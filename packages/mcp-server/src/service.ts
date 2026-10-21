@@ -7,6 +7,9 @@
 import { renderClausesText, type TextViewClause } from '@bs/clause-tree';
 import {
   GlossaryEntrySchema,
+  RuleSchema,
+  TermPreferenceSchema,
+  bareLemma,
   basicClauseType,
   bookById,
   chapterFromBcv,
@@ -15,12 +18,15 @@ import {
   parseClauseId,
   parseScriptureRange,
   segmentsText,
+  strongMatches,
   type BibleDb,
   type CriticalTextTool,
   type ClauseEntity,
   type ClauseText,
+  type HistoryOrigin,
   type ScriptureRange,
   type SeedClause,
+  type TermPreference,
   type Token,
   type VersionExpectation,
   type WorkFileStore,
@@ -39,8 +45,17 @@ import {
 import { checkClauseAnalysis, checkTranslations, type SeedOverride, type VerseError } from './validate.js';
 import { collectDisputes, hasDisputes } from './disputes.js';
 import { reviewChapter, verseRanges, type HumanReviewItem, type ReviewIssue } from './review.js';
+import {
+  LEARN_ORIGINS,
+  buildRevisionReport,
+  historyChapters,
+  replaceRendering as replaceRenderingIn,
+  type HistoryScope,
+  type ReplaceTarget,
+} from './revisions.js';
 
 export { toSubmission } from './review.js';
+export { importRevisions, type ImportLine } from './revisions.js';
 export type { ReviewIssue } from './review.js';
 
 export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool };
@@ -67,6 +82,21 @@ function rangeTokens(deps: Deps, range: ScriptureRange): Map<number, Token[]> {
     throw new Error(`范围内没有经文：${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel(range.endBcv)}`);
   }
   return verses;
+}
+
+const STYLE_PRIORITY = '个人风格是偏好：只在原文两种译法都成立时采用；与直译原则、术语表冲突时以原则和术语表为准。';
+
+/** briefing 里的个人风格（工作目录 style.md）；没有时不给。 */
+async function styleBriefing(deps: Deps) {
+  const style = await deps.store.readStyle();
+  return style ? { options: style.options, text: style.text || undefined, priority: STYLE_PRIORITY } : undefined;
+}
+
+/** 术语偏好按 senseKey > strong > lemma 匹配。 */
+function preferenceFor(sense: { key: string; strong: string; lemma: string }, preferences: TermPreference[]): TermPreference | undefined {
+  return preferences.find((item) => item.senseKey === sense.key)
+    ?? preferences.find((item) => !item.senseKey && item.strong !== undefined && strongMatches(item.strong, sense.strong))
+    ?? preferences.find((item) => !item.senseKey && !item.strong && bareLemma(item.lemma) === bareLemma(sense.lemma));
 }
 
 const TOKEN_HEADER = 'id\ttext\tlemma\tstrong\tmorph\tgloss\tzh\tcontent';
@@ -247,12 +277,13 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
     textualVariants: textualVariantLines(deps, range, verses),
     existingClauses: existing.length > 0 ? existing : undefined,
     rules: rules.length > 0 ? rules : undefined,
+    style: await styleBriefing(deps),
     submit: 'submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词；id 为 bcv+字母（如 1001001a）。',
   };
 }
 
-/** 编辑器提交时带上读到的版本号做乐观锁；MCP 调用不带。 */
-export type SubmitOptions = { expected?: VersionExpectation };
+/** 编辑器提交时带上读到的版本号做乐观锁；MCP 调用不带。origin 记进修改历史：MCP 提交为 ai，编辑器为 human。 */
+export type SubmitOptions = { expected?: VersionExpectation; origin?: HistoryOrigin };
 
 export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, rawClauses: unknown[], options: SubmitOptions = {}) {
   const verses = rangeTokens(deps, range);
@@ -390,6 +421,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     throw new Error(`这些节还没有子句分析，请先运行 analyze：${missingVerses.map(verseLabel).join(', ')}`);
   }
   const glossary = await deps.store.readGlossary();
+  const preferences = await deps.store.readTermPreferences();
   const memory = await deps.memory.build({ books: new Set([range.bookName]), excludeVerses: new Set(verses.keys()) });
   const existingTexts = (await Promise.all(chapters.map((chapter) => deps.store.readClauseTexts(range.bookName, chapter)))).flat();
 
@@ -424,6 +456,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     const entry = glossaryFor(token, range.bookName, glossary);
     const distribution = renderingDistribution(memory.get(key));
     const ubs = deps.db.lookupLexicon(token.strong).find((item) => item.source === 'UBS-zh');
+    const preference = entry ? undefined : preferenceFor({ key, strong: token.strong, lemma: token.lemma }, preferences);
     terms.push({
       senseKey: key,
       lemma: token.lemma,
@@ -432,6 +465,9 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       ubsZh: ubs ? ubs.gloss.slice(0, 80) : undefined,
       glossary: entry ? { zh: entry.zh, level: entry.level, note: entry.note || undefined } : undefined,
       history: distribution.length > 0 ? distribution.slice(0, 4) : undefined,
+      preference: preference
+        ? { zh: preference.zh, avoid: preference.avoid.length > 0 ? preference.avoid : undefined, note: preference.note || undefined }
+        : undefined,
     });
   }
 
@@ -461,6 +497,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       ? existingTexts.filter((text) => inRange(text.bcv, range)).map((text) => ({ clauseId: `${text.bcv}${text.sub}`, span: text.translationSpan, text: segmentsText(text.formatted), renderings: text.renderings, alternatives: text.alternatives.length > 0 ? text.alternatives : undefined }))
       : undefined,
     rules: rules.length > 0 ? rules : undefined,
+    style: await styleBriefing(deps),
     submit: 'submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, paraTitle?}；contentTokens 里的每个实词都要有 rendering；有 disputes 的子句须给 alternatives 或 note。',
   };
 }
@@ -497,7 +534,7 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
     const rows = toWrite.filter((text) => chapterFromBcv(text.bcv) === chapter);
     if (rows.length > 0) {
       const versesInChapter = new Set(rows.map((text) => text.bcv));
-      await deps.store.replaceClauseTextsForVerses(range.bookName, chapter, versesInChapter, rows, options.expected);
+      await deps.store.replaceClauseTextsForVerses(range.bookName, chapter, versesInChapter, rows, options.expected, options.origin ?? 'ai');
       written.push(...[...versesInChapter].map(verseLabel));
     }
   }
@@ -546,12 +583,28 @@ export async function consistencyReport(deps: Deps, range: ScriptureRange | null
   const books = range ? new Set([range.bookName]) : undefined;
   const memory = await deps.memory.build({ books });
   const report = buildConsistencyReport(memory);
+  const preferences = await deps.store.readTermPreferences();
+  const preferenceConflicts = [...memory.values()].flatMap((history) => {
+    const preference = preferenceFor(history, preferences);
+    const off = preference ? history.uses.filter((use) => use.zh !== preference.zh) : [];
+    if (!preference || off.length === 0) {
+      return [];
+    }
+    const counts = new Map<string, string[]>();
+    off.forEach((use) => counts.set(use.zh, [...(counts.get(use.zh) ?? []), use.clauseKey]));
+    return [{
+      senseKey: history.key, strong: history.strong, lemma: history.lemma, preferred: preference.zh,
+      others: [...counts].map(([zh, clauses]) => ({ zh, count: clauses.length, avoided: preference.avoid.includes(zh), examples: clauses.slice(0, 5) })),
+    }];
+  });
   return {
     scope: range ? bookById(range.bookId).name : '全部',
     senses: memory.size,
     oneToMany: report.oneToMany.slice(0, 200),
     manyToOne: report.manyToOne.slice(0, 200),
-    guidance: '一词多译：先判断是否原文义项不同（senseKey 已按 Macula 义项分开，仍可能需人工再分）或合理的中文同义变化；同一义项内的非同义分叉才需统一。多词一译：虚词归并正常，实词误并要修。判定后用 upsert_glossary 固化。',
+    preferenceConflicts: preferenceConflicts.length > 0 ? preferenceConflicts.slice(0, 200) : undefined,
+    guidance: '一词多译：先判断是否原文义项不同（senseKey 已按 Macula 义项分开，仍可能需人工再分）或合理的中文同义变化；同一义项内的非同义分叉才需统一。多词一译：虚词归并正常，实词误并要修。判定后用 upsert_glossary 固化。'
+      + 'preferenceConflicts：与 terms.yaml 术语偏好不同的译法（avoided 为偏好里明确不要的）；确认要统一的，用 replace_rendering 批量替换。',
   };
 }
 
@@ -637,10 +690,92 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
     verses: [...verses.values()].slice(0, REVIEW_VERSE_LIMIT),
     humanReview: humanReview.length > 0 ? humanReview : undefined,
     untranslated: untranslated.length > 0 ? untranslated : undefined,
+    style: await styleBriefing(deps),
     next: retranslate.length > 0
       ? 'retranslate 中的范围按 bible-translate 流程整节重提（structure 里提示没有子句分析或子句对不上的，先 analyze）；humanReview 逐条列给用户复核'
       : humanReview.length > 0
         ? '译文与当前分析、术语表一致；humanReview 逐条列给用户复核'
         : '没有需要处理的问题',
+  };
+}
+
+// ---------------------------------------------------------------- 个人风格、术语偏好、规则
+
+export async function updateStyle(deps: Deps, content: string) {
+  const style = await deps.store.writeStyle(content);
+  return { options: style.options, length: style.text.length, next: '新风格对之后的 briefing 生效；已译经文不会自动按风格改写' };
+}
+
+export async function updateTermPreferences(deps: Deps, rawEntries: unknown[]) {
+  const entries = rawEntries.map((raw, index) => {
+    const parsed = TermPreferenceSchema.safeParse(raw);
+    if (!parsed.success) {
+      throw new Error(`第 ${index + 1} 条术语偏好格式不对: ${parsed.error.message}`);
+    }
+    return parsed.data;
+  });
+  return {
+    written: await deps.store.upsertTermPreferences(entries),
+    next: '术语偏好只在 translate briefing 里提示（terms[].preference）。要强制统一，用 upsert_glossary 写成 preferred；要改已译经文，用 replace_rendering',
+  };
+}
+
+export async function upsertRules(deps: Deps, rawRules: unknown[]) {
+  const rules = rawRules.map((raw, index) => {
+    const parsed = RuleSchema.omit({ version: true }).safeParse({ examples: [], ...(raw as object) });
+    if (!parsed.success) {
+      throw new Error(`第 ${index + 1} 条规则格式不对: ${parsed.error.message}`);
+    }
+    return { ...parsed.data, version: 0 };
+  });
+  return { written: await deps.store.upsertRules(rules) };
+}
+
+// ---------------------------------------------------------------- 修改历史
+
+/** range 给出时只看该范围，否则看 books 中的书卷（不给则全部）。 */
+function historyScope(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }): HistoryScope {
+  const { range } = target;
+  if (range) {
+    return {
+      chapters: chaptersBetween(range.startBcv, range.endBcv).map((chapter) => ({ bookName: range.bookName, chapter })),
+      keep: (bcv) => inRange(bcv, range),
+    };
+  }
+  return { chapters: historyChapters(deps.store, target.books), keep: () => true };
+}
+
+export async function revisionReport(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }, origins: HistoryOrigin[] = LEARN_ORIGINS) {
+  const scope = historyScope(deps, target);
+  const memory = await deps.memory.build({ books: target.range ? new Set([target.range.bookName]) : target.books });
+  const current = new Map([...memory].map(([key, history]) => [key, history.uses]));
+  const report = await buildRevisionReport(deps.db, deps.store, scope, current, origins);
+  return {
+    origins,
+    ...report,
+    termPreferences: (await deps.store.readTermPreferences()).length,
+    style: await styleBriefing(deps),
+    guidance: 'renderingChanges 已按原文义项归并，count 高且方向一致的是术语偏好候选；stillFrom 是当前仍用旧译法的子句。'
+      + 'textChanges 只有文本：用 get_passage 看例句所在节的原文，判断改动属于哪个原文词（术语偏好）、哪种形态规律（规则）还是纯中文表达（风格）。'
+      + '同一组改动方向不一、或与原文不符的，列为疑似误改，不要写入。',
+  };
+}
+
+export async function replaceRendering(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }, replace: ReplaceTarget, apply: boolean) {
+  if (!replace.strong && !replace.senseKey) {
+    throw new Error('要给 strong 或 senseKey');
+  }
+  if (!replace.from || !replace.to || replace.from === replace.to) {
+    throw new Error('from、to 都要给，且不能相同');
+  }
+  const scope = historyScope(deps, target);
+  const result = await replaceRenderingIn(deps.db, deps.store, scope, replace, apply);
+  return {
+    ...result,
+    matched: result.matched.slice(0, 300),
+    more: result.matched.length > 300 ? result.matched.length - 300 : undefined,
+    next: apply
+      ? '已改写译文与 renderings（修改历史记为 replace）。用 review_report 复查'
+      : '这是预览（dry-run）。确认后加 apply: true 再调一次；skipped 中的子句要人工改',
   };
 }

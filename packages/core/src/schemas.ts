@@ -130,6 +130,11 @@ export function senseKey(strong: string, sense: string | null | undefined): stri
 
 export type GlossaryEntry = z.infer<typeof GlossaryEntrySchema>;
 
+/** 术语偏好、批量替换里的 Strong：带后缀的（H5647H）只配这一个；不带后缀的基本号（H5647）配所有后缀变体。 */
+export function strongMatches(pattern: string, strong: string): boolean {
+  return pattern === strong || (!/[A-Za-z]$/.test(pattern) && strong.replace(/[A-Za-z]$/, '') === pattern);
+}
+
 export const RuleSchema = z.object({
   id: z.string().min(1),
   /** analyze | translate */
@@ -141,6 +146,51 @@ export const RuleSchema = z.object({
 });
 
 export type Rule = z.infer<typeof RuleSchema>;
+
+/** 个人风格的结构化选项（style.md 的 frontmatter）。 */
+export const CLAUSE_ORDERS = ['fluent', 'source'] as const;
+
+export const StyleOptionsSchema = z.object({
+  /** 后置状语：fluent = 中文不通顺时合并前置（默认）；source = 时间、“直到”从句保留原文语序。 */
+  clauseOrder: z.enum(CLAUSE_ORDERS).default('fluent'),
+});
+
+export type StyleOptions = z.infer<typeof StyleOptionsSchema>;
+
+export type Style = { options: StyleOptions; text: string };
+
+/** 术语偏好（terms.yaml）：比术语表弱，只作选词提示；需要强制时升级为 glossary 的 preferred。 */
+export const TermPreferenceSchema = z.object({
+  lemma: z.string().min(1),
+  strong: z.string().regex(/^[HAG]\d{4}[A-Za-z]?$/).optional(),
+  senseKey: z.string().optional(),
+  zh: z.string().min(1),
+  /** 不要用的译法（通常是修改历史里被改掉的）。 */
+  avoid: z.array(z.string()).default([]),
+  note: z.string().optional(),
+});
+
+export type TermPreference = z.infer<typeof TermPreferenceSchema>;
+
+export const HISTORY_ORIGINS = ['ai', 'human', 'replace', 'import'] as const;
+
+export type HistoryOrigin = (typeof HISTORY_ORIGINS)[number];
+
+/**
+ * 译文修改历史（<书名>/chNN/history.jsonl 的一行）。工具写入时 before/after 是 ClauseText；
+ * 从外部导入的历史只有文本（字符串），没有 renderings。新增的子句 before 为 null，删掉的子句 after 为 null。
+ */
+export const HistoryEntrySchema = z.object({
+  bcv: z.number().int().positive(),
+  /** 外部导入按整节记录时为空串。 */
+  sub: z.string(),
+  at: z.string(),
+  origin: z.enum(HISTORY_ORIGINS),
+  before: z.union([ClauseTextSchema, z.string(), z.null()]),
+  after: z.union([ClauseTextSchema, z.string(), z.null()]),
+});
+
+export type HistoryEntry = z.infer<typeof HistoryEntrySchema>;
 
 export function parseSegments(formatted: string): TranslationSegment[] {
   return z.array(TranslationSegmentSchema).parse(JSON.parse(formatted));

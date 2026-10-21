@@ -41,14 +41,22 @@ function letterOf(index: number): string {
 
 const nullableString = z.preprocess((value) => (value === '' || value === undefined ? null : value), z.string().nullable());
 
+/** 子句 id 去掉前导零：模型有时照词 id 的定宽格式写成 09009011a，而 bcv 是 9009011。 */
+export function canonicalClauseId(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim().replace(/^0+(?=\d{7,}[a-z]+$)/, '') : value;
+}
+
+const clauseIdString = z.preprocess(canonicalClauseId, z.string());
+const nullableClauseId = z.preprocess((value) => (value === '' || value === undefined ? null : canonicalClauseId(value)), z.string().nullable());
+
 /** 模型提交的子句：必填结构字段，其余可省（取空值）。 */
 export const SubmittedClauseSchema = z.object({
-  id: z.string(),
+  id: clauseIdString,
   firstWordId: z.string(),
   lastWordId: z.string(),
   /** 旧约基础句型全称（wayyiqtol / qatal …），写盘时换算成展示码；新约不填。 */
   type: z.string().default(''),
-  parentId: nullableString.default(null),
+  parentId: nullableClauseId.default(null),
   modifies: nullableString.default(null),
   subjectRange: nullableString.default(null),
   verbRange: nullableString.default(null),
@@ -336,7 +344,7 @@ export function checkClauseAnalysis(
 }
 
 export const SubmittedTranslationSchema = z.object({
-  clauseId: z.string(),
+  clauseId: clauseIdString,
   span: z.coerce.number().int().nonnegative().default(1),
   text: z.string().default(''),
   renderings: z.array(RenderingSchema).default([]),

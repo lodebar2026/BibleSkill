@@ -14,7 +14,7 @@ description: 圣经原文中文直译。当用户要求翻译、直译某段经�
 执行顺序：
 
 1. `build_translation_briefing(range)`，只调一次。新约：如果有能返回 NA28 原文的扩展工具，再取一次本范围的 NA28 原文，核对断句与校勘符号。如果报“还没有子句分析”，先按 bible-analyze skill 完成这些节的分析，再回来翻译。
-2. 逐子句直译。每个实词给 rendering，并对照 `terms` 里的术语表和既有译法保持用词统一。有 `disputes` 的子句必须处理；其他争议主动标出，主译之外给 alternatives 并写依据。
+2. 逐子句直译。每个实词给 rendering，并对照 `terms` 里的术语表和既有译法保持用词统一；首次出现、带 `preference` 的词按术语偏好选词。有 `disputes` 的子句必须处理；其他争议主动标出，主译之外给 alternatives 并写依据。briefing 带 `style` 时，在原文两种译法都成立处按个人风格表达（偏好级，不得违背直译原则）。
 3. `submit_translation(range, translations)` 提交。
    - 有 `errors`：修正后整节重提。
    - 有 `consistency`：统一为既有或术语表译法，或者在 rendering 的 `note` 写明理由，然后整节重提。

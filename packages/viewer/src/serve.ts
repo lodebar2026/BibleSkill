@@ -103,7 +103,7 @@ export function serve(options: ServeOptions): void {
           throw new Error('没有要保存的译文');
         }
         const range = { ...parseScriptureRange(`${body.bookName} ${body.chapter}`), startBcv: Math.min(...bcvs), endBcv: Math.max(...bcvs) };
-        const result = await submitTranslation(deps, range, body.texts.map(toSubmission), { expected: new Map(Object.entries(body.expected)) });
+        const result = await submitTranslation(deps, range, body.texts.map(toSubmission), { expected: new Map(Object.entries(body.expected)), origin: 'human' });
         send(response, 200, { result, chapter: await loadChapter(deps, body.bookName, body.chapter) });
         return;
       }

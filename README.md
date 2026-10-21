@@ -2,12 +2,13 @@
 
 圣经原文**中文直译**的 AI 工作流：一组可公开的 skill，加一个基于开放数据的 MCP server。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
 
-工作流分四步：
+工作流分四步，另有一个从修改历史学习的步骤：
 
 1. **analyze**：把经文切分为子句并确定从属关系。Macula 句法树作为第二意见，不当作标准答案。
 2. **translate**：逐子句直译，同时给出实词的译法对照，并强制检查用词统一。
 3. **consistency**：汇总一词多译、多词一译，把判定结果固化进术语表。
 4. **review**：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围和需要人工复核的子句。
+5. **learn**：汇总人工修改历史，整理成术语偏好、个人风格和项目规则，经用户确认后写入；可以批量替换不一致的译词。
 
 结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。
 
@@ -59,7 +60,9 @@ pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
 | Claude Code | `.claude/skills/`、`.mcp.json` |
 | agy / Gemini CLI | `.agents/skills/`、`.agents/mcp_config.json`、`.gemini/settings.json`、`.gemini/policies/` |
 | Codex | `.agents/skills/`；MCP 片段由脚本打印，需手动加入 `~/.codex/config.toml` |
-| 通用 | `AGENTS.md`、`config.json`（数据库路径） |
+| 通用 | `AGENTS.md`、`config.json`（数据库路径）；`style.md`、`terms.yaml`（有个人设置时） |
+
+个人风格与术语偏好：`install.sh --style <style.md> --terms <terms.yaml>` 拷进工作目录。不传时，如果 `~/.config/bibleskill/style.md`、`~/.config/bibleskill/terms.yaml` 存在、而工作目录里还没有，就自动拷入；工作目录里已有的不覆盖。
 
 **agy 无头模式**（`agy -p`）不能弹出权限确认。需要在 `~/.gemini/antigravity-cli/settings.json` 的 `permissions.allow` 里加入 `mcp(bibleskill/<工具名>)`，工具名见下表。
 
@@ -72,6 +75,7 @@ pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
 /bible-translate 创 1:1-5
 /bible-consistency 创世记
 /bible-review 创世记
+/bible-learn 创世记
 ```
 
 查看结果：
@@ -124,6 +128,9 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 | `view_clauses` | 缩进文本视图 |
 | `upsert_glossary` / `consistency_report` | 术语表与用词统一报告 |
 | `review_report` | 审校：复查已写入的译文，列出需要改译的范围与需要人工复核的子句 |
+| `revision_report` | 修改历史：按原文义项汇总人工改过的译词，以及导入历史里的文本替换 |
+| `replace_rendering` | 批量替换某个原文词的译法（默认预览，`apply` 才写入） |
+| `update_style` / `update_term_preferences` / `upsert_rule` | 写入个人风格、术语偏好、项目规则 |
 
 入参都用 `range`（如 `创 1:1-5`、`John 3`），schema 写得宽松，校验在工具内部进行：校验失败作为工具错误返回，模型能照着改。
 
@@ -148,9 +155,12 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 ```
 config.json                        数据库路径
 glossary.json                      术语表 {strong, senseKey, lemma, zh, level: locked|preferred, note, scope}
-rules.json                         分析/翻译规则 {id, task, pattern, resolution, examples}（手工维护）
+rules.json                         分析/翻译规则 {id, task, pattern, resolution, examples}（手工维护，或由 bible-learn 写入）
+style.md                           个人风格：Markdown，可带 frontmatter 选项（clauseOrder: fluent|source）
+terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh, avoid?, note?}]，可写注释
 <中文书名>/chNN/clause_entities.json  子句分析
 <中文书名>/chNN/clauses.json          直译
+<中文书名>/chNN/history.jsonl         译文修改历史 {bcv, sub, at, origin: ai|human|replace|import, before, after}
 ```
 
 `clause_entities.json`（`ClauseEntity`）与 `clauses.json`（`ClauseText`）的字段保持稳定，新功能只追加字段：
@@ -181,6 +191,20 @@ rules.json                         分析/翻译规则 {id, task, pattern, resol
 | `glossary` | 违反当前术语表（`locked` 不符；`preferred` 不符且没写 note） |
 
 报告给出两份清单：`retranslate` 把需要改译的节合并成连续范围（如 `创世记 1:3-5`），可以直接交给 bible-translate；`humanReview` 列出 needs-review / ambiguous 子句，交人工复核。`bible-review` skill 按这份报告逐段重译，最后再跑一次确认清零。`upsert_glossary` 返回时会提示跑审校；重新分析已有译文的节时，`submit_clause_analysis` 会在 `translatedVerses` 里提醒。
+
+## 个人风格、术语偏好与修改历史
+
+- **个人风格**（`style.md`）进入 analyze、translate briefing 和审校报告的 `style` 字段。它是偏好级：原文两种译法都成立时才采用，与直译原则、术语表冲突时以原则为准；审校不会因为风格不符要求重译。frontmatter 的 `clauseOrder` 控制后置状语从句是合并前置（`fluent`，默认）还是保留原文语序（`source`）。
+- **术语偏好**（`terms.yaml`）在 translate briefing 的 `terms[].preference` 里提示，只对还没有术语表条目的词生效；`consistency_report` 的 `preferenceConflicts` 列出与偏好不同的现有译法。要强制统一，把它写成术语表的 `preferred`。
+- **修改历史**：每次写入译文，变化了的子句都把改前改后追加到该章的 `history.jsonl`，`origin` 区分 AI 提交（`ai`）、视图里的人工编辑（`human`）、批量替换（`replace`）和导入（`import`）。别处的修改历史可以导入：
+
+  ```bash
+  pnpm revisions import 历史.jsonl --workdir ~/圣经直译
+  # 每行 {"ref": "撒上 5:8", "before": "改前文本", "after": "改后文本"}，也可以用 bcv、sub、time
+  ```
+
+  `revision_report` 对工具写入的历史按原文义项列出“从 A 改成 B”，对导入的纯文本历史按字符 diff 归并替换片段；`bible-learn` skill 据此分类，经用户确认后写入 terms.yaml、style.md、rules.json。
+- **批量替换**：`replace_rendering` 按 strong 或 senseKey 把某个译法换成另一个，同时改写译文文本与对齐位置；默认只预览。
 
 ## 争议处理
 

@@ -10,13 +10,14 @@
 | 翻译 / 直译 某段经文 | `bible-translate` |
 | 检查用词统一、一词多译、整理术语表 | `bible-consistency` |
 | 审校、复查哪些译文需要改 | `bible-review` |
+| 从修改历史学习、生成术语偏好、整理个人风格 | `bible-learn` |
 
 经文范围用中文或英文书名都可以，如 `创 1:1-5`、`约 1`、`John 3:16`。
 
 ## 规则
 
 - 所有读写都通过 `bibleskill` MCP 工具完成：先 `build_*_briefing`，再 `submit_*`。
-- 不要直接编辑工作文件（`<书名>/chNN/clause_entities.json`、`clauses.json`、`glossary.json`），也不要写脚本绕过工具。
+- 不要直接编辑工作文件（`<书名>/chNN/clause_entities.json`、`clauses.json`、`history.jsonl`、`glossary.json`、`style.md`、`terms.yaml`），也不要写脚本绕过工具。
 - 不要运行 shell 命令，也不要列目录、读工作文件：需要的数据都由工具提供。
 - 词 id 只用工具返回的 id。
 - 不照搬其他中外译本的措辞（说明争议依据时可以提到哪些译本采某读法）。
@@ -28,6 +29,9 @@
 config.json                 数据库路径
 glossary.json               术语表（用词统一）
 rules.json                  积累的分析/翻译规则（可手工维护）
+style.md                    个人风格（偏好级，可手工维护）
+terms.yaml                  术语偏好（偏好级，可手工维护，可写注释）
+<书名>/chNN/history.jsonl          译文修改历史（自动记录）
 <书名>/chNN/clause_entities.json   子句分析
 <书名>/chNN/clauses.json           直译与实词译法对照
 ```

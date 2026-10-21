@@ -11,6 +11,7 @@
     "test": "pnpm -r test",
     "data:build": "node ./packages/data-build/dist/cli.js",
     "view": "node ./packages/viewer/dist/cli.js",
+    "revisions": "node ./packages/viewer/dist/revisions-cli.js",
     "verify:passage": "node ./scripts/verify-passage.mjs"
   },
   "devDependencies": {

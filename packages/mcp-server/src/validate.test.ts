@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ClauseEntity, SeedClause, Token } from '@bs/core';
 import { checkRenderings, buildConsistencyReport, type RenderingMemory } from './consistency.js';
-import { checkClauseAnalysis, checkTranslations } from './validate.js';
+import { SubmittedClauseSchema, SubmittedTranslationSchema, checkClauseAnalysis, checkTranslations } from './validate.js';
 
 const BCV = 1001001;
 
@@ -152,4 +152,12 @@ test('争议：ambiguous 子句须给 alternatives 与 note；异文须给 textu
   assert.deepEqual(handled.errors, []);
   assert.equal(handled.accepted[0].alternatives.length, 1);
   assert.match(handled.accepted[0].formatted, /取 a 读法/);
+});
+
+test('子句 id 的前导零在提交时去掉', () => {
+  const parsed = SubmittedClauseSchema.parse({ id: '09009011a', firstWordId: 'o090090110011', lastWordId: 'o090090110011', parentId: '09009011b' });
+  assert.equal(parsed.id, '9009011a');
+  assert.equal(parsed.parentId, '9009011b');
+  assert.equal(SubmittedTranslationSchema.parse({ clauseId: '09009011a' }).clauseId, '9009011a');
+  assert.equal(SubmittedClauseSchema.parse({ id: '1001001a', firstWordId: 'x', lastWordId: 'x' }).id, '1001001a');
 });

@@ -59,6 +59,12 @@
 - 子句不跨节；跨节的句子在每节各自成子句，用 `parentId` 连接。`parentId` 可以指向**后面**的子句（包括下一节的）：例如约 1:3-4 按 NA28 断句时，3c `ὃ γέγονεν` 挂在 4a 下，`modifies` 指向 4a 的词。
 - 前置的连词、介词留在其后的子句里。
 
+### 切分单位
+
+- 动词不与它的宾语、补语拆成两个子句。
+- 诗歌以诗行为单位：同一诗行内的成分不要拆到两个子句里，但不跨平行诗行合并（见 [poetry-genre.md](poetry-genre.md)）。
+- 工作目录有个人风格（briefing 的 `style`）时，其中的切分偏好在不违反上面规则时采用。
+
 ### 基础句型（仅旧约）
 
 - 旧约：`wayyiqtol`、`qatal`、`yiqtol`、`weqatal`、`imperative`、`participle`、`infinitive_construct`、`infinitive_absolute`、`nominal`。用法见 [clause-type-guidance-hebrew.md](clause-type-guidance-hebrew.md)。

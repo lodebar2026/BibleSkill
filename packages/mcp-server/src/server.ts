@@ -7,7 +7,7 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { BibleDb, WorkFileStore, findBookByName, resolveConfig } from '@bs/core';
+import { BibleDb, HISTORY_ORIGINS, WorkFileStore, findBookByName, resolveConfig, type HistoryOrigin, type ScriptureRange } from '@bs/core';
 import { z } from 'zod';
 import { optionalString, resolveArray, resolveRange } from './args.js';
 import {
@@ -17,10 +17,15 @@ import {
   createDeps,
   getPassage,
   lookupLexicon,
+  replaceRendering,
   reviewReport,
+  revisionReport,
   submitClauseAnalysis,
   submitTranslation,
+  updateStyle,
+  updateTermPreferences,
   upsertGlossary,
+  upsertRules,
   viewClauses,
   type Deps,
 } from './service.js';
@@ -41,6 +46,16 @@ function json(payload: unknown) {
 
 function text(value: string) {
   return { content: [{ type: 'text' as const, text: value }] };
+}
+
+/** range 可以是书卷名（整卷）或经文范围；不给为全部。 */
+function bookOrRange(args: Record<string, unknown>): { range?: ScriptureRange; books?: Set<string> } {
+  const raw = optionalString(args, ['range', 'book', 'passage', 'reference', 'ref']);
+  if (!raw) {
+    return {};
+  }
+  const book = findBookByName(raw);
+  return book ? { books: new Set([book.name]) } : { range: resolveRange({ range: raw }) };
 }
 
 const range = z.string().optional().describe("经文范围，如 '创 1'（整章）、'创 1:1-5'、'约 3:16'。中英文书名与缩写均可。");
@@ -132,13 +147,68 @@ server.registerTool('review_report', {
     + '和需要人工复核的子句（needs-review / ambiguous）。range 给书卷名审整卷，给经文范围只审该范围，不给审全部。',
   inputSchema: loose({ range }),
   annotations: { readOnlyHint: true },
+}, async (args) => json(await reviewReport(getDeps(), bookOrRange(args))));
+
+server.registerTool('update_style', {
+  description:
+    '整体改写工作目录的个人风格 style.md（content 为完整 Markdown，可带 --- frontmatter 选项 clauseOrder: fluent|source）。'
+    + '风格是偏好级：原文两种译法都成立时才采用。先 build_translation_briefing 或 review_report 看 style 现状，在其基础上增改。',
+  inputSchema: loose({ content: z.string().optional() }),
 }, async (args) => {
-  const raw = optionalString(args, ['range', 'book', 'passage', 'reference', 'ref']);
-  if (!raw) {
-    return json(await reviewReport(getDeps(), {}));
+  const content = optionalString(args, ['content', 'style', 'text', 'markdown']);
+  if (!content) {
+    throw new Error('缺少 content：style.md 的完整内容');
   }
-  const book = findBookByName(raw);
-  return json(await reviewReport(getDeps(), book ? { books: new Set([book.name]) } : { range: resolveRange({ range: raw }) }));
+  return json(await updateStyle(getDeps(), content));
 });
+
+server.registerTool('update_term_preferences', {
+  description:
+    '写入术语偏好 terms.yaml（保留文件里的注释）。entries 为 JSON 数组，每项 {lemma, zh, strong?, senseKey?, avoid?:[不要用的译法], note?}；'
+    + '按 senseKey / strong / lemma 合并。偏好只在 briefing 里提示，不强制；要强制用 upsert_glossary。',
+  inputSchema: loose({ entries: z.any().optional() }),
+}, async (args) => json(await updateTermPreferences(getDeps(), resolveArray(args, ['entries', 'terms', 'preferences']))));
+
+server.registerTool('upsert_rule', {
+  description:
+    '写入项目规则 rules.json（按 id 合并），会出现在对应任务的 briefing 里。rules 为 JSON 数组，每项 '
+    + '{id, task: analyze|translate, pattern（原文现象）, resolution（怎么译/怎么切）, examples?:[经文出处与改前改后]}。',
+  inputSchema: loose({ rules: z.any().optional() }),
+}, async (args) => json(await upsertRules(getDeps(), resolveArray(args, ['rules', 'entries', 'items']))));
+
+server.registerTool('revision_report', {
+  description:
+    '修改历史报告：汇总译文的人工修改（默认 origin 为 human 与 import），按原文义项列出译词改动（renderingChanges，含当前仍用旧译法的子句），'
+    + '以及只有文本的导入历史里的替换片段（textChanges）。range 给书卷名、经文范围或不给（全部）。',
+  inputSchema: loose({ range, origins: z.any().optional().describe('要统计的来源：human / import / ai / replace，默认 human,import') }),
+  annotations: { readOnlyHint: true },
+}, async (args) => {
+  const raw = args.origins;
+  const list = (Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(/[,\s]+/) : []).filter(Boolean) as string[];
+  const unknown = list.filter((item) => !(HISTORY_ORIGINS as readonly string[]).includes(item));
+  if (unknown.length > 0) {
+    throw new Error(`未知来源：${unknown.join('、')}；可用 ${HISTORY_ORIGINS.join(' / ')}`);
+  }
+  return json(await revisionReport(getDeps(), bookOrRange(args), list.length > 0 ? list as HistoryOrigin[] : undefined));
+});
+
+server.registerTool('replace_rendering', {
+  description:
+    '批量替换某个原文词的译法：把 strong（不带后缀的基本号含所有后缀变体）或 senseKey 的 rendering 从 from 改成 to，同时改写译文文本。默认只预览（dry-run），'
+    + 'apply: true 才写入。range 给书卷名、经文范围或不给（全部）。定位不到的子句列在 skipped，需人工改。',
+  inputSchema: loose({
+    range,
+    strong: z.string().optional(),
+    senseKey: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    apply: z.any().optional(),
+  }),
+}, async (args) => json(await replaceRendering(getDeps(), bookOrRange(args), {
+  strong: optionalString(args, ['strong', 'strongs']),
+  senseKey: optionalString(args, ['senseKey', 'sense']),
+  from: optionalString(args, ['from', 'old']) ?? '',
+  to: optionalString(args, ['to', 'new']) ?? '',
+}, args.apply === true || args.apply === 'true')));
 
 await server.connect(new StdioServerTransport());

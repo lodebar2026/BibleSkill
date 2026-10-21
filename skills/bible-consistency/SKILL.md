@@ -17,13 +17,15 @@ description: 圣经直译的用词统一审校。当用户要求检查「用词�
 3. 逐条判定 **多词一译**（不同原文实词同一中文译法）：
    - 近义词归并 → 视需要区分。
    - 实词误并（意思不同却译成同一个词）→ 给出区分方案，写入术语表。
-4. 用 `upsert_glossary` 写入判定结果。
-5. `review_report(书卷)`：它按新术语表复查已写入的译文，`retranslate` 就是需要改译的范围，不要自己汇总。
-6. 向用户汇报：新增或修改的术语、`retranslate` 中需要改译的范围。改译本身交给 bible-review / bible-translate 重新提交那些节。
+4. 逐条看 **与术语偏好不同的译法**（`preferenceConflicts`，对照工作目录的 terms.yaml）：`avoided` 为偏好里明确不要的译法，一般应统一；其余按第 2 步判断是否属于义项不同。
+5. 用 `upsert_glossary` 写入判定结果。
+6. 只是换一个译词、不涉及句子结构的统一，可以用 `replace_rendering` 批量替换：先不带 `apply` 预览，把命中的子句给用户看，用户同意后再带 `apply: true` 写入；`skipped` 里的子句交给重译。
+7. `review_report(书卷)`：它按新术语表复查已写入的译文，`retranslate` 就是需要改译的范围，不要自己汇总。
+8. 向用户汇报：新增或修改的术语、批量替换了哪些、`retranslate` 中需要改译的范围。改译本身交给 bible-review / bible-translate 重新提交那些节。
 
 约束：
 
 - 需要的数据都在 briefing 和工具返回里；**不要运行 shell 命令，也不要列目录、读工作目录里的文件**（references 里的文档直接读即可）。
 
-- 本流程只改术语表，不直接改译文。
+- 本流程只改术语表；改译文只通过用户同意后的 `replace_rendering`。
 - 高频虚词不强求统一。

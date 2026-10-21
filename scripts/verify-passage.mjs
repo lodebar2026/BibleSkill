@@ -2,7 +2,7 @@
 /**
  * MCP 冒烟验证：用真实 MCP client 拉起 server，在临时工作目录里走一遍
  * get_passage → analyze → view → translate → 用词统一检查 → consistency_report → review_report，
- * 最后拉起 pnpm view --serve，通过它的 HTTP 接口做拆分 / 撤销 / 译文合并拆开。
+ * 最后拉起 pnpm view --serve，通过它的 HTTP 接口做拆分 / 撤销 / 译文合并拆开 / 改对齐。
  *
  *   pnpm verify:passage            （默认 创 1:1-2 与 约 1:1）
  */
@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { finalizeClauses, mergeTranslationWithNext, splitClause, splitTranslation } from '../packages/viewer/dist/edit-ops.js';
+import { finalizeClauses, mergeTranslationWithNext, setRendering, splitClause, splitTranslation } from '../packages/viewer/dist/edit-ops.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workdir = mkdtempSync(path.join(tmpdir(), 'bibleskill-verify-'));
@@ -100,6 +100,8 @@ try {
     }],
   });
   check('创 1:1 译文写入', ok.writtenVerses.length === 1, JSON.stringify(ok.errors ?? ok.consistency));
+  const aligned = JSON.parse(readFileSync(path.join(workdir, '创世记/ch01/clauses.json'), 'utf8'))[0].renderings;
+  check('存盘的对照带上译文位置 at', aligned.map((rendering) => rendering.at).join() === '0,3,2,6,9', JSON.stringify(aligned));
 
   await call('upsert_glossary', { entries: [{ strong: 'H0430G', zh: '神', level: 'locked', lemma: 'אֱלֹהִים' }] });
   const full = (zh101, zh013, note) => [
@@ -239,6 +241,15 @@ async function verifyEditor() {
     const splitSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: unmerged, expected: versions(mergedRows) });
     check('译文拆开写入', splitSave.status === 200 && splitSave.body.chapter.texts.filter((text) => text.bcv === 1001002).map((text) => text.translationSpan).join() === '1,1,1',
       JSON.stringify(splitSave.body.result?.errors ?? splitSave.body).slice(0, 160));
+
+    // 对齐：1:2c「神的灵运行在水面上」把「水」(o010010020142) 改对到「水面」上，再试一次违反 locked 的「神的」
+    const realigned = forVerse(setRendering(splitSave.body.chapter.texts, '1001002c', { tokens: 'o010010020142', zh: '水面', at: 6, note: '人工对齐' }), 1001002);
+    const alignSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: realigned, expected: versions(forVerse(splitSave.body.chapter.texts, 1001002)) });
+    const water = alignSave.body.chapter?.texts.find((text) => `${text.bcv}${text.sub}` === '1001002c')?.renderings.find((rendering) => rendering.tokens === 'o010010020142');
+    check('编辑器改对齐写入', alignSave.status === 200 && water?.zh === '水面' && water?.at === 6, JSON.stringify(alignSave.body.result?.errors ?? alignSave.body).slice(0, 160));
+    const lockedAlign = forVerse(setRendering(alignSave.body.chapter.texts, '1001002c', { tokens: 'o010010020101', zh: '神的', at: 0 }), 1001002);
+    const lockedSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: lockedAlign, expected: versions(forVerse(alignSave.body.chapter.texts, 1001002)) });
+    check('对齐改成违反 locked 的译词被拒', lockedSave.status === 200 && lockedSave.body.result.writtenVerses.length === 0, JSON.stringify(lockedSave.body.result).slice(0, 160));
   } finally {
     viewer.kill();
   }

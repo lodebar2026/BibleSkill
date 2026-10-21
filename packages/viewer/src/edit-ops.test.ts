@@ -8,9 +8,12 @@ import {
   mergeWithNext,
   setParent,
   setRange,
+  setRendering,
   splitClause,
   splitTranslation,
+  textRowOfWord,
   toggleBr,
+  updateRendering,
 } from './edit-ops.js';
 
 const V1 = 1001001;
@@ -98,13 +101,14 @@ function text(sub: string, value: string, extra: Partial<ClauseText> = {}): Clau
 
 test('译文合并与拆开', () => {
   const texts = [
-    text('a', '起初神创造', { renderings: [{ tokens: w(1, 1), zh: '创造' }] }),
-    text('b', '天地', { renderings: [{ tokens: w(1, 5), zh: '天' }], formatted: JSON.stringify([{ text: '天地', note: '理由' }]) }),
+    text('a', '起初神创造', { renderings: [{ tokens: w(1, 1), zh: '创造', at: 3 }] }),
+    text('b', '天地', { renderings: [{ tokens: w(1, 5), zh: '天', at: 0 }], formatted: JSON.stringify([{ text: '天地', note: '理由' }]) }),
   ];
   const merged = mergeTranslationWithNext(texts, `${V1}a`);
   assert.equal(merged[0].translationSpan, 2);
   assert.equal(merged[0].formatted, JSON.stringify([{ text: '起初神创造天地', note: '理由' }]));
-  assert.equal(merged[0].renderings.length, 2);
+  // 后一行的位置挪到合并后的译文里
+  assert.deepEqual(merged[0].renderings.map((rendering) => rendering.at), [3, 5]);
   assert.deepEqual([merged[1].translationSpan, merged[1].formatted, merged[1].renderings], [0, '[]', []]);
   assert.throws(() => mergeTranslationWithNext(merged, `${V1}a`), /没有下一行/);
 
@@ -115,4 +119,27 @@ test('译文合并与拆开', () => {
   assert.equal(split[1].formatted, JSON.stringify([{ text: '天地' }]));
   assert.deepEqual(split[1].renderings, [{ tokens: w(1, 5), zh: '天' }]);
   assert.throws(() => splitTranslation(texts, chapter, `${V1}a`, '', ''), /没有可拆/);
+});
+
+test('词级对齐：找译文行、设定 / 修改 / 删除对照', () => {
+  const texts = [
+    text('a', '起初神创造天地', { translationSpan: 2, renderings: [{ tokens: w(1, 1), zh: '创造', at: 3 }, { tokens: w(1, 5), zh: '天', note: '理由' }] }),
+    text('b', '', { translationSpan: 0, formatted: '[]' }),
+  ];
+  assert.equal(textRowOfWord(texts, chapter, w(1, 5)), `${V1}a`);
+  assert.equal(textRowOfWord(texts, chapter, w(2, 1)), null);
+
+  // 同一词范围：换位置、保留 note；重叠的区间整条被替换；按词序排
+  const moved = setRendering(texts, `${V1}a`, { tokens: w(1, 5), zh: '天地', at: 5 });
+  assert.deepEqual(moved[0].renderings[1], { tokens: w(1, 5), zh: '天地', at: 5, note: '理由' });
+  assert.deepEqual(moved[0].sources, ['ai', 'human']);
+  const phrase = setRendering(moved, `${V1}a`, { tokens: `${w(1, 4)}-${w(1, 6)}`, zh: '天地', at: 5 });
+  assert.deepEqual(phrase[0].renderings.map((rendering) => rendering.tokens), [w(1, 1), `${w(1, 4)}-${w(1, 6)}`]);
+  assert.throws(() => setRendering(texts, `${V1}b`, { tokens: w(1, 5), zh: '天' }), /没有自己的译文行/);
+
+  const untranslated = updateRendering(texts, `${V1}a`, w(1, 1), { zh: '∅', note: '与前词合译' });
+  assert.deepEqual(untranslated[0].renderings[0], { tokens: w(1, 1), zh: '∅', note: '与前词合译' });
+  const cleared = updateRendering(texts, `${V1}a`, w(1, 5), { note: '' });
+  assert.deepEqual(cleared[0].renderings[1], { tokens: w(1, 5), zh: '天' });
+  assert.equal(updateRendering(texts, `${V1}a`, w(1, 5), null)[0].renderings.length, 1);
 });

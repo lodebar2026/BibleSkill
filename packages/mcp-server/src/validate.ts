@@ -12,6 +12,7 @@ import {
   isTokenId,
   parseClauseId,
   parseTokenRange,
+  resolveAlignment,
   type ClauseEntity,
   type ClauseText,
   type SeedClause,
@@ -364,7 +365,7 @@ export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[] };
  * 译文结构校验（用词统一检查另在 consistency.ts）：
  * - 每节子句齐全且按序；span：未合并 1，合并时首句 N、其后 N-1 句为 0，不跨节
  * - span>0 的子句 text 非空；span=0 的 text 必须为空
- * - renderings 的词落在所覆盖子句内，zh 必须出现在 text 里
+ * - renderings 的词落在所覆盖子句内，zh 必须出现在 text 里；存盘时补上 at（zh 在译文中的位置）
  * - 覆盖子句内每个实词都要有 rendering
  * - 争议：子句分析为 ambiguous → 必须给 alternatives 并在 note 写主译理由；
  *   有影响翻译的经文异文 → 给 kind=textual 的 alternative，或在 note 说明为何不影响译文
@@ -485,12 +486,17 @@ export function checkTranslations(
       if (item.alternatives.length > 0 && !note) {
         fail(bcv, clause.id, '给了 alternatives 时须在 note 写明主译的取舍理由');
       }
+      const text = item.text.trim();
+      const positions = resolveAlignment(text, item.renderings);
       rows.push({
         bcv, sub,
         translationSpan: item.span,
-        formatted: JSON.stringify([note ? { text: item.text.trim(), note } : { text: item.text.trim() }]),
+        formatted: JSON.stringify([note ? { text, note } : { text }]),
         paraTitle: toParaTitle(item.paraTitle),
-        renderings: item.renderings,
+        renderings: item.renderings.map(({ at: _, ...rendering }, index) => {
+          const at = positions[index];
+          return at === null ? rendering : { ...rendering, at };
+        }),
         alternatives: item.alternatives,
         sources: item.sources,
         version: 0,

@@ -13,16 +13,19 @@ const STYLE = `
 :root {
   --bg: #fdfcf9; --fg: #1d1b16; --muted: #77716a; --line: #e4dfd6; --accent: #8a5a00;
   --ambiguous: #fff1c7; --review: #fde2e2; --selected: #e8f0fe; --shadow: #6b6b6b; --error: #b3261e;
+  --align: #ffe08a; --pending: #c7e3ff;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #17161a; --fg: #ebe7df; --muted: #9a958c; --line: #34313a; --accent: #f0b54a;
     --ambiguous: #3d3418; --review: #44232a; --selected: #233148; --shadow: #a8a29a; --error: #f28b82;
+    --align: #6b5414; --pending: #1f4a73;
   }
 }
 :root[data-theme="dark"] {
   --bg: #17161a; --fg: #ebe7df; --muted: #9a958c; --line: #34313a; --accent: #f0b54a;
   --ambiguous: #3d3418; --review: #44232a; --selected: #233148; --shadow: #a8a29a; --error: #f28b82;
+    --align: #6b5414; --pending: #1f4a73;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg);
@@ -48,6 +51,10 @@ td.orig { white-space: nowrap; font-family: "SBL BibLit", "SBL Hebrew", "SBL Gre
 table.ot td.orig { direction: rtl; text-align: right; }
 td.zh { font-size: 16px; line-height: 1.6; white-space: pre-line; min-width: 14em; }
 .tree-prefix { white-space: pre; font-family: "Times New Roman", Times, serif; font-size: 25pt; color: var(--muted); }
+.word.aligned, .zh-seg.aligned { background: var(--align); border-radius: 3px; }
+.word.pending { background: var(--pending); border-radius: 3px; }
+#details .renderings input { width: 100%; font: inherit; font-size: 12px; }
+#details .renderings button { font-size: 12px; padding: 0 4px; }
 .word.na-bracket { color: var(--muted); font-style: italic; }
 .word.shadow { color: var(--shadow); text-decoration: underline dotted; text-underline-offset: 6px; }
 tr.para-title td { font-weight: 600; color: var(--accent); padding-top: 14px; border-bottom: none; }

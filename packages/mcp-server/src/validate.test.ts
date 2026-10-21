@@ -71,6 +71,7 @@ test('合并两句：首句 span=2、次句 span=0 通过', () => {
   ], clausesByVerse, verses);
   assert.deepEqual(result.errors, []);
   assert.equal(result.accepted[0].translationSpan, 2);
+  assert.deepEqual(result.accepted[0].renderings.map((rendering) => rendering.at), [1, 0, 4]);
 });
 
 test('span 不合法、实词缺 rendering、rendering 不在译文里都被拒', () => {

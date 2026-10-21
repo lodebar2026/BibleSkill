@@ -57,13 +57,15 @@ export const TranslationSegmentSchema = z.object({
 
 export type TranslationSegment = z.infer<typeof TranslationSegmentSchema>;
 
-/** 原文词 → 中文译词的对照（一期的轻量对齐），用于用词统一检查与译法记忆。 */
+/** 原文词 → 中文译词的对照（词级对齐），用于用词统一检查、译法记忆与视图里的原文↔译文高亮。 */
 export const RenderingSchema = z.object({
   /** 单个词 id 或 `首-末` 范围（短语整体译为一个中文词时）。 */
   tokens: TokenRange,
   zh: z.string().min(1),
   /** 偏离术语表 preferred 或既有主导译法时必须说明理由。 */
   note: z.string().optional(),
+  /** zh 在本行译文中的起始位置（UTF-16 下标）。提交时可省，存盘时由 resolveAlignment 定位补上。 */
+  at: z.number().int().nonnegative().optional(),
 });
 
 export type Rendering = z.infer<typeof RenderingSchema>;

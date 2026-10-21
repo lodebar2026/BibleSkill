@@ -1,8 +1,10 @@
 /**
  * 浏览器端缩进视图的渲染。版式：节号 | 原文（树形前缀）| 直译（按 span 设置 rowSpan），
  * 段落标题独占一行。缩进用 canvas 按实际字体测量。
+ * 译文按 renderings 切成片段，悬停原文词或译文片段时双向高亮对应的另一侧（词级对齐）。
  */
 import type { ChapterView, ClauseEntity, ClauseText, ViewWord } from '@bs/core';
+import { alignmentSpans } from '@bs/core/align';
 import { buildChapterTree, continuationPrefix, flipTreePrefix, type Measure } from '@bs/clause-tree';
 
 type Clause = ClauseEntity;
@@ -109,6 +111,56 @@ export type RenderHooks = {
   errors?: Map<number, string[]>;
 };
 
+/** 区间 `首-末` 展开成章内的词 id（词表按 id 有序）。 */
+function wordsOfRange(range: string, words: Word[]): string[] {
+  const [first, last = first] = range.split('-');
+  return words.filter((word) => word.id >= first && word.id <= last).map((word) => word.id);
+}
+
+/** 主译文：按对齐切成片段，data-words 记下对应的原文词。 */
+function translationLine(text: Text, words: Word[]): HTMLElement {
+  const main = el('span', 'zh-main');
+  for (const span of alignmentSpans(segmentsText(text.formatted), text.renderings)) {
+    if (span.tokens.length === 0) {
+      main.append(document.createTextNode(span.text));
+      continue;
+    }
+    const seg = el('span', 'zh-seg', span.text);
+    seg.dataset.words = [...new Set(span.tokens.flatMap((range) => wordsOfRange(range, words)))].join(' ');
+    main.append(seg);
+  }
+  return main;
+}
+
+/** 原文词 ↔ 译文片段的悬停高亮：悬停一侧，点亮同一条对照的全部原文词与译文片段。 */
+function wireAlignmentHover(table: HTMLElement, groups: Map<string, string[]>): void {
+  let lit: Element[] = [];
+  const clear = () => {
+    lit.forEach((node) => node.classList.remove('aligned'));
+    lit = [];
+  };
+  table.addEventListener('mouseover', (event) => {
+    const target = (event.target as Element).closest('.word, .zh-seg');
+    clear();
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const seeds = target.classList.contains('word') ? [target.dataset.id!] : (target.dataset.words ?? '').split(' ');
+    const ids = new Set(seeds.flatMap((id) => groups.get(id) ?? []));
+    if (ids.size === 0) {
+      return;
+    }
+    table.querySelectorAll<HTMLElement>('.word, .zh-seg').forEach((node) => {
+      const own = node.classList.contains('word') ? [node.dataset.id!] : (node.dataset.words ?? '').split(' ');
+      if (own.some((id) => ids.has(id))) {
+        node.classList.add('aligned');
+        lit.push(node);
+      }
+    });
+  });
+  table.addEventListener('mouseleave', clear);
+}
+
 function verseOfClause(clauseId: string): number {
   return Number(clauseId.match(/^(\d+)[a-z]+$/)![1]);
 }
@@ -123,6 +175,19 @@ export function renderChapter(chapter: Chapter, panel: HTMLElement, hooks: Rende
   const textByKey = new Map(chapter.texts.map((text) => [`${text.bcv}${text.sub}`, text]));
   const paragraphStarts = new Set(chapter.texts.filter((text) => text.paraTitle !== null).map((text) => `${text.bcv}${text.sub}`));
   const wordById = new Map(chapter.words.map((word) => [word.id, word]));
+  // 原文词 → 它所在对照的译词（标在 title 上），以及同一条对照里的全部原文词（悬停时一起高亮）
+  const renderingOfWord = new Map<string, string>();
+  const groups = new Map<string, string[]>();
+  for (const text of chapter.texts) {
+    for (const rendering of text.renderings) {
+      const ids = wordsOfRange(rendering.tokens, chapter.words);
+      const label = rendering.zh === '∅' ? `不译${rendering.note ? `：${rendering.note}` : ''}` : `→ ${rendering.zh}`;
+      for (const id of ids) {
+        renderingOfWord.set(id, label);
+        groups.set(id, [...new Set([...(groups.get(id) ?? []), ...ids])]);
+      }
+    }
+  }
   const tree = buildChapterTree(chapter.clauses, chapter.words, measure, paragraphStarts);
   const orient = (prefix: string) => (chapter.isOT ? prefix : flipTreePrefix(prefix));
 
@@ -172,7 +237,7 @@ export function renderChapter(chapter: Chapter, panel: HTMLElement, hooks: Rende
             }
           });
         }
-        span.title = [full?.gloss, full?.zh, full?.morph, full?.naBracket ? 'NA28 [[ ]] 后加经文' : ''].filter(Boolean).join(' · ');
+        span.title = [full?.gloss, full?.zh, full?.morph, full?.naBracket ? 'NA28 [[ ]] 后加经文' : '', renderingOfWord.get(word.id)].filter(Boolean).join(' · ');
         div.append(span, document.createTextNode(word.after));
       }
       original.append(div);
@@ -181,7 +246,8 @@ export function renderChapter(chapter: Chapter, panel: HTMLElement, hooks: Rende
     if (!text) {
       row.append(el('td', 'zh muted', ''));
     } else if (text.translationSpan > 0) {
-      const cell = el('td', 'zh', segmentsText(text.formatted));
+      const cell = el('td', 'zh');
+      cell.append(translationLine(text, chapter.words));
       for (const alt of text.alternatives ?? []) {
         const line = el('div', 'alt-line');
         line.append(el('span', 'alt-kind', KIND_LABELS[alt.kind] ?? alt.kind), document.createTextNode(` ${alt.text}`));
@@ -209,6 +275,7 @@ export function renderChapter(chapter: Chapter, panel: HTMLElement, hooks: Rende
       table.append(errorRow);
     }
   });
+  wireAlignmentHover(table, groups);
   section.append(table);
   if (tree.orphans.length > 0) {
     section.append(el('p', 'muted', `parentId 无法解析或成环，已按独立子句显示：${tree.orphans.map(verseLabel).join('、')}`));

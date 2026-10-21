@@ -4,7 +4,7 @@
  * 只从 @bs/core 引类型：core 的运行时代码依赖 node:sqlite，不能打进浏览器包。
  * 拆分 / 合并后按词序把本节子句重排为 a、b、c…，并按改名表重写全章的 parentId。
  */
-import type { ClauseEntity, ClauseText, TranslationSegment } from '@bs/core';
+import type { ClauseEntity, ClauseText, Rendering, TranslationSegment } from '@bs/core';
 
 type Word = { id: string };
 
@@ -284,6 +284,15 @@ function replaceTexts(texts: ClauseText[], bcv: number, rows: ClauseText[]): Cla
   return [...texts.filter((item) => item.bcv !== bcv), ...rows].sort((a, b) => (a.bcv - b.bcv) || a.sub.localeCompare(b.sub));
 }
 
+function shiftAt(rendering: Rendering, offset: number): Rendering {
+  return rendering.at === undefined ? rendering : { ...rendering, at: rendering.at + offset };
+}
+
+/** 拆开时译文是人工重填的，旧位置作废，交给服务端重新定位。 */
+function withoutAt({ at: _, ...rendering }: Rendering): Rendering {
+  return rendering;
+}
+
 /** 把下一行译文并入本行：文字直接相接，对照 / 其他译法合并，note 用「；」相连。 */
 export function mergeTranslationWithNext(texts: ClauseText[], key: string): ClauseText[] {
   const bcv = verseOf(key);
@@ -302,7 +311,7 @@ export function mergeTranslationWithNext(texts: ClauseText[], key: string): Clau
     ...head,
     translationSpan: head.translationSpan + next.translationSpan,
     formatted: formattedOf(textOf(head.formatted) + textOf(next.formatted), [noteOf(head.formatted), noteOf(next.formatted)].filter(Boolean).join('；')),
-    renderings: [...head.renderings, ...next.renderings],
+    renderings: [...head.renderings, ...next.renderings.map((rendering) => shiftAt(rendering, textOf(head.formatted).length))],
     alternatives: [...head.alternatives, ...next.alternatives],
     sources: [...new Set([...head.sources, ...next.sources, 'human'])],
   };
@@ -344,7 +353,7 @@ export function splitTranslation(texts: ClauseText[], entities: ClauseEntity[], 
         ...head,
         translationSpan: head.translationSpan - 1,
         formatted: formattedOf(kept.trim(), noteOf(head.formatted)),
-        renderings: head.renderings.filter((rendering) => !moves(rendering.tokens)),
+        renderings: head.renderings.filter((rendering) => !moves(rendering.tokens)).map(withoutAt),
         sources,
       };
     }
@@ -353,7 +362,7 @@ export function splitTranslation(texts: ClauseText[], entities: ClauseEntity[], 
         ...item,
         translationSpan: 1,
         formatted: formattedOf(detached.trim(), ''),
-        renderings: head.renderings.filter((rendering) => moves(rendering.tokens)),
+        renderings: head.renderings.filter((rendering) => moves(rendering.tokens)).map(withoutAt),
         alternatives: [],
         sources,
       };
@@ -361,4 +370,68 @@ export function splitTranslation(texts: ClauseText[], entities: ClauseEntity[], 
     return item;
   });
   return replaceTexts(texts, bcv, split);
+}
+
+// ---------------------------------------------------------------- 词级对齐
+
+/** 词所在子句的译文行（合并时是首句）的 key；该节还没有译文为 null。 */
+export function textRowOfWord(texts: ClauseText[], entities: ClauseEntity[], wordId: string): string | null {
+  const clause = entities.find((item) => item.firstWordId <= wordId && wordId <= item.lastWordId);
+  if (!clause) {
+    return null;
+  }
+  const rows = verseTexts(texts, verseOf(clause.id));
+  const index = rows.findIndex((item) => `${item.bcv}${item.sub}` === clause.id);
+  for (let i = index; i >= 0; i -= 1) {
+    if (rows[i].translationSpan > 0) {
+      return i + rows[i].translationSpan > index ? `${rows[i].bcv}${rows[i].sub}` : null;
+    }
+  }
+  return null;
+}
+
+function overlaps(a: string, b: string): boolean {
+  return rangeStart(a) <= rangeEnd(b) && rangeStart(b) <= rangeEnd(a);
+}
+
+function updateRow(texts: ClauseText[], key: string, update: (row: ClauseText) => Rendering[]): ClauseText[] {
+  const row = texts.find((item) => `${item.bcv}${item.sub}` === key);
+  if (!row || row.translationSpan === 0) {
+    throw new Error('这一句还没有自己的译文行');
+  }
+  return texts.map((item) => (item === row
+    ? { ...item, renderings: update(item), sources: [...new Set([...item.sources, 'human'])] }
+    : item));
+}
+
+/** 设定一条对齐：与它词范围重叠的旧对照被替换（词范围完全相同时保留旧 note），按词序插入。 */
+export function setRendering(texts: ClauseText[], key: string, rendering: Rendering): ClauseText[] {
+  return updateRow(texts, key, (row) => {
+    const same = row.renderings.find((item) => item.tokens === rendering.tokens);
+    const next = same?.note && rendering.note === undefined ? { ...rendering, note: same.note } : rendering;
+    return [...row.renderings.filter((item) => !overlaps(item.tokens, rendering.tokens)), next]
+      .sort((a, b) => rangeStart(a.tokens).localeCompare(rangeStart(b.tokens)));
+  });
+}
+
+/** 改一条对照的 note / zh（设为 ∅ 时去掉位置）；patch 为 null 删除这条。 */
+export function updateRendering(texts: ClauseText[], key: string, tokens: string, patch: Partial<Pick<Rendering, 'zh' | 'note'>> | null): ClauseText[] {
+  return updateRow(texts, key, (row) => {
+    if (!row.renderings.some((item) => item.tokens === tokens)) {
+      throw new Error(`没有 ${tokens} 的对照`);
+    }
+    if (patch === null) {
+      return row.renderings.filter((item) => item.tokens !== tokens);
+    }
+    return row.renderings.map((item) => {
+      if (item.tokens !== tokens) {
+        return item;
+      }
+      const next: Rendering = { ...item, ...patch };
+      if (!next.note) {
+        delete next.note;
+      }
+      return patch.zh !== undefined && patch.zh !== item.zh ? withoutAt(next) : next;
+    });
+  });
 }

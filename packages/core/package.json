@@ -13,6 +13,10 @@
     "./clause-type": {
       "types": "./dist/clause-type.d.ts",
       "import": "./dist/clause-type.js"
+    },
+    "./align": {
+      "types": "./dist/align.d.ts",
+      "import": "./dist/align.js"
     }
   },
   "scripts": {

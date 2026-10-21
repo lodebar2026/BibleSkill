@@ -15,9 +15,12 @@ import {
   setFields,
   setParent,
   setRange,
+  setRendering,
   splitClause,
   splitTranslation,
+  textRowOfWord,
   toggleBr,
+  updateRendering,
   verseOf,
 } from './edit-ops.js';
 import {
@@ -32,7 +35,7 @@ import {
   type ClauseText,
 } from './render.js';
 
-type Mode = 'select' | 'split' | 'attach' | 'subject' | 'verb' | 'br';
+type Mode = 'select' | 'split' | 'attach' | 'subject' | 'verb' | 'br' | 'align';
 
 const MODES: Array<[Mode, string, string]> = [
   ['select', '选择', '点子句行选中，在右侧修改句型、状态、说明'],
@@ -41,6 +44,7 @@ const MODES: Array<[Mode, string, string]> = [
   ['subject', '主语', '先选中子句，再依次点主语的首词、末词（单词点两次）'],
   ['verb', '谓词', '先选中子句，再依次点谓词的首词、末词（单词点两次）'],
   ['br', '换行', '点词：在这个词后面换行 / 取消换行'],
+  ['align', '对齐', '点原文首词、末词（单词点两次），再在译文里划选对应的中文'],
 ];
 
 const STATUSES = ['accepted', 'ambiguous', 'needs-review'];
@@ -88,6 +92,8 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
   let mode: Mode = 'select';
   let selected: { chapter: number; id: string } | null = null;
   let rangeStart: string | null = null;
+  /** 对齐模式下已选好的原文词区间，等着划选译文。 */
+  let pendingAlign: { chapter: number; key: string; tokens: string } | null = null;
   let saving = false;
   /** 保存期间又有新编辑：保存完再提交一次。 */
   let saveAgain: number | null = null;
@@ -120,6 +126,8 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
   function setMode(next: Mode): void {
     mode = next;
     rangeStart = null;
+    pendingAlign = null;
+    markPending();
     modeButtons.forEach((button, value) => button.classList.toggle('active', value === mode));
     status(MODES.find(([value]) => value === mode)![2]);
   }
@@ -141,7 +149,22 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
     )));
     undoButton.disabled = undoStack.length === 0 || saving;
     redoButton.disabled = redoStack.length === 0 || saving;
+    markPending();
     renderDetails();
+  }
+
+  /** 对齐模式里已点的原文词标出来（重绘后也要补上）。 */
+  function markPending(): void {
+    content.querySelectorAll('.word.pending').forEach((node) => node.classList.remove('pending'));
+    const [first, last] = pendingAlign ? pendingAlign.tokens.split('-') : rangeStart && mode === 'align' ? [rangeStart] : [];
+    if (!first) {
+      return;
+    }
+    content.querySelectorAll<HTMLElement>('.word').forEach((node) => {
+      if (node.dataset.id! >= first && node.dataset.id! <= (last ?? first)) {
+        node.classList.add('pending');
+      }
+    });
   }
 
   // ------------------------------------------------------------ 操作
@@ -259,8 +282,61 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
         }
         return true;
       }
+      case 'align': {
+        if (rangeStart === null || pendingAlign) {
+          rangeStart = wordId;
+          pendingAlign = null;
+          markPending();
+          status('首词已选，再点末词（单词就再点一次同一个词）');
+          return true;
+        }
+        const [first, last] = rangeStart < wordId ? [rangeStart, wordId] : [wordId, rangeStart];
+        rangeStart = null;
+        const key = textRowOfWord(work.texts, work.clauses, first);
+        if (!key || textRowOfWord(work.texts, work.clauses, last) !== key) {
+          markPending();
+          status(key ? '首末词要落在同一行译文里' : '这一句还没有译文，先跑 /bible-translate', 'error');
+          return true;
+        }
+        pendingAlign = { chapter, key, tokens: first === last ? first : `${first}-${last}` };
+        markPending();
+        status(`在 ${verseLabel(key)} 的译文里划选对应的中文（有意不译的，在右侧「译法对照」里设）`);
+        return true;
+      }
     }
   }
+
+  /** 对齐模式：划选完译文，把选区换算成译文里的位置，设成待定原文词的对照。 */
+  content.addEventListener('mouseup', () => {
+    const selection = window.getSelection();
+    if (mode !== 'align' || !pendingAlign || !selection || selection.isCollapsed) {
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const main = (range.startContainer.parentElement)?.closest('.zh-main');
+    if (!main || main !== range.endContainer.parentElement?.closest('.zh-main')) {
+      status('选区要在同一行主译文里', 'error');
+      return;
+    }
+    const key = (main.closest('tr') as HTMLElement | null)?.dataset.clause;
+    if (key !== pendingAlign.key) {
+      status(`要在 ${verseLabel(pendingAlign.key)} 的译文里划选`, 'error');
+      return;
+    }
+    const before = document.createRange();
+    before.selectNodeContents(main);
+    before.setEnd(range.startContainer, range.startOffset);
+    const raw = range.toString();
+    const zh = raw.trim();
+    if (!zh) {
+      return;
+    }
+    const at = before.toString().length + (raw.length - raw.trimStart().length);
+    const { chapter, tokens } = pendingAlign;
+    pendingAlign = null;
+    selection.removeAllRanges();
+    editTexts(chapter, (texts) => setRendering(texts, key, { tokens, zh, at }));
+  });
 
   // ------------------------------------------------------------ 保存
 
@@ -479,6 +555,7 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
       panel.append(line);
     }
     const key = clause.id;
+    renderRenderings(chapter, work, key, text);
     const actions = el('div', 'actions');
     const rows = work.texts.filter((item) => item.bcv === text.bcv).sort((a, b) => a.sub.localeCompare(b.sub));
     const index = rows.indexOf(text);
@@ -514,8 +591,43 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
     }
   }
 
+  /** 译法对照表：note 失焦即保存；「不译」把译词设为 ∅（须有 note）；「删除」去掉这条。 */
+  function renderRenderings(chapter: number, work: Work, key: string, text: ClauseText): void {
+    if (text.renderings.length === 0) {
+      return;
+    }
+    panel.append(el('h4', '', '译法对照'));
+    const table = el('table', 'renderings');
+    for (const rendering of text.renderings) {
+      const row = el('tr');
+      const note = el('input');
+      note.value = rendering.note ?? '';
+      note.placeholder = 'note';
+      note.addEventListener('change', () => editTexts(chapter, (texts) => updateRendering(texts, key, rendering.tokens, { note: note.value.trim() })));
+      const untranslated = el('button', '', '不译');
+      untranslated.disabled = rendering.zh === '∅';
+      untranslated.addEventListener('click', () => {
+        if (!note.value.trim()) {
+          status('标为不译要先在 note 里写理由', 'error');
+          note.focus();
+          return;
+        }
+        editTexts(chapter, (texts) => updateRendering(texts, key, rendering.tokens, { zh: '∅', note: note.value.trim() }));
+      });
+      const remove = el('button', '', '删除');
+      remove.addEventListener('click', () => editTexts(chapter, (texts) => updateRendering(texts, key, rendering.tokens, null)));
+      const tools = el('td');
+      tools.append(untranslated, remove);
+      const noteCell = el('td');
+      noteCell.append(note);
+      row.append(el('td', 'orig', surfaceOf(work, rendering.tokens)), el('td', '', rendering.zh), noteCell, tools);
+      table.append(row);
+    }
+    panel.append(table);
+  }
+
   document.addEventListener('keydown', (event) => {
-    if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) {
+    if (event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement || event.target instanceof HTMLInputElement) {
       return;
     }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'z') {

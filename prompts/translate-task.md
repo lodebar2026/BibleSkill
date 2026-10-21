@@ -31,6 +31,7 @@
 - `text`：直译文本。原文隐含、中文必须补出的词用 `[ ]`；NA28/UBS 双括号内的经文，译文首尾加 `〚 〛`。
 - `renderings`：`clauses[].contentTokens` 中的**每个实词**都要有一条；`zh` 必须是 `text` 里实际出现的字串。
   - 几个词整体译为一个中文词时，`tokens` 写区间 `首-末`。
+  - `zh` 在 `text` 里出现不止一处时，可以加 `at`（`zh` 在 `text` 中的起始位置，从 0 数）指明是哪一处；不给时系统按词序自动定位。briefing 里已有译文的 renderings 带着 `at`，改了译文后不必手算，删掉或留着都行。
   - 实词有意不译时 `zh` 写 `∅` 并加 `note`。
   - 虚词可以不给 rendering。
 - `alternatives`：争议处的其他译法，每条 `{text, kind, basis}`（见下文“争议”）。

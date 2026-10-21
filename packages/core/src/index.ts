@@ -8,3 +8,4 @@ export * from './db.js';
 export * from './config.js';
 export * from './clause-type.js';
 export * from './view-data.js';
+export * from './align.js';

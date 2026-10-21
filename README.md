@@ -92,12 +92,14 @@ pnpm view 创 1 --workdir ~/圣经直译 --serve            # 可编辑视图：
 | 挂接 | 先选中子句，再点父句里被它修饰的词：同时设定 parentId 与 modifies |
 | 主语 / 谓词 | 先选中子句，再依次点首词、末词（单个词点两次） |
 | 换行 | 点词，在它后面换行或取消 |
+| 对齐 | 依次点原文首词、末词（单个词点两次），再在译文里划选对应的中文：设为这几个词的对照，与它们重叠的旧对照被替换 |
 
-右侧详情栏可以改句型、状态、说明、seedDiff，也可以设为独立、清除 modifies / 主语 / 谓词、与下一句合并。译文区可以把下一行译文并进来（translationSpan 合并），或者把合并行的最后一句拆出来另填译文。撤销、重做用工具条按钮或 Ctrl/⌘+Z、Ctrl/⌘+Shift+Z。
+右侧详情栏可以改句型、状态、说明、seedDiff，也可以设为独立、清除 modifies / 主语 / 谓词、与下一句合并；「译法对照」表可以改 note、把某个词设为不译（∅，须写 note）或删掉对照。译文区可以把下一行译文并进来（translationSpan 合并），或者把合并行的最后一句拆出来另填译文。撤销、重做用工具条按钮或 Ctrl/⌘+Z、Ctrl/⌘+Shift+Z。
 
 - **保存**：每步操作后立即提交，走与 `submit_clause_analysis` / `submit_translation` 相同的校验（含主语检查与术语表检查）。没通过的节留作草稿，节号标红，并在表中显示错误，可以接着改或撤销。
 - **乐观锁**：提交时带上读到的版本号。文件已在别处改过（例如模型同时在提交），返回冲突，刷新页面即可。
 - **人工标记**：改过的子句 `sources` 追加 `human`。人工写 seedDiff 推翻 Macula 时，状态不会再自动降为 needs-review，因为人工修改本身就是复核结论。
+- **词级对齐**：HTML 和 `--serve` 视图里，鼠标悬停原文词会高亮它在译文里的译词，悬停译文也会反过来高亮原文词；原文词的提示里也带着译词。
 - **重译提示**：结构改动导致已有译文对不上的节，节号后显示 ↻，悬停可看到原因。这些节交给 `/bible-review` 整节重译。
 
 ### 在 agy 下跑端到端测试
@@ -154,14 +156,14 @@ rules.json                         分析/翻译规则 {id, task, pattern, resol
 `clause_entities.json`（`ClauseEntity`）与 `clauses.json`（`ClauseText`）的字段保持稳定，新功能只追加字段：
 
 - 子句：`status`（accepted / ambiguous / needs-review）、`alternatives`（其他切法与依据）、`seedDiff`、`sources`、`note`
-- 译文：`renderings`、`alternatives`（其他译法 `{text, kind, basis}`）、`sources`；主译的取舍理由存在 `formatted` 的 note 里
+- 译文：`renderings`（每条可带 `at`：译词在本行译文中的位置，存盘时自动定位）、`alternatives`（其他译法 `{text, kind, basis}`）、`sources`；主译的取舍理由存在 `formatted` 的 note 里
 
 两个文件都有 `version` 字段，按节整体替换，写入是原子的（先写临时文件再 rename）。
 
 ## 用词统一
 
 - **归并键**：`senseKey` = 扩展 Strong + Macula 义项（旧约 SDBH，新约 Louw-Nida）。扩展 Strong 已经区分同形词和专名个体。
-- **译法对照**：提交译文时，每个实词（名词、动词、形容词）都要给出 `renderings`。这些对照构成译法记忆，不另外落盘，扫描工作目录实时汇总。
+- **译法对照**：提交译文时，每个实词（名词、动词、形容词）都要给出 `renderings`。这些对照构成译法记忆，不另外落盘，扫描工作目录实时汇总。它们同时就是词级对齐：`zh` 在译文里出现不止一处、或落在别的译词里（「地」在「大地」里）时，存盘时按「给定的 `at` → 长词优先 → 词序」定到具体位置，视图据此做原文与译文的双向高亮。
 - **提交检查**：
   - 违反 `locked` 术语 → 拒绝该节。
   - 偏离 `preferred` 术语或既有主导译法、又没写 `note` → 拒绝该节，并列出既有译法。
@@ -200,7 +202,7 @@ skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>
 ## 开发
 
 ```bash
-pnpm build && pnpm test        # 单元测试（校验器、审校、引用解析、句型换算、编辑操作）
+pnpm build && pnpm test        # 单元测试（校验器、审校、引用解析、句型换算、对齐定位、编辑操作）
 pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍完整流程，最后经 --serve 的接口做编辑
 ```
 
@@ -215,5 +217,4 @@ pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍�
 
 ## 二期
 
-- 词级对齐
 - 新约引用旧约的译法对照

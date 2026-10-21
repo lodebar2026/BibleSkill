@@ -27,7 +27,7 @@
 |---|---|
 | `id` | `bcv + 字母`，如 `1001002a`；同一节按 a、b、c… 连续 |
 | `firstWordId` / `lastWordId` | 只用 briefing 中出现的词 id |
-| `type` | **基础句型全称**（见下），系统换算展示码 |
+| `type` | 仅旧约：**基础句型全称**（见下），系统换算展示码；新约不填 |
 | `parentId` | 父子句的完整 id；顶层子句为 `null` |
 | `modifies` | 父句中被本句修饰的词 id（决定缩进视图分支位置）；与父句相邻时应填写 |
 | `subjectRange` | 明示主语的词 id 或 `首-末` 区间；无明示主语则省略 |
@@ -42,7 +42,7 @@
 
 ### 主语（系统会校验）
 
-- 有明示主语就必须填 `subjectRange`，它决定展示码（`WayX`/`XQtl`/`AorX` …）。
+- 有明示主语就必须填 `subjectRange`；旧约的展示码（`WayX`/`XQtl` …）也据此换算。
 - 判断系词句的主语：希腊文带冠词的名词通常是主语，不带冠词的是表语（约 1:1 `θεὸς ἦν ὁ λόγος` 主语是 `ὁ λόγος`）。
 - `subjectRange` 只标主语名词短语本身，不能包含谓词。
 - 系统拿 Macula 的主语核对：谓词在本句内而 Macula 标出的主语漏填、标得完全不重叠、或主语被切到别的子句，都会拒绝该节。
@@ -59,12 +59,12 @@
 - 子句不跨节；跨节的句子在每节各自成子句，用 `parentId` 连接。`parentId` 可以指向**后面**的子句（包括下一节的）：例如约 1:3-4 按 NA28 断句时，3c `ὃ γέγονεν` 挂在 4a 下，`modifies` 指向 4a 的词。
 - 前置的连词、介词留在其后的子句里。
 
-### 基础句型
+### 基础句型（仅旧约）
 
 - 旧约：`wayyiqtol`、`qatal`、`yiqtol`、`weqatal`、`imperative`、`participle`、`infinitive_construct`、`infinitive_absolute`、`nominal`。用法见 [clause-type-guidance-hebrew.md](clause-type-guidance-hebrew.md)。
-- 新约：`aorist_ind`、`imperfect_ind`、`present_ind`、`perfect_ind`、`pluperfect_ind`、`future_ind`、`subjunctive`、`optative`、`imperative`、`infinitive`、`participle`、`nominal`。用法见 [clause-type-guidance-greek.md](clause-type-guidance-greek.md)。
-- 旧约的 `wayyiqtol`、`qatal`、`yiqtol`、`infinitive_*` 必须给 `verbRange`；新约除 `nominal` 外都必须给 `verbRange`。
-- 展示码（`WayX`、`XQtl`、`AorX` …）由系统按主语有无与前后换算，不要自己填。
+- `wayyiqtol`、`qatal`、`yiqtol`、`infinitive_*` 必须给 `verbRange`。
+- 展示码（`WayX`、`XQtl` …）由系统按主语有无与前后换算，不要自己填。
+- 新约不分句型，`type` 不填；子句有谓词时照常给 `verbRange`。
 
 ## 从属关系的判断
 

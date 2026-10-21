@@ -1,6 +1,6 @@
 ## ClauseType 指南（旧约希伯来语）
 
-本页只适用**旧约**。新约希腊语见 [clause-type-guidance-greek.md](clause-type-guidance-greek.md)。
+本页只适用**旧约**。新约不分句型。
 
 本页说明的是系统落盘后的展示句型 `ClauseType`，不是 analyze 时直接提交的 `type`。
 analyze 时，`type` 提交基础句型全称；系统会根据 `subjectRange`、`verbRange` 等信息自动换算成这里的展示句型。

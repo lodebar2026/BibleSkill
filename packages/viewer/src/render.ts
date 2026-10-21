@@ -53,7 +53,7 @@ export function verseLabel(clauseId: string): string {
 
 export function showDetails(panel: HTMLElement, clause: Clause, text: Text | undefined, words: Map<string, Word>): void {
   panel.replaceChildren();
-  panel.append(el('h3', '', `${verseLabel(clause.id)} · ${clause.type}`));
+  panel.append(el('h3', '', clause.type ? `${verseLabel(clause.id)} · ${clause.type}` : verseLabel(clause.id)));
   const rows: Array<[string, string]> = [
     ['状态', clause.status],
     ['父句', clause.parentId ? verseLabel(clause.parentId) : '—'],

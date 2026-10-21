@@ -46,7 +46,7 @@ export const SubmittedClauseSchema = z.object({
   id: z.string(),
   firstWordId: z.string(),
   lastWordId: z.string(),
-  /** 基础句型全称（wayyiqtol / aorist_ind …），写盘时换算成展示码。 */
+  /** 旧约基础句型全称（wayyiqtol / qatal …），写盘时换算成展示码；新约不填。 */
   type: z.string().default(''),
   parentId: nullableString.default(null),
   modifies: nullableString.default(null),

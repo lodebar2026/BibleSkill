@@ -1,5 +1,6 @@
 /**
- * 子句句型。analyze 提交基础句型全称，系统按主语有无与前后换算成展示码（WayX、XAor …）。
+ * 子句句型（只用于旧约）。analyze 提交基础句型全称，系统按主语有无与前后换算成展示码（WayX、XQtl …）。
+ * 新约不分句型，type 一律存空串。
  *
  * 展示码规则：无明示主语 → `…0`；主语在动词前 → `X…`；否则 → `…X`。
  */
@@ -10,22 +11,8 @@ export const BASIC_TYPES_OT = [
   'infinitive_construct', 'infinitive_absolute', 'nominal',
 ] as const;
 
-export const BASIC_TYPES_NT = [
-  'aorist_ind', 'imperfect_ind', 'present_ind', 'perfect_ind', 'pluperfect_ind', 'future_ind',
-  'subjunctive', 'optative', 'imperative', 'infinitive', 'participle', 'nominal',
-] as const;
-
 /** 必须给 verbRange 的基础句型（据此判断主语前置并回填动词信息）。 */
 const VERB_REQUIRED_OT = new Set(['wayyiqtol', 'qatal', 'yiqtol', 'infinitive_construct', 'infinitive_absolute']);
-
-const GREEK_INDICATIVE_STEMS: Record<string, string> = {
-  present_ind: 'Prs',
-  imperfect_ind: 'Ipf',
-  aorist_ind: 'Aor',
-  future_ind: 'Fut',
-  perfect_ind: 'Prf',
-  pluperfect_ind: 'Plp',
-};
 
 function subjectFronted(subjectRange: string | null, verbRange: string | null): boolean {
   if (!subjectRange || !verbRange) {
@@ -34,17 +21,19 @@ function subjectFronted(subjectRange: string | null, verbRange: string | null): 
   return parseTokenRange(subjectRange)[0] < parseTokenRange(verbRange)[0];
 }
 
-/** 校验基础句型；返回问题列表（空即通过）。 */
+/** 校验基础句型；返回问题列表（空即通过）。新约不分句型，不校验。 */
 export function validateBasicType(
   testament: 'OT' | 'NT',
   input: { type: string; subjectRange: string | null; verbRange: string | null },
 ): string[] {
-  const allowed: readonly string[] = testament === 'OT' ? BASIC_TYPES_OT : BASIC_TYPES_NT;
-  if (!allowed.includes(input.type)) {
-    return [`type 应为${testament === 'OT' ? '旧约' : '新约'}基础句型之一：${allowed.join(' / ')}（收到 ${input.type || '空'}）`];
+  if (testament === 'NT') {
+    return [];
   }
-  const needsVerb = testament === 'OT' ? VERB_REQUIRED_OT.has(input.type) : input.type !== 'nominal';
-  if (needsVerb && !input.verbRange) {
+  const allowed: readonly string[] = BASIC_TYPES_OT;
+  if (!allowed.includes(input.type)) {
+    return [`type 应为旧约基础句型之一：${allowed.join(' / ')}（收到 ${input.type || '空'}）`];
+  }
+  if (VERB_REQUIRED_OT.has(input.type) && !input.verbRange) {
     return [`type=${input.type} 时必须填写 verbRange`];
   }
   return [];
@@ -54,22 +43,11 @@ export function displayClauseType(
   testament: 'OT' | 'NT',
   input: { type: string; subjectRange: string | null; verbRange: string | null },
 ): string {
+  if (testament === 'NT') {
+    return '';
+  }
   const withSubject = Boolean(input.subjectRange);
   const fronted = subjectFronted(input.subjectRange, input.verbRange);
-  if (testament === 'NT') {
-    const stem = GREEK_INDICATIVE_STEMS[input.type];
-    if (stem) {
-      return withSubject ? (fronted ? `X${stem}` : `${stem}X`) : `${stem}0`;
-    }
-    switch (input.type) {
-      case 'subjunctive': return withSubject ? (fronted ? 'XSbj' : 'SbjX') : 'Sbj0';
-      case 'optative': return withSubject ? 'OptX' : 'Opt0';
-      case 'imperative': return withSubject ? 'IpvX' : 'Ipv';
-      case 'infinitive': return 'Inf';
-      case 'participle': return 'Ptc';
-      default: return 'Nom';
-    }
-  }
   switch (input.type) {
     case 'wayyiqtol': return withSubject ? 'WayX' : 'Way0';
     case 'qatal': return withSubject ? (fronted ? 'XQtl' : 'QtlX') : 'Qtl0';
@@ -84,25 +62,17 @@ export function displayClauseType(
 }
 
 /**
- * 展示码 → 基础句型（displayClauseType 的逆）。同一约内展示码与基础句型一一对应；
+ * 展示码 → 基础句型（displayClauseType 的逆）。展示码与基础句型一一对应；
  * 已是基础句型的原样返回，认不出的返回 null。编辑器把存盘的子句重新提交校验时用。
+ * 新约一律返回空串（旧数据里残留的句型随之清掉）。
  */
 export function basicClauseType(testament: 'OT' | 'NT', type: string): string | null {
-  const allowed: readonly string[] = testament === 'OT' ? BASIC_TYPES_OT : BASIC_TYPES_NT;
+  if (testament === 'NT') {
+    return '';
+  }
+  const allowed: readonly string[] = BASIC_TYPES_OT;
   if (allowed.includes(type)) {
     return type;
-  }
-  if (testament === 'NT') {
-    for (const [basic, stem] of Object.entries(GREEK_INDICATIVE_STEMS)) {
-      if ([`X${stem}`, `${stem}X`, `${stem}0`].includes(type)) {
-        return basic;
-      }
-    }
-    const nt: Record<string, string> = {
-      XSbj: 'subjunctive', SbjX: 'subjunctive', Sbj0: 'subjunctive', OptX: 'optative', Opt0: 'optative',
-      IpvX: 'imperative', Ipv: 'imperative', Inf: 'infinitive', Ptc: 'participle', Nom: 'nominal',
-    };
-    return nt[type] ?? null;
   }
   const ot: Record<string, string> = {
     WayX: 'wayyiqtol', Way0: 'wayyiqtol', XQtl: 'qatal', QtlX: 'qatal', Qtl0: 'qatal', XYqt: 'yiqtol', YqtX: 'yiqtol', Yqt0: 'yiqtol',

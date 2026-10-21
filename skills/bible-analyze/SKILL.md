@@ -9,7 +9,7 @@ description: 圣经原文子句切分。当用户要求分析、切分、断句�
 
 1. [references/principles.md](references/principles.md)：角色、直译原则、扩展工具的用法
 2. [references/analyze-task.md](references/analyze-task.md)：任务规则、字段、校验规则
-3. 句型说明：旧约读 [references/clause-type-guidance-hebrew.md](references/clause-type-guidance-hebrew.md)，新约读 [references/clause-type-guidance-greek.md](references/clause-type-guidance-greek.md)；诗歌体再读 [references/poetry-genre.md](references/poetry-genre.md)
+3. 句型说明：旧约读 [references/clause-type-guidance-hebrew.md](references/clause-type-guidance-hebrew.md)（新约不分句型）；诗歌体再读 [references/poetry-genre.md](references/poetry-genre.md)
 
 执行顺序：
 

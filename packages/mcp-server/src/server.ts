@@ -81,7 +81,7 @@ server.registerTool('build_analysis_briefing', {
 
 server.registerTool('submit_clause_analysis', {
   description:
-    '提交子句切分。clauses 为 JSON 数组，每项 {id, firstWordId, lastWordId, type, parentId, modifies, '
+    '提交子句切分。clauses 为 JSON 数组，每项 {id, firstWordId, lastWordId, type（仅旧约）, parentId, modifies, '
     + 'subjectRange?, verbRange?, verbPerson?, verbStem?, br?, alone?, status?, alternatives?, seedDiff?, sources?, note?}。'
     + '按节校验，通过的节写入 clause_entities.json，未通过的节在 errors 返回。',
   inputSchema: loose({ range, clauses: z.any().optional() }),

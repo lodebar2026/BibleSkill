@@ -5,7 +5,7 @@
  * 每次操作先改工作副本，再把有变化的节（连同之前没保存成功的节）提交；通过的节换成盘上状态，
  * 没通过的留作草稿并显示错误，可以接着改或撤销。撤销就是把操作前的副本当作一次新编辑提交。
  */
-import { BASIC_TYPES_NT, BASIC_TYPES_OT, basicClauseType } from '@bs/core/clause-type';
+import { BASIC_TYPES_OT, basicClauseType } from '@bs/core/clause-type';
 import {
   changedClauseVerses,
   changedTextVerses,
@@ -457,11 +457,11 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
     const text = work.texts.find((item) => `${item.bcv}${item.sub}` === clause.id);
     const edit = (op: (clauses: ClauseEntity[]) => ClauseEntity[]) => editClauses(chapter, op);
     panel.replaceChildren();
-    panel.append(el('h3', '', `${verseLabel(clause.id)} · ${clause.type}`));
+    panel.append(el('h3', '', clause.type ? `${verseLabel(clause.id)} · ${clause.type}` : verseLabel(clause.id)));
 
     const form = el('div', 'edit-form');
     const typeSelect = el('select');
-    for (const type of testament === 'OT' ? BASIC_TYPES_OT : BASIC_TYPES_NT) {
+    for (const type of BASIC_TYPES_OT) {
       typeSelect.append(new Option(type, type));
     }
     typeSelect.value = basicClauseType(testament, clause.type) ?? '';
@@ -482,7 +482,9 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
       row.append(el('span', '', label), input);
       form.append(row);
     };
-    field('句型', typeSelect);
+    if (testament === 'OT') {
+      field('句型', typeSelect);
+    }
     field('状态', statusSelect);
     field('说明', note);
     field('与 Macula 不同', seedDiff);

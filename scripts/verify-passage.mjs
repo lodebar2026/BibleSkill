@@ -144,16 +144,16 @@ try {
 
   // 约 1:1 / 1:3：主语检查（Macula 主语为证据）
   const john11 = (subject, extra = {}) => [
-    { id: '43001001a', firstWordId: 'n43001001001', lastWordId: 'n43001001005', type: 'imperfect_ind', verbRange: 'n43001001003', subjectRange: 'n43001001004-n43001001005' },
-    { id: '43001001b', firstWordId: 'n43001001006', lastWordId: 'n43001001012', type: 'imperfect_ind', verbRange: 'n43001001009', subjectRange: 'n43001001007-n43001001008' },
-    { id: '43001001c', firstWordId: 'n43001001013', lastWordId: 'n43001001017', type: 'imperfect_ind', verbRange: 'n43001001015', subjectRange: subject, ...extra },
+    { id: '43001001a', firstWordId: 'n43001001001', lastWordId: 'n43001001005', verbRange: 'n43001001003', subjectRange: 'n43001001004-n43001001005' },
+    { id: '43001001b', firstWordId: 'n43001001006', lastWordId: 'n43001001012', verbRange: 'n43001001009', subjectRange: 'n43001001007-n43001001008' },
+    { id: '43001001c', firstWordId: 'n43001001013', lastWordId: 'n43001001017', verbRange: 'n43001001015', subjectRange: subject, ...extra },
   ];
   const noSubject = await call('submit_clause_analysis', { range: '约 1:1', clauses: john11(null) });
   check('约 1:1c 漏标主语被拦', noSubject.writtenVerses.length === 0 && /没有填 subjectRange/.test(JSON.stringify(noSubject.errors)), noSubject.errors[0]?.messages[0]?.slice(0, 60));
   const wrongSubject = await call('submit_clause_analysis', { range: '约 1:1', clauses: john11('n43001001014') });
   check('约 1:1c 把 θεὸς 当主语被拦', wrongSubject.writtenVerses.length === 0 && /不重叠/.test(JSON.stringify(wrongSubject.errors)), wrongSubject.errors[0]?.messages[0]?.slice(0, 60));
   const rightSubject = await call('submit_clause_analysis', { range: '约 1:1', clauses: john11('n43001001016-n43001001017') });
-  check('约 1:1c 主语 ὁ λόγος 通过，展示码 IpfX', rightSubject.writtenVerses.length === 1, JSON.stringify(rightSubject.errors).slice(0, 120));
+  check('约 1:1c 主语 ὁ λόγος 通过', rightSubject.writtenVerses.length === 1, JSON.stringify(rightSubject.errors).slice(0, 120));
   const arguedSubject = await call('submit_clause_analysis', { range: '约 1:1', clauses: john11('n43001001014', { seedDiff: '测试：写明理由即放行' }) });
   check('写明 seedDiff 后放行但标为待复核', arguedSubject.writtenVerses.length === 1 && arguedSubject.needsReview?.length === 1);
   const wideSubject = await call('submit_clause_analysis', { range: '约 1:1', clauses: john11('n43001001014-n43001001017', { seedDiff: '整句作主语' }) });
@@ -161,9 +161,9 @@ try {
   const split = await call('submit_clause_analysis', {
     range: '约 1:3',
     clauses: [
-      { id: '43001003a', firstWordId: 'n43001003001', lastWordId: 'n43001003004', type: 'aorist_ind', verbRange: 'n43001003004', subjectRange: 'n43001003001' },
-      { id: '43001003b', firstWordId: 'n43001003005', lastWordId: 'n43001003008', type: 'aorist_ind', verbRange: 'n43001003008' },
-      { id: '43001003c', firstWordId: 'n43001003009', lastWordId: 'n43001003012', type: 'perfect_ind', verbRange: 'n43001003012', subjectRange: 'n43001003011' },
+      { id: '43001003a', firstWordId: 'n43001003001', lastWordId: 'n43001003004', verbRange: 'n43001003004', subjectRange: 'n43001003001' },
+      { id: '43001003b', firstWordId: 'n43001003005', lastWordId: 'n43001003008', verbRange: 'n43001003008' },
+      { id: '43001003c', firstWordId: 'n43001003009', lastWordId: 'n43001003012', verbRange: 'n43001003012', subjectRange: 'n43001003011' },
     ],
   });
   check('约 1:3 把 οὐδὲ ἓν 切离谓词被拦', split.writtenVerses.length === 0 && /切走/.test(JSON.stringify(split.errors)), split.errors[0]?.messages[0]?.slice(0, 70));
@@ -171,7 +171,7 @@ try {
   // 争议：约一 5:7 只见于 TR 的整段应出现在 disputes 里
   await call('submit_clause_analysis', {
     range: '约一 5:7',
-    clauses: [{ id: '62005007a', firstWordId: 'n62005007001', lastWordId: 'n62005007005', type: 'present_ind', verbRange: 'n62005007003', subjectRange: 'n62005007004-n62005007005', seedDiff: '测试' }],
+    clauses: [{ id: '62005007a', firstWordId: 'n62005007001', lastWordId: 'n62005007005', verbRange: 'n62005007003', subjectRange: 'n62005007004-n62005007005', seedDiff: '测试' }],
   });
   const comma = await call('build_translation_briefing', { range: '约一 5:7' });
   check('约一 5:7 的 TR 异文列入 disputes', JSON.stringify(comma.clauses[0].disputes ?? {}).includes('TR'), JSON.stringify(comma.clauses[0].disputes ?? {}).slice(0, 90));

@@ -83,6 +83,34 @@ export function displayClauseType(
   }
 }
 
+/**
+ * 展示码 → 基础句型（displayClauseType 的逆）。同一约内展示码与基础句型一一对应；
+ * 已是基础句型的原样返回，认不出的返回 null。编辑器把存盘的子句重新提交校验时用。
+ */
+export function basicClauseType(testament: 'OT' | 'NT', type: string): string | null {
+  const allowed: readonly string[] = testament === 'OT' ? BASIC_TYPES_OT : BASIC_TYPES_NT;
+  if (allowed.includes(type)) {
+    return type;
+  }
+  if (testament === 'NT') {
+    for (const [basic, stem] of Object.entries(GREEK_INDICATIVE_STEMS)) {
+      if ([`X${stem}`, `${stem}X`, `${stem}0`].includes(type)) {
+        return basic;
+      }
+    }
+    const nt: Record<string, string> = {
+      XSbj: 'subjunctive', SbjX: 'subjunctive', Sbj0: 'subjunctive', OptX: 'optative', Opt0: 'optative',
+      IpvX: 'imperative', Ipv: 'imperative', Inf: 'infinitive', Ptc: 'participle', Nom: 'nominal',
+    };
+    return nt[type] ?? null;
+  }
+  const ot: Record<string, string> = {
+    WayX: 'wayyiqtol', Way0: 'wayyiqtol', XQtl: 'qatal', QtlX: 'qatal', Qtl0: 'qatal', XYqt: 'yiqtol', YqtX: 'yiqtol', Yqt0: 'yiqtol',
+    WQtl: 'weqatal', Impv: 'imperative', Ptcp: 'participle', InfC: 'infinitive_construct', InfA: 'infinitive_absolute', NmCl: 'nominal',
+  };
+  return ot[type] ?? null;
+}
+
 const HEBREW_STEMS: Record<string, string> = {
   q: 'qal', N: 'niphal', p: 'piel', P: 'pual', h: 'hiphil', H: 'hophal', t: 'hithpael',
   o: 'polel', O: 'polal', r: 'hithpolel', m: 'poel', M: 'poal', k: 'palel', K: 'pulal',

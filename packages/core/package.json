@@ -6,7 +6,14 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./clause-type": {
+      "types": "./dist/clause-type.d.ts",
+      "import": "./dist/clause-type.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

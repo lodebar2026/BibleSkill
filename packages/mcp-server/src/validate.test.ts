@@ -125,6 +125,9 @@ test('主语检查：漏标、标错、主语被切走都拒绝，写 seedDiff �
   assert.deepEqual(overridden.errors, []);
   assert.equal(overridden.accepted[0].status, 'needs-review');
   assert.equal(overridden.overrides.length, 1);
+  // 人工改过的子句即是复核结论，不再降为 needs-review
+  const human = checkClauseAnalysis([clause('a', 1, 4, { seedDiff: '人工复核：表语', sources: ['ai', 'human'] })], verses, [], [seed]);
+  assert.equal(human.accepted[0].status, 'accepted');
   // 主语包含谓词：写 seedDiff 也不放行
   assert.match(run([clause('a', 1, 4, { subjectRange: `${id(2)}-${id(3)}`, seedDiff: 'x' })]), /包含了谓词/);
 });

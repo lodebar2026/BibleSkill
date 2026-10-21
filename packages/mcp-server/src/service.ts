@@ -7,11 +7,13 @@
 import { renderClausesText, type TextViewClause } from '@bs/clause-tree';
 import {
   GlossaryEntrySchema,
+  basicClauseType,
   bookById,
   chapterFromBcv,
   isContentWord,
   loadChapterViews,
   parseClauseId,
+  parseScriptureRange,
   segmentsText,
   type BibleDb,
   type CriticalTextTool,
@@ -20,6 +22,7 @@ import {
   type ScriptureRange,
   type SeedClause,
   type Token,
+  type VersionExpectation,
   type WorkFileStore,
 } from '@bs/core';
 import { chaptersBetween } from './args.js';
@@ -36,6 +39,9 @@ import {
 import { checkClauseAnalysis, checkTranslations, type SeedOverride, type VerseError } from './validate.js';
 import { collectDisputes, hasDisputes } from './disputes.js';
 import { reviewChapter, verseRanges, type HumanReviewItem, type ReviewIssue } from './review.js';
+
+export { toSubmission } from './review.js';
+export type { ReviewIssue } from './review.js';
 
 export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool };
 
@@ -245,7 +251,10 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
   };
 }
 
-export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, rawClauses: unknown[]) {
+/** 编辑器提交时带上读到的版本号做乐观锁；MCP 调用不带。 */
+export type SubmitOptions = { expected?: VersionExpectation };
+
+export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, rawClauses: unknown[], options: SubmitOptions = {}) {
   const verses = rangeTokens(deps, range);
   const errors: VerseError[] = [];
   const written: string[] = [];
@@ -269,7 +278,7 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
     overrides.push(...result.overrides);
     if (result.accepted.length > 0) {
       const acceptedVerses = new Set(result.accepted.map((clause) => parseClauseId(clause.id).bcv));
-      await deps.store.replaceClauseEntitiesForVerses(range.bookName, chapter, acceptedVerses, result.accepted);
+      await deps.store.replaceClauseEntitiesForVerses(range.bookName, chapter, acceptedVerses, result.accepted, options.expected);
       written.push(...[...acceptedVerses].map(verseLabel));
       const texts = await deps.store.readClauseTexts(range.bookName, chapter);
       translatedVerses.push(...[...new Set(texts.map((text) => text.bcv))].filter((bcv) => acceptedVerses.has(bcv)).map(verseLabel));
@@ -294,6 +303,66 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
       : overrides.length > 0
         ? 'needsReview 中的子句用 seedDiff 推翻了 Macula 的主语判断，已标为 needs-review；向用户逐条列出，供人工复核'
         : '可以用 view_clauses 查看缩进结构，然后进行 translate',
+  };
+}
+
+/**
+ * 编辑器（pnpm view --serve）提交的子句：存盘形态（type 为展示码）→ 提交形态，再走 submitClauseAnalysis 的同一套校验。
+ * 谓词范围改过的子句清空 verbPerson/verbStem，按词法重新回填。
+ * 提交的节按连续段分批（submitClauseAnalysis 要求范围内每节都有子句），乐观锁的版本号也按段拆开。
+ */
+export async function editClauseAnalysis(deps: Deps, bookName: string, chapter: number, entities: ClauseEntity[], expected: VersionExpectation) {
+  if (entities.length === 0) {
+    throw new Error('没有要保存的子句');
+  }
+  const bcvs = [...new Set(entities.map((clause) => parseClauseId(clause.id).bcv))].sort((a, b) => a - b);
+  if (bcvs.some((bcv) => chapterFromBcv(bcv) !== chapter)) {
+    throw new Error('只能提交同一章的子句');
+  }
+  const book = parseScriptureRange(`${bookName} ${chapter}`);
+  const testament = book.isOT ? 'OT' : 'NT';
+  const onDisk = new Map((await deps.store.readClauseEntities(book.bookName, chapter)).map((clause) => [clause.id, clause]));
+  const runs: number[][] = [];
+  for (const bcv of bcvs) {
+    const run = runs.at(-1);
+    if (run && run.at(-1)! + 1 === bcv) {
+      run.push(bcv);
+    } else {
+      runs.push([bcv]);
+    }
+  }
+  const submitRun = async (run: number[]) => {
+    const verses = new Set(run);
+    const raw = entities.filter((clause) => verses.has(parseClauseId(clause.id).bcv)).map(({ version: _version, ...clause }) => {
+      const verbChanged = onDisk.get(clause.id)?.verbRange !== clause.verbRange;
+      return {
+        ...clause,
+        type: basicClauseType(testament, clause.type) ?? clause.type,
+        verbPerson: verbChanged ? null : clause.verbPerson,
+        verbStem: verbChanged ? null : clause.verbStem,
+      };
+    });
+    const runExpected = new Map([...expected].filter(([id]) => verses.has(parseClauseId(id).bcv)));
+    const range = { ...book, startBcv: run[0], endBcv: run.at(-1)! };
+    return submitClauseAnalysis(deps, range, raw, { expected: runExpected });
+  };
+  // 段与段之间可能互相挂接（如前段的 parentId 指向后段新改名的子句）：失败的段在其他段写入后再试一次
+  const settled = [];
+  for (const run of runs) {
+    settled.push({ run, result: await submitRun(run) });
+  }
+  const failed = settled.filter((item) => item.result.errors.length > 0);
+  if (failed.length > 0 && failed.length < settled.length) {
+    for (const item of failed) {
+      item.result = await submitRun(item.run);
+    }
+  }
+  const results = settled.map((item) => item.result);
+  return {
+    writtenVerses: results.flatMap((result) => result.writtenVerses),
+    errors: results.flatMap((result) => result.errors),
+    needsReview: results.flatMap((result) => result.needsReview ?? []),
+    translatedVerses: results.flatMap((result) => (result.translatedVerses ? [result.translatedVerses] : [])),
   };
 }
 
@@ -396,7 +465,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   };
 }
 
-export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: unknown[]) {
+export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: unknown[], options: SubmitOptions = {}) {
   const verses = rangeTokens(deps, range);
   const chapters = chaptersBetween(range.startBcv, range.endBcv);
   const entitiesByChapter = await chapterEntities(deps, range.bookName, chapters);
@@ -428,7 +497,7 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
     const rows = toWrite.filter((text) => chapterFromBcv(text.bcv) === chapter);
     if (rows.length > 0) {
       const versesInChapter = new Set(rows.map((text) => text.bcv));
-      await deps.store.replaceClauseTextsForVerses(range.bookName, chapter, versesInChapter, rows);
+      await deps.store.replaceClauseTextsForVerses(range.bookName, chapter, versesInChapter, rows, options.expected);
       written.push(...[...versesInChapter].map(verseLabel));
     }
   }
@@ -492,6 +561,25 @@ const REVIEW_MESSAGES_PER_VERSE = 8;
 const REVIEW_VERSE_LIMIT = 300;
 
 /** 审校报告：range 给出时只审该范围，否则审 books 中的书卷（不给则全部）。 */
+/** 单章的审校问题（编辑器在节号上标出需要重译的节）。 */
+export async function chapterReviewIssues(deps: Deps, bookName: string, chapter: number): Promise<ReviewIssue[]> {
+  const entities = await deps.store.readClauseEntities(bookName, chapter);
+  const texts = await deps.store.readClauseTexts(bookName, chapter);
+  if (texts.length === 0) {
+    return [];
+  }
+  const bcvs = [...entities.map((clause) => parseClauseId(clause.id).bcv), ...texts.map((text) => text.bcv)];
+  const [startBcv, endBcv] = [Math.min(...bcvs), Math.max(...bcvs)];
+  return reviewChapter({
+    bookName,
+    entities,
+    texts,
+    tokensByVerse: groupByVerse(deps.db.tokensInRange(startBcv, endBcv)),
+    variants: deps.db.variantsInRange(startBcv, endBcv),
+    glossary: await deps.store.readGlossary(),
+  }).issues;
+}
+
 export async function reviewReport(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }) {
   const { range } = target;
   const chapters = range

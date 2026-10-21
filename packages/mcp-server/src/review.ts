@@ -36,7 +36,7 @@ export type ChapterReview = {
 };
 
 /** 已存译文 → submit_translation 的提交格式。 */
-function toSubmission(text: ClauseText) {
+export function toSubmission(text: ClauseText) {
   const segments = parseSegments(text.formatted);
   return {
     clauseId: `${text.bcv}${text.sub}`,

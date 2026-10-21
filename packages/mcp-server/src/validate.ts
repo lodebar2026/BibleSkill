@@ -255,7 +255,8 @@ export function checkClauseAnalysis(
         const subjectIssues = checkSubject(clause, seeds, surfaceOf);
         if (subjectIssues.length > 0 && clause.seedDiff) {
           overrides.push({ clauseId: clause.id, seedDiff: clause.seedDiff, overridden: subjectIssues });
-          if (clause.status === 'accepted') {
+          // 人工改过的子句本身就是复核结论，不再降级
+          if (clause.status === 'accepted' && !clause.sources.includes('human')) {
             clause.status = 'needs-review';
           }
         } else {

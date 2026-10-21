@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { bookByStepCode, parseScriptureRange } from './ref.js';
 import { otTokenId, ntTokenId, parseTokenId } from './ids.js';
 import { isContentWord } from './content-word.js';
-import { displayClauseType, verbInfoFromMorph } from './clause-type.js';
+import { BASIC_TYPES_NT, BASIC_TYPES_OT, basicClauseType, displayClauseType, verbInfoFromMorph } from './clause-type.js';
 
 test('经文范围：中英文书名、整章从第 0 节起', () => {
   assert.deepEqual(parseScriptureRange('创 1:1-5'), { bookId: 1, bookName: '创世记', isOT: true, startBcv: 1001001, endBcv: 1001005 });
@@ -36,4 +36,21 @@ test('句型展示码与动词信息', () => {
   assert.equal(displayClauseType('NT', { type: 'aorist_ind', subjectRange: 'n43001001005', verbRange: 'n43001001002' }), 'AorX');
   assert.deepEqual(verbInfoFromMorph('HVhi3ms'), { stem: 'hiphil', person: '3ms' });
   assert.deepEqual(verbInfoFromMorph('V-AAI-3S'), { stem: null, person: '3s' });
+});
+
+test('展示码可反推基础句型', () => {
+  const ranges = [
+    { subjectRange: null, verbRange: 'x' },
+    { subjectRange: 'n40001001001', verbRange: 'n40001001002' },
+    { subjectRange: 'n40001001003', verbRange: 'n40001001002' },
+  ];
+  for (const [testament, types] of [['OT', BASIC_TYPES_OT], ['NT', BASIC_TYPES_NT]] as const) {
+    for (const type of types) {
+      for (const range of ranges) {
+        assert.equal(basicClauseType(testament, displayClauseType(testament, { type, ...range })), type);
+      }
+    }
+  }
+  assert.equal(basicClauseType('OT', 'wayyiqtol'), 'wayyiqtol');
+  assert.equal(basicClauseType('OT', 'Aor0'), null);
 });

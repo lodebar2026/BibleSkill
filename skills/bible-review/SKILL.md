@@ -15,7 +15,7 @@ description: 圣经直译的审校。当用户要求「审校」「复查」「�
      - `structure`：子句分析在翻译之后改过，译文对不上（缺译子句、子句 id 变了、rendering 越界、实词缺 rendering 等）
      - `dispute`：子句后来标成了 ambiguous，或有影响翻译的异文，但译文还没有处理
      - `glossary`：违反当前术语表
-   - **需要人工复核的子句**（`humanReview`）：needs-review 写明推翻 Macula 的理由，ambiguous 列出各种读法。这些由用户判断，不要替用户定。
+   - **需要人工复核的子句**（`humanReview`）：needs-review 写明推翻 Macula 的理由，ambiguous 列出各种读法。这些由用户判断，不要替用户定。用户可以在终端运行 `pnpm view <范围> --serve --workdir <工作目录>` 打开可编辑视图，自己改切分、挂接、主语和状态；改完再回来跑审校。
    - `untranslated` 只是进度信息，简单提一句即可。
 3. 用户同意后，按 `retranslate` 逐个范围走 bible-translate 的流程（`build_translation_briefing` → `submit_translation`）整节重提。`structure` 问题提示“没有子句分析”的，先按 bible-analyze 完成分析再翻译。
 4. 全部重提后再调一次 `review_report(range)`，确认 `retranslate` 已清空，然后向用户汇报改了哪些节、还剩哪些需要人工复核。

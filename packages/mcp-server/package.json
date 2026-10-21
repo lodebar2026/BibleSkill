@@ -4,7 +4,16 @@
   "type": "module",
   "private": true,
   "main": "./dist/server.js",
-  "bin": { "bibleskill-mcp": "./dist/server.js" },
+  "exports": {
+    ".": "./dist/server.js",
+    "./service": {
+      "types": "./dist/service.d.ts",
+      "import": "./dist/service.js"
+    }
+  },
+  "bin": {
+    "bibleskill-mcp": "./dist/server.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "node --test dist/*.test.js"

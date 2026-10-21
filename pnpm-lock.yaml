@@ -55,6 +55,9 @@ importers:
       '@bs/core':
         specifier: workspace:*
         version: link:../core
+      '@bs/mcp-server':
+        specifier: workspace:*
+        version: link:../mcp-server
     devDependencies:
       esbuild:
         specifier: ^0.25.0

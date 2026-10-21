@@ -1,0 +1,5 @@
+[[rule]]
+toolName = "activate_skill"
+argsPattern = '"name":"bible-(analyze|translate|consistency)"'
+decision = "allow"
+priority = 200

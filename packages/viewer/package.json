@@ -1,0 +1,17 @@
+{
+  "name": "@bs/viewer",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": { "bibleskill-view": "./dist/cli.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && esbuild dist/browser.js --bundle --format=iife --target=es2022 --outfile=dist/browser.bundle.js --log-level=warning"
+  },
+  "dependencies": {
+    "@bs/clause-tree": "workspace:*",
+    "@bs/core": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

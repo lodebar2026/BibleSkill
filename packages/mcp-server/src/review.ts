@@ -3,12 +3,18 @@
  *
  * 提交时的检查只在那一刻生效；之后术语表改了、子句重新切分了，旧译文不会自动复查。
  * 这里把已存的 ClauseText 还原成提交格式，重跑 checkTranslations 与 checkRenderings。
+ * 每节按它写入时的档位（ClauseText.literalness，旧数据按 2）复查；与当前档位不同的只列出来，不要求重译。
  */
 import {
+  DEFAULT_LITERALNESS,
   chapterFromBcv,
+  clauseNote,
+  hasLegacyBrackets,
+  isMeaningBased,
   parseClauseId,
   parseSegments,
-  segmentsText,
+  segmentsMarkup,
+  suppliedNotes,
   type ClauseEntity,
   type ClauseText,
   type GlossaryEntry,
@@ -33,6 +39,10 @@ export type ChapterReview = {
   humanReview: HumanReviewItem[];
   /** 已分析但整节没有译文的节。 */
   untranslated: number[];
+  /** 写入时的档位与当前档位不同的节（只作提示）。 */
+  otherLevel: number[];
+  /** 补词还以 [ ] 字符存在普通段里的节（旧数据，跑 pnpm migrate:segments）。 */
+  legacy: number[];
 };
 
 /** 已存译文 → submit_translation 的提交格式。 */
@@ -41,12 +51,14 @@ export function toSubmission(text: ClauseText) {
   return {
     clauseId: `${text.bcv}${text.sub}`,
     span: text.translationSpan,
-    text: segmentsText(text.formatted),
+    text: segmentsMarkup(segments),
     renderings: text.renderings,
     alternatives: text.alternatives,
-    note: segments.find((segment) => segment.note)?.note ?? '',
+    note: clauseNote(segments),
+    supplied: suppliedNotes(segments),
     paraTitle: text.paraTitle,
     sources: text.sources,
+    literalness: text.literalness ?? DEFAULT_LITERALNESS,
   };
 }
 
@@ -58,7 +70,7 @@ function translationMessages(
 ): string[] {
   const bcv = texts[0].bcv;
   try {
-    return checkTranslations(texts.map(toSubmission), new Map([[bcv, clauses]]), new Map([[bcv, tokens]]), disputes)
+    return checkTranslations(texts.map(toSubmission), new Map([[bcv, clauses]]), new Map([[bcv, tokens]]), disputes, { itemLevels: true })
       .errors.flatMap((error) => error.messages);
   } catch (error) {
     return [(error as Error).message];
@@ -72,8 +84,11 @@ export function reviewChapter(input: {
   tokensByVerse: Map<number, Token[]>;
   variants: VariantToken[];
   glossary: GlossaryEntry[];
+  /** 当前档位。 */
+  level?: number;
 }): ChapterReview {
   const { bookName, entities, texts, tokensByVerse, variants, glossary } = input;
+  const level = input.level ?? DEFAULT_LITERALNESS;
   const clausesByVerse = new Map<number, ClauseEntity[]>();
   for (const clause of entities) {
     const { bcv } = parseClauseId(clause.id);
@@ -99,7 +114,11 @@ export function reviewChapter(input: {
     structural.forEach((message) => issues.push({ kind: 'structure', bcv, message }));
     withDisputes.filter((message) => !seen.has(message)).forEach((message) => issues.push({ kind: 'dispute', bcv, message }));
     for (const text of verseTexts) {
+      const meaningBased = isMeaningBased(text.literalness ?? DEFAULT_LITERALNESS);
       for (const issue of checkRenderings(text, tokens, bookName, glossary, new Map())) {
+        if (meaningBased && issue.severity !== 'error') {
+          continue;
+        }
         issues.push({ kind: 'glossary', bcv, message: `${text.bcv}${text.sub}: ${issue.surface}（${issue.tokenId}）译作「${issue.zh}」，${issue.message}` });
       }
     }
@@ -115,7 +134,10 @@ export function reviewChapter(input: {
   }
 
   const untranslated = [...clausesByVerse.keys()].filter((bcv) => !textsByVerse.has(bcv)).sort((a, b) => a - b);
-  return { issues, humanReview, untranslated };
+  const spoken = texts.filter((text) => text.translationSpan > 0);
+  const otherLevel = [...new Set(spoken.filter((text) => (text.literalness ?? DEFAULT_LITERALNESS) !== level).map((text) => text.bcv))].sort((a, b) => a - b);
+  const legacy = [...new Set(spoken.filter((text) => hasLegacyBrackets(parseSegments(text.formatted))).map((text) => text.bcv))].sort((a, b) => a - b);
+  return { issues, humanReview, untranslated, otherLevel, legacy };
 }
 
 /** 节号列表 → 按章合并的连续范围，如「创 1:3-5」。 */

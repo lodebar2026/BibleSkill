@@ -1,5 +1,5 @@
 /**
- * 终端文本视图：等宽近似测量 + 逐行输出（原文行带树形前缀，直译另起一行缩进对齐）。
+ * 终端文本视图：等宽近似测量 + 逐行输出（原文行带树形前缀，译文另起一行缩进对齐）。
  * 终端对希伯来文的双向排版各不相同，分支符对准被修饰词只在 HTML 视图里是精确的。
  */
 import { buildChapterTree, continuationPrefix, flipTreePrefix, type Measure, type TreeClause, type TreeWord } from './tree.js';
@@ -9,7 +9,7 @@ export const measureMonospace: Measure = (text, font) =>
   font === 'prefix' ? text.length : text.normalize('NFD').replace(/\p{M}/gu, '').length;
 
 export type TextViewClause = TreeClause & {
-  /** 该子句的直译；被合并的后续子句（span=0）传 null。 */
+  /** 该子句的译文；被合并的后续子句（span=0）传 null。 */
   translation: string | null;
   status?: string;
   /** 争议处的其他译法。 */

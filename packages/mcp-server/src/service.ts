@@ -13,17 +13,24 @@ import {
   basicClauseType,
   bookById,
   chapterFromBcv,
+  DEFAULT_LITERALNESS,
+  LITERALNESS_LEVELS,
+  effectiveClauseOrder,
+  formattedMarkup,
   isContentWord,
+  isMeaningBased,
   loadChapterViews,
+  parseSegments,
+  suppliedNotes,
   parseClauseId,
   parseScriptureRange,
-  segmentsText,
   strongMatches,
   type BibleDb,
   type CriticalTextTool,
   type ClauseEntity,
   type ClauseText,
   type HistoryOrigin,
+  type Literalness,
   type ScriptureRange,
   type SeedClause,
   type TermPreference,
@@ -56,6 +63,7 @@ import {
 
 export { toSubmission } from './review.js';
 export { importRevisions, type ImportLine } from './revisions.js';
+export { migrateSegments } from './migrate.js';
 export type { ReviewIssue } from './review.js';
 
 export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool };
@@ -84,12 +92,24 @@ function rangeTokens(deps: Deps, range: ScriptureRange): Map<number, Token[]> {
   return verses;
 }
 
-const STYLE_PRIORITY = '个人风格是偏好：只在原文两种译法都成立时采用；与直译原则、术语表冲突时以原则和术语表为准。';
+const STYLE_PRIORITY = '个人风格是偏好：只在原文两种译法都成立时采用；与当前档位的翻译原则、术语表冲突时以原则和术语表为准。';
 
 /** briefing 里的个人风格（工作目录 style.md）；没有时不给。 */
 async function styleBriefing(deps: Deps) {
   const style = await deps.store.readStyle();
   return style ? { options: style.options, text: style.text || undefined, priority: STYLE_PRIORITY } : undefined;
+}
+
+/** 当前翻译档位（style.md 的 literalness；没有 style.md 时为 2）。 */
+async function currentLevel(deps: Deps): Promise<Literalness> {
+  return (await deps.store.readStyle())?.options.literalness ?? DEFAULT_LITERALNESS;
+}
+
+/** briefing 里的翻译档位：总是给出。 */
+async function approachBriefing(deps: Deps) {
+  const options = (await deps.store.readStyle())?.options ?? { clauseOrder: 'fluent' as const, literalness: DEFAULT_LITERALNESS };
+  const { name, summary } = LITERALNESS_LEVELS[options.literalness];
+  return { literalness: options.literalness, name, summary, clauseOrder: effectiveClauseOrder(options), rules: 'references/literalness.md' };
 }
 
 /** 术语偏好按 senseKey > strong > lemma 匹配。 */
@@ -277,6 +297,7 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
     textualVariants: textualVariantLines(deps, range, verses),
     existingClauses: existing.length > 0 ? existing : undefined,
     rules: rules.length > 0 ? rules : undefined,
+    approach: await approachBriefing(deps),
     style: await styleBriefing(deps),
     submit: 'submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词；id 为 bcv+字母（如 1001001a）。',
   };
@@ -405,7 +426,7 @@ function textViewClauses(entities: ClauseEntity[], texts: ClauseText[]): TextVie
     const text = byKey.get(entity.id);
     return {
       ...entity,
-      translation: text && text.translationSpan > 0 ? segmentsText(text.formatted) : null,
+      translation: text && text.translationSpan > 0 ? formattedMarkup(text.formatted) : null,
       alternatives: text?.alternatives,
     };
   });
@@ -475,7 +496,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   const preceding = firstChapterTexts
     .filter((text) => text.bcv < range.startBcv && text.translationSpan > 0)
     .slice(-8)
-    .map((text) => `${verseLabel(text.bcv)}${text.sub} ${segmentsText(text.formatted)}`);
+    .map((text) => `${verseLabel(text.bcv)}${text.sub} ${formattedMarkup(text.formatted)}`);
 
   const view = chapters.map((chapter) => {
     const entities = (entitiesByChapter.get(chapter) ?? []).filter((clause) => inRange(parseClauseId(clause.id).bcv, range));
@@ -494,11 +515,23 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     terms,
     precedingTranslations: preceding.length > 0 ? preceding : undefined,
     existingTranslations: existingTexts.some((text) => inRange(text.bcv, range))
-      ? existingTexts.filter((text) => inRange(text.bcv, range)).map((text) => ({ clauseId: `${text.bcv}${text.sub}`, span: text.translationSpan, text: segmentsText(text.formatted), renderings: text.renderings, alternatives: text.alternatives.length > 0 ? text.alternatives : undefined }))
+      ? existingTexts.filter((text) => inRange(text.bcv, range)).map((text) => {
+        const supplied = suppliedNotes(parseSegments(text.formatted));
+        return {
+          clauseId: `${text.bcv}${text.sub}`,
+          span: text.translationSpan,
+          text: formattedMarkup(text.formatted),
+          renderings: text.renderings,
+          alternatives: text.alternatives.length > 0 ? text.alternatives : undefined,
+          supplied: supplied.length > 0 ? supplied : undefined,
+          literalness: text.literalness,
+        };
+      })
       : undefined,
     rules: rules.length > 0 ? rules : undefined,
+    approach: await approachBriefing(deps),
     style: await styleBriefing(deps),
-    submit: 'submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, paraTitle?}；contentTokens 里的每个实词都要有 rendering；有 disputes 的子句须给 alternatives 或 note。',
+    submit: 'submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering；有 disputes 的子句须给 alternatives 或 note。',
   };
 }
 
@@ -514,7 +547,9 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
     }
   }
   const disputes = collectDisputes([...clausesByVerse.values()].flat(), [...verses.values()].flat(), deps.db.variantsInRange(range.startBcv, range.endBcv));
-  const structural = checkTranslations(raw, clausesByVerse, verses, disputes);
+  const level = await currentLevel(deps);
+  // 编辑器改旧译文时沿用它原来的档位，不因 style.md 换了档位就拒收
+  const structural = checkTranslations(raw, clausesByVerse, verses, disputes, { level, itemLevels: options.origin === 'human' });
   const submittedVerses = new Set(structural.accepted.map((text) => text.bcv));
   const glossary = await deps.store.readGlossary();
   const memory = await deps.memory.build({ books: new Set([range.bookName]), excludeVerses: submittedVerses });
@@ -525,7 +560,10 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
     const issues = checkRenderings(text, verses.get(text.bcv) ?? [], range.bookName, glossary, memory);
     if (issues.length > 0) {
       consistency.push({ verse: verseLabel(text.bcv), clauseId: `${text.bcv}${text.sub}`, issues });
-      blocked.add(text.bcv);
+      // 第 4、5 档用词统一只作提示：只有违反 locked 才拦
+      if (!isMeaningBased(text.literalness ?? level) || issues.some((issue) => issue.severity === 'error')) {
+        blocked.add(text.bcv);
+      }
     }
   }
   const toWrite = structural.accepted.filter((text) => !blocked.has(text.bcv));
@@ -542,9 +580,11 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
     writtenVerses: written,
     errors: structural.errors.map((error) => ({ verse: verseLabel(error.bcv), clauseIds: error.clauseIds, messages: error.messages })),
     consistency: consistency.length > 0 ? consistency : undefined,
-    next: structural.errors.length + consistency.length > 0
+    next: structural.errors.length + blocked.size > 0
       ? '未写入的节：按 errors 修正；consistency 中的用词要么统一为既有/术语表译法，要么在该 rendering 写 note 说明理由，然后整节重提'
-      : '已全部写入。确定的新术语可用 upsert_glossary 固化；用 view_clauses 查看',
+      : consistency.length > 0
+        ? '已全部写入。当前档位下 consistency 只作提示：与既有译法不同处，确认是有意为之即可；确定的新术语可用 upsert_glossary 固化'
+        : '已全部写入。确定的新术语可用 upsert_glossary 固化；用 view_clauses 查看',
   };
 }
 
@@ -630,6 +670,7 @@ export async function chapterReviewIssues(deps: Deps, bookName: string, chapter:
     tokensByVerse: groupByVerse(deps.db.tokensInRange(startBcv, endBcv)),
     variants: deps.db.variantsInRange(startBcv, endBcv),
     glossary: await deps.store.readGlossary(),
+    level: await currentLevel(deps),
   }).issues;
 }
 
@@ -639,10 +680,13 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
     ? chaptersBetween(range.startBcv, range.endBcv).map((chapter) => ({ bookName: range.bookName, chapter }))
     : listChapterDirs(deps.store, target.books);
   const glossary = await deps.store.readGlossary();
+  const level = await currentLevel(deps);
   const issues: Array<ReviewIssue & { bookName: string }> = [];
   const humanReview: HumanReviewItem[] = [];
   const retranslate: string[] = [];
   const untranslated: string[] = [];
+  const otherLevel: string[] = [];
+  const legacy: string[] = [];
   for (const { bookName, chapter } of chapters) {
     const keep = (bcv: number) => !range || inRange(bcv, range);
     const entities = (await deps.store.readClauseEntities(bookName, chapter)).filter((clause) => keep(parseClauseId(clause.id).bcv));
@@ -659,11 +703,14 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
       tokensByVerse: groupByVerse(deps.db.tokensInRange(startBcv, endBcv)),
       variants: deps.db.variantsInRange(startBcv, endBcv),
       glossary,
+      level,
     });
     issues.push(...review.issues.map((issue) => ({ ...issue, bookName })));
     humanReview.push(...review.humanReview);
     retranslate.push(...verseRanges(bookName, review.issues.map((issue) => issue.bcv)));
     untranslated.push(...verseRanges(bookName, review.untranslated));
+    otherLevel.push(...verseRanges(bookName, review.otherLevel));
+    legacy.push(...verseRanges(bookName, review.legacy));
   }
 
   const counts: Record<string, number> = {};
@@ -690,6 +737,13 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
     verses: [...verses.values()].slice(0, REVIEW_VERSE_LIMIT),
     humanReview: humanReview.length > 0 ? humanReview : undefined,
     untranslated: untranslated.length > 0 ? untranslated : undefined,
+    otherLevel: otherLevel.length > 0
+      ? { literalness: level, ranges: otherLevel, note: '这些节是按别的档位译的，按各自的档位复查，不算问题；要统一成当前档位，把范围交给 bible-translate 重译' }
+      : undefined,
+    legacy: legacy.length > 0
+      ? { ranges: legacy, note: '这些节的补词还以 [ ] 字符存在译文里（旧格式），请用户在 BibleSkill 目录运行 pnpm migrate:segments --workdir <工作目录> 转成补词段' }
+      : undefined,
+    approach: await approachBriefing(deps),
     style: await styleBriefing(deps),
     next: retranslate.length > 0
       ? 'retranslate 中的范围按 bible-translate 流程整节重提（structure 里提示没有子句分析或子句对不上的，先 analyze）；humanReview 逐条列给用户复核'
@@ -702,8 +756,16 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
 // ---------------------------------------------------------------- 个人风格、术语偏好、规则
 
 export async function updateStyle(deps: Deps, content: string) {
+  const before = await currentLevel(deps);
   const style = await deps.store.writeStyle(content);
-  return { options: style.options, length: style.text.length, next: '新风格对之后的 briefing 生效；已译经文不会自动按风格改写' };
+  const changed = style.options.literalness !== before;
+  return {
+    options: style.options,
+    length: style.text.length,
+    next: changed
+      ? `翻译档位从 ${before}（${LITERALNESS_LEVELS[before].name}）改为 ${style.options.literalness}（${LITERALNESS_LEVELS[style.options.literalness].name}），对之后的 briefing 生效。已译经文不会自动改写：review_report 的 otherLevel 列出按旧档位译的节，需要时交给 bible-translate 重译`
+      : '新风格对之后的 briefing 生效；已译经文不会自动按风格改写',
+  };
 }
 
 export async function updateTermPreferences(deps: Deps, rawEntries: unknown[]) {

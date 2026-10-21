@@ -1,11 +1,11 @@
-# 直译（translate）
+# 翻译（translate）
 
-基于子句分析产出中文直译，并给出实词的译法对照，通过 `submit_translation` 提交。
+基于子句分析，按工作目录设定的档位（briefing 的 `approach`，见 [literalness.md](literalness.md)）产出中文译文，并给出实词的译法对照，通过 `submit_translation` 提交。下面的示例和“span”“叙事文”两节按默认的第 2 档（直译）写；其他档位与之不同的地方，以 literalness.md 为准。
 
 ## 流程
 
 1. 调 `build_translation_briefing(range)` 一次。还没有子句分析的节会报错，先做 analyze。范围较大时按自然段分批。
-2. 读 `clauseView`（缩进结构）、`clauses`、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
+2. 读 `approach`（档位）、`clauseView`（缩进结构）、`clauses`、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
 3. 逐子句翻译，组成 `translations` 数组提交。
 4. 若返回 `errors` 或 `consistency`，按提示修正后**整节**重提；已写入的节不要重提。
 5. 本段新确定的专名、术语，用 `upsert_glossary` 写入术语表。
@@ -28,11 +28,12 @@
 }
 ```
 
-- `text`：直译文本。原文隐含、中文必须补出的词用 `[ ]`；NA28/UBS 双括号内的经文，译文首尾加 `〚 〛`。
-- `renderings`：`clauses[].contentTokens` 中的**每个实词**都要有一条；`zh` 必须是 `text` 里实际出现的字串。
-  - 几个词整体译为一个中文词时，`tokens` 写区间 `首-末`。
-  - `zh` 在 `text` 里出现不止一处时，可以加 `at`（`zh` 在 `text` 中的起始位置，从 0 数）指明是哪一处；不给时系统按词序自动定位。briefing 里已有译文的 renderings 带着 `at`，改了译文后不必手算，删掉或留着都行。
-  - 实词有意不译时 `zh` 写 `∅` 并加 `note`。
+- `text`：译文。第 1–3 档中补出的词用 `[ ]` 标出（范围按档位，见 literalness.md），第 4、5 档不用 `[ ]`；NA28/UBS 双括号内的经文，各档译文首尾都加 `〚 〛`。
+- `supplied`：可选，补词的说明，每条 `{text, note}`，`text` 是某个 `[ ]` 里的文字（同一补词出现多次时加 `at`）。补出名词主语等需要交代的补词写在这里。
+- `renderings`：`clauses[].contentTokens` 中的**每个实词**都要有一条；`zh` 必须是**去掉 `[ ]` 后的** `text` 里实际出现的字串。
+  - 几个词整体译为一个中文词或短语时，`tokens` 写区间 `首-末`。第 4、5 档重组句子时常这样用。
+  - `zh` 出现不止一处时，可以加 `at`（`zh` 在去掉 `[ ]` 后的译文中的起始位置，从 0 数）指明是哪一处；不给时系统按词序自动定位。briefing 里已有译文的 renderings 带着 `at`，改了译文后不必手算，删掉或留着都行。
+  - 实词有意不译时 `zh` 写 `∅`；第 1–3 档还要加 `note`。
   - 虚词可以不给 rendering。
 - `alternatives`：争议处的其他译法，每条 `{text, kind, basis}`（见下文“争议”）。
 - `note`：主译的取舍理由；有 alternatives 时必填。
@@ -61,7 +62,7 @@
 }
 ```
 
-alternatives 的译文同样用直译标准；不需要为 alternatives 提供 renderings。
+alternatives 的译文用同一档位来写；不需要为 alternatives 提供 renderings。
 
 ## 用词统一
 
@@ -73,16 +74,16 @@ alternatives 的译文同样用直译标准；不需要为 alternatives 提供 r
 
 规则：
 
-1. 有 `locked` → 必须用该译法，否则该节被拒。
-2. 有 `preferred` 或 `history` → 默认沿用；确需不同时，在该 rendering 的 `note` 写理由，否则该节被拒并在 `consistency` 中列出。
+1. 有 `locked` → 必须用该译法，否则该节被拒（各档都一样）。
+2. 有 `preferred` 或 `history` → 默认沿用；确需不同时，在该 rendering 的 `note` 写理由，否则该节被拒并在 `consistency` 中列出。第 4、5 档不拒，只在 `consistency` 里提示。
 3. 都没有 → 这是首次出现，认真选词：有 `preference`（术语偏好）时默认用它，不用 `avoid` 里的译法；重要的词提交后用 `upsert_glossary` 固化。
 4. 同一 senseKey 下的正当分化（比喻义与本义、语域差异），写 note 后系统会放行；若这种分化会反复出现，考虑在术语表里按 `senseKey` 分别建条目。
 
 ## span（子句合并）
 
-基准是逐句翻译（`span: 1`）。
+基准是逐句翻译（`span: 1`）。第 1 档不合并（系统拒绝 span>1）；第 3 档起判据 B 不再限制；第 4、5 档按意思合并，诗歌平行句也可以合并，但要写 note。以下是第 2 档的规则。
 
-**判据 A（合并前置）：后置状语造成语序倒置。** 原文把条件、时间、情状成分放在主句之后，中文按习惯要前置——拆开就会留下悬空的尾句。范围由个人风格的 `clauseOrder` 选项决定（briefing 的 `style.options`，没有时按 `fluent`）：
+**判据 A（合并前置）：后置状语造成语序倒置。** 原文把条件、时间、情状成分放在主句之后，中文按习惯要前置——拆开就会留下悬空的尾句。范围由 briefing 里 `approach.clauseOrder` 决定（来自 style.md 的 `clauseOrder`；第 1 档固定为 `source`，第 4、5 档固定为 `fluent`）：
 
 - `fluent`（默认）：中文前置才通顺的，一律合并前置。
 - `source`：时间从句、“直到”从句、不定式时间从句保留原文语序，各自成句；中文后置也能读通时不合并。
@@ -123,6 +124,8 @@ alternatives 的译文同样用直译标准；不需要为 alternatives 提供 r
 briefing 有 `style` 时，按 principles.md 的“个人风格与术语偏好”处理：原文两种译法都成立时采用其中的偏好。
 
 ## 叙事文
+
+以下是第 1–3 档的要求；第 4、5 档按 literalness.md 处理重复和强调，但原文明示的主语仍要译出。
 
 - 保留重复结构，不为中文文风删减重复。
 - 非主语前置成分有强调或焦点功能，译文要体现。

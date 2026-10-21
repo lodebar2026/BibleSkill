@@ -17,6 +17,10 @@
     "./align": {
       "types": "./dist/align.d.ts",
       "import": "./dist/align.js"
+    },
+    "./segments": {
+      "types": "./dist/segments.d.ts",
+      "import": "./dist/segments.js"
     }
   },
   "scripts": {

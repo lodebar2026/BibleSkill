@@ -65,7 +65,7 @@ const server = new McpServer(
   { name: 'bibleskill', version: '0.1.0' },
   {
     instructions:
-      '圣经原文直译工作流：analyze（子句切分）→ translate（中文直译）。每步先调 build_*_briefing，再 submit_*。'
+      '圣经原文中文翻译工作流：analyze（子句切分）→ translate（按工作目录设定的档位翻译，1 逐字…2 直译…5 意译，见 briefing 的 approach）。每步先调 build_*_briefing，再 submit_*。'
       + '数据来自 STEPBible（TAHOT/TAGNT）与 Macula；词 id 只用 briefing 里给出的 id。',
   },
 );
@@ -103,20 +103,21 @@ server.registerTool('submit_clause_analysis', {
 }, async (args) => json(await submitClauseAnalysis(getDeps(), resolveRange(args), resolveArray(args, ['clauses', 'clauseEntities', 'items']))));
 
 server.registerTool('build_translation_briefing', {
-  description: '直译任务简报：缩进结构、子句与实词、每个实词义项的术语表条目与既有译法、前文译文。',
+  description: '翻译任务简报：翻译档位（approach）、缩进结构、子句与实词、每个实词义项的术语表条目与既有译法、前文译文。',
   inputSchema: loose({ range }),
   annotations: { readOnlyHint: true },
 }, async (args) => json(await buildTranslationBriefing(getDeps(), resolveRange(args))));
 
 server.registerTool('submit_translation', {
   description:
-    '提交直译。translations 为 JSON 数组，每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], paraTitle?}。'
+    '提交译文。translations 为 JSON 数组，每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], supplied?:[{text, note}], paraTitle?}。'
+    + 'text 里补出的词用 [ ] 标出（第 4、5 档不用），supplied 给补词写说明。'
     + '按节校验结构与用词统一；未通过的节在 errors / consistency 返回，需整节重提。',
   inputSchema: loose({ range, translations: z.any().optional() }),
 }, async (args) => json(await submitTranslation(getDeps(), resolveRange(args), resolveArray(args, ['translations', 'clauses', 'items']))));
 
 server.registerTool('view_clauses', {
-  description: '以缩进树形文本查看子句结构与已有直译。',
+  description: '以缩进树形文本查看子句结构与已有译文。',
   inputSchema: loose({ range }),
   annotations: { readOnlyHint: true },
 }, async (args) => text(await viewClauses(getDeps(), resolveRange(args))));
@@ -144,14 +145,15 @@ server.registerTool('consistency_report', {
 server.registerTool('review_report', {
   description:
     '审校报告：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围（retranslate：译文与子句对不上、未处理的争议、违反术语表）'
-    + '和需要人工复核的子句（needs-review / ambiguous）。range 给书卷名审整卷，给经文范围只审该范围，不给审全部。',
+    + '和需要人工复核的子句（needs-review / ambiguous）。每节按它写入时的档位复查，按别的档位译的节列在 otherLevel。'
+    + 'range 给书卷名审整卷，给经文范围只审该范围，不给审全部。',
   inputSchema: loose({ range }),
   annotations: { readOnlyHint: true },
 }, async (args) => json(await reviewReport(getDeps(), bookOrRange(args))));
 
 server.registerTool('update_style', {
   description:
-    '整体改写工作目录的个人风格 style.md（content 为完整 Markdown，可带 --- frontmatter 选项 clauseOrder: fluent|source）。'
+    '整体改写工作目录的个人风格 style.md（content 为完整 Markdown，可带 --- frontmatter 选项 literalness: 1-5（翻译档位，默认 2 直译）、clauseOrder: fluent|source）。'
     + '风格是偏好级：原文两种译法都成立时才采用。先 build_translation_briefing 或 review_report 看 style 现状，在其基础上增改。',
   inputSchema: loose({ content: z.string().optional() }),
 }, async (args) => {

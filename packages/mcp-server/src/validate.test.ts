@@ -161,3 +161,40 @@ test('子句 id 的前导零在提交时去掉', () => {
   assert.equal(SubmittedTranslationSchema.parse({ clauseId: '09009011a' }).clauseId, '9009011a');
   assert.equal(SubmittedClauseSchema.parse({ id: '1001001a', firstWordId: 'x', lastWordId: 'x' }).id, '1001001a');
 });
+
+test('补词：[ ] 拆成补词段，renderings 按去掉括号的译文定位；supplied 写进补词说明', () => {
+  const result = checkTranslations([
+    { clauseId: '1001001a', span: 1, text: '[他]创造', renderings: [{ tokens: id(2), zh: '创造' }], supplied: [{ text: '他', note: '原文只有动词' }] },
+    { clauseId: '1001001b', span: 1, text: '神[和]大地', renderings: [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }] },
+  ], clausesByVerse, verses);
+  assert.deepEqual(result.errors, []);
+  assert.deepEqual(JSON.parse(result.accepted[0].formatted), [{ text: '他', styleName: 'added', note: '原文只有动词' }, { text: '创造' }]);
+  assert.deepEqual(result.accepted[1].renderings.map((rendering) => rendering.at), [0, 2]);
+  assert.deepEqual(result.accepted.map((row) => row.literalness), [2, 2]);
+  const unpaired = checkTranslations([
+    { clauseId: '1001001a', span: 1, text: '[他创造', renderings: [{ tokens: id(2), zh: '创造' }] },
+    { clauseId: '1001001b', span: 1, text: '神大地', renderings: [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }] },
+  ], clausesByVerse, verses);
+  assert.match(unpaired.errors[0].messages.join(), /不成对/);
+});
+
+test('档位：第 1 档不合并子句；第 4 档不用 [ ]、∅ 可不写 note；〚 〛 各档都可用', () => {
+  const merged = [
+    { clauseId: '1001001a', span: 2, text: '神创造了大地', renderings: allRendered },
+    { clauseId: '1001001b', span: 0, text: '' },
+  ];
+  assert.match(checkTranslations(merged, clausesByVerse, verses, new Map(), { level: 1 }).errors[0].messages.join(), /第 1 档/);
+  assert.deepEqual(checkTranslations(merged, clausesByVerse, verses, new Map(), { level: 3 }).errors, []);
+  const bracketed = [
+    { clauseId: '1001001a', span: 1, text: '[他]创造', renderings: [{ tokens: id(2), zh: '创造' }] },
+    { clauseId: '1001001b', span: 1, text: '〚神大地〛', renderings: [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '∅' }] },
+  ];
+  const level4 = checkTranslations(bracketed, clausesByVerse, verses, new Map(), { level: 4 }).errors[0].messages;
+  assert.equal(level4.length, 1);
+  assert.match(level4[0], /1001001a: 第 4 档（意义对等）不用 \[ \]/);
+  assert.match(checkTranslations(bracketed, clausesByVerse, verses).errors[0].messages.join(), /∅）时必须写 note/);
+  // 编辑器提交：按每条自带的档位校验
+  const legacy = bracketed.map((item) => ({ ...item, literalness: 2 }));
+  assert.match(checkTranslations(legacy, clausesByVerse, verses, new Map(), { level: 4, itemLevels: true }).errors[0].messages.join(), /∅）时必须写 note/);
+  assert.doesNotMatch(checkTranslations(legacy, clausesByVerse, verses, new Map(), { level: 4, itemLevels: true }).errors[0].messages.join(), /第 4 档/);
+});

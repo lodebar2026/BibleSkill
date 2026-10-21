@@ -182,6 +182,29 @@ try {
 
   // 可编辑视图：1:2 的「地」放宽为 preferred（已写理由），译文整节才能重提
   await call('upsert_glossary', { entries: [{ strong: 'H0776G', zh: '大地', level: 'preferred', lemma: 'אֶרֶץ' }] });
+
+  // 补词：[ ] 存成补词段，supplied 写说明
+  const withSupplied = full('神', '大地');
+  withSupplied[0] = { ...withSupplied[0], text: '[那]大地是空虚混沌', supplied: [{ text: '那', note: '测试补词' }] };
+  const supplied = await call('submit_translation', { range: '创 1:2', translations: withSupplied });
+  const row12 = JSON.parse(readFileSync(path.join(workdir, '创世记/ch01/clauses.json'), 'utf8')).find((text) => text.bcv === 1001002 && text.sub === 'a');
+  check('补词存成 added 段并带说明', supplied.writtenVerses.length === 1 && JSON.parse(row12.formatted)[0].styleName === 'added' && JSON.parse(row12.formatted)[0].note === '测试补词'
+    && row12.renderings[0].at === 1 && row12.literalness === 2, row12?.formatted);
+  check('view_clauses 把补词显示为 [ ]', (await call('view_clauses', { range: '创 1:2' })).includes('[那]大地'));
+
+  // 档位：改为 4（意义对等）
+  const styled = await call('update_style', { content: '---\nliteralness: 4\n---\n' });
+  check('update_style 提示档位变了', /档位从 2/.test(styled.next), styled.next);
+  const level4 = await call('build_translation_briefing', { range: '创 1:2' });
+  check('briefing 的 approach 为第 4 档', level4.approach?.literalness === 4 && level4.approach.clauseOrder === 'fluent', JSON.stringify(level4.approach));
+  const otherLevel = await call('review_report', { range: '创 1:2' });
+  check('review_report 列出按别的档位译的节', otherLevel.otherLevel?.ranges.join() === '创世记 1:2' && otherLevel.retranslate.length === 0, JSON.stringify(otherLevel.otherLevel));
+  const bracketed = await call('submit_translation', { range: '创 1:2', translations: withSupplied });
+  check('第 4 档不用 [ ]', bracketed.writtenVerses.length === 0 && /第 4 档/.test(JSON.stringify(bracketed.errors)), JSON.stringify(bracketed.errors).slice(0, 120));
+  const loose = await call('submit_translation', { range: '创 1:2', translations: full('神', '地') });
+  check('第 4 档偏离 preferred 只提示不拦', loose.writtenVerses.length === 1 && loose.consistency?.length > 0, JSON.stringify(loose.errors ?? loose.consistency).slice(0, 120));
+  await call('update_style', { content: '---\nliteralness: 2\n---\n' });
+
   await verifyEditor();
 } finally {
   await client.close();

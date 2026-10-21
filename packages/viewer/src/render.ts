@@ -1,10 +1,11 @@
 /**
- * 浏览器端缩进视图的渲染。版式：节号 | 原文（树形前缀）| 直译（按 span 设置 rowSpan），
+ * 浏览器端缩进视图的渲染。版式：节号 | 原文（树形前缀）| 译文（按 span 设置 rowSpan），
  * 段落标题独占一行。缩进用 canvas 按实际字体测量。
- * 译文按 renderings 切成片段，悬停原文词或译文片段时双向高亮对应的另一侧（词级对齐）。
+ * 译文按 renderings 切成片段，悬停原文词或译文片段时双向高亮对应的另一侧（词级对齐）；补词段带括号、灰色显示。
  */
 import type { ChapterView, ClauseEntity, ClauseText, ViewWord } from '@bs/core';
 import { alignmentSpans } from '@bs/core/align';
+import { addedRanges, clauseNote, parseFormatted, plainText, segmentsMarkup } from '@bs/core/segments';
 import { buildChapterTree, continuationPrefix, flipTreePrefix, type Measure } from '@bs/clause-tree';
 
 type Clause = ClauseEntity;
@@ -36,12 +37,24 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: st
   return node;
 }
 
+/** 纯文本（补词不带括号），对齐按它算。 */
 export function segmentsText(json: string): string {
-  return (JSON.parse(json) as Array<{ text: string }>).map((segment) => segment.text).join('');
+  return plainText(parseFormatted(json));
 }
 
+/** 标记文本（补词带 [ ]），显示与编辑用。 */
+export function segmentsMarkupText(json: string): string {
+  return segmentsMarkup(parseFormatted(json));
+}
+
+/** 主译的取舍理由（补词说明另列）。 */
 export function segmentsNote(json: string): string {
-  return (JSON.parse(json) as Array<{ note?: string }>).map((segment) => segment.note ?? '').filter(Boolean).join(' ');
+  return clauseNote(parseFormatted(json));
+}
+
+/** 补词说明：「补词：说明」。 */
+export function suppliedLines(json: string): string[] {
+  return addedRanges(parseFormatted(json)).filter((range) => range.note).map((range) => `[${range.text}]：${range.note}`);
 }
 
 export const KIND_LABELS: Record<string, string> = { textual: '异文', punctuation: '断句', syntax: '句法', lexical: '词义', other: '其他' };
@@ -75,6 +88,13 @@ export function showDetails(panel: HTMLElement, clause: Clause, text: Text | und
   const translationNote = text && text.translationSpan > 0 ? segmentsNote(text.formatted) : '';
   if (translationNote) {
     panel.append(el('h4', '', '主译取舍'), el('p', '', translationNote));
+  }
+  const supplied = text && text.translationSpan > 0 ? suppliedLines(text.formatted) : [];
+  if (supplied.length > 0) {
+    panel.append(el('h4', '', '补词说明'));
+    const ul = el('ul');
+    supplied.forEach((line) => ul.append(el('li', '', line)));
+    panel.append(ul);
   }
   if (text?.alternatives && text.alternatives.length > 0) {
     panel.append(el('h4', '', '其他译法'));
@@ -117,17 +137,43 @@ function wordsOfRange(range: string, words: Word[]): string[] {
   return words.filter((word) => word.id >= first && word.id <= last).map((word) => word.id);
 }
 
-/** 主译文：按对齐切成片段，data-words 记下对应的原文词。 */
+/** 主译文：按对齐切成片段，data-words 记下对应的原文词；补词段包在 .zh-added 里（括号由样式加上）。 */
 function translationLine(text: Text, words: Word[]): HTMLElement {
   const main = el('span', 'zh-main');
-  for (const span of alignmentSpans(segmentsText(text.formatted), text.renderings)) {
-    if (span.tokens.length === 0) {
-      main.append(document.createTextNode(span.text));
-      continue;
+  const segments = parseFormatted(text.formatted);
+  const added = addedRanges(segments);
+  const addedAt = (position: number) => added.findIndex((range) => position >= range.start && position < range.end);
+  const cuts = new Set(added.flatMap((range) => [range.start, range.end]));
+  let offset = 0;
+  let group: { index: number; node: HTMLElement } | null = null;
+  for (const span of alignmentSpans(plainText(segments), text.renderings)) {
+    // 对齐片段在补词边界处再切开
+    const points = [0, ...[...cuts].filter((cut) => cut > offset && cut < offset + span.text.length).map((cut) => cut - offset).sort((a, b) => a - b), span.text.length];
+    for (let i = 0; i + 1 < points.length; i += 1) {
+      const piece = span.text.slice(points[i], points[i + 1]);
+      const index = addedAt(offset + points[i]);
+      let node: Node;
+      if (span.tokens.length === 0) {
+        node = document.createTextNode(piece);
+      } else {
+        const seg = el('span', 'zh-seg', piece);
+        seg.dataset.words = [...new Set(span.tokens.flatMap((range) => wordsOfRange(range, words)))].join(' ');
+        node = seg;
+      }
+      if (index < 0) {
+        group = null;
+        main.append(node);
+        continue;
+      }
+      if (!group || group.index !== index) {
+        const wrapper = el('span', 'zh-added');
+        if (added[index].note) wrapper.title = added[index].note!;
+        group = { index, node: wrapper };
+        main.append(wrapper);
+      }
+      group.node.append(node);
     }
-    const seg = el('span', 'zh-seg', span.text);
-    seg.dataset.words = [...new Set(span.tokens.flatMap((range) => wordsOfRange(range, words)))].join(' ');
-    main.append(seg);
+    offset += span.text.length;
   }
   return main;
 }

@@ -9,10 +9,14 @@ import {
   RenderingSchema,
   TranslationAlternativeSchema,
   isContentWord,
+  isMeaningBased,
   isTokenId,
+  markupToSegments,
   parseClauseId,
   parseTokenRange,
   resolveAlignment,
+  DEFAULT_LITERALNESS,
+  LITERALNESS_LEVELS,
   type ClauseEntity,
   type ClauseText,
   type SeedClause,
@@ -352,8 +356,16 @@ export const SubmittedTranslationSchema = z.object({
   alternatives: z.array(TranslationAlternativeSchema).default([]),
   /** 主译的取舍理由 / 异文不影响翻译的说明；存进 formatted 的 note。 */
   note: z.string().default(''),
+  /** 补词（text 里的 [ ]）的说明，存进对应补词段的 note。 */
+  supplied: z.array(z.object({
+    text: z.string().min(1),
+    note: z.string().default(''),
+    at: z.coerce.number().int().nonnegative().optional(),
+  })).default([]),
   paraTitle: nullableString.default(null),
   sources: z.array(z.string()).default(['ai']),
+  /** 这条译文所用的档位。只在编辑器提交（保留原译文的档位）时采用，见 TranslationCheckOptions。 */
+  literalness: z.coerce.number().int().min(1).max(5).optional(),
 }).loose();
 
 /** rendering.zh 取此值表示该原文词有意不译（须带 note）。 */
@@ -370,11 +382,18 @@ function toParaTitle(value: string | null): string | null {
 export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[] };
 
 /**
+ * level：当前翻译档位（style.md 的 literalness）。
+ * itemLevels：每条按它自带的 literalness 校验（编辑器改旧译文、审校复查时用，旧数据没有就按 2）。
+ */
+export type TranslationCheckOptions = { level?: number; itemLevels?: boolean };
+
+/**
  * 译文结构校验（用词统一检查另在 consistency.ts）：
  * - 每节子句齐全且按序；span：未合并 1，合并时首句 N、其后 N-1 句为 0，不跨节
  * - span>0 的子句 text 非空；span=0 的 text 必须为空
- * - renderings 的词落在所覆盖子句内，zh 必须出现在 text 里；存盘时补上 at（zh 在译文中的位置）
- * - 覆盖子句内每个实词都要有 rendering
+ * - text 里的 [ ] 是补词，拆成 styleName=added 的段；第 4、5 档不用补词，第 1 档不合并子句
+ * - renderings 的词落在所覆盖子句内，zh 必须出现在去掉 [ ] 的译文里；存盘时补上 at（zh 在译文中的位置）
+ * - 覆盖子句内每个实词都要有 rendering；∅（不译）在第 1–3 档须写 note
  * - 争议：子句分析为 ambiguous → 必须给 alternatives 并在 note 写主译理由；
  *   有影响翻译的经文异文 → 给 kind=textual 的 alternative，或在 note 说明为何不影响译文
  */
@@ -383,6 +402,7 @@ export function checkTranslations(
   clausesByVerse: Map<number, ClauseEntity[]>,
   tokensByVerse: Map<number, Token[]>,
   disputes: Map<string, ClauseDisputes> = new Map(),
+  options: TranslationCheckOptions = {},
 ): TranslationCheck {
   const errors = new Map<number, VerseError>();
   const fail = (bcv: number, clauseId: string, message: string) => {
@@ -427,6 +447,7 @@ export function checkTranslations(
       const clause = clauses[index];
       const item = verse.get(clause.id)!;
       const sub = parseClauseId(clause.id).sub;
+      const level = (options.itemLevels ? item.literalness : undefined) ?? options.level ?? DEFAULT_LITERALNESS;
       if (item.span === 0) {
         if (item.text.trim() !== '' || item.renderings.length > 0 || item.alternatives.length > 0) {
           fail(bcv, clause.id, 'span=0（已并入前句）时 text、renderings、alternatives 必须为空（写在首句上）');
@@ -452,9 +473,25 @@ export function checkTranslations(
           fail(bcv, clause.id, '已被前面的合并覆盖，span 应为 0');
         }
       }
+      if (level === 1 && item.span > 1) {
+        fail(bcv, clause.id, `第 1 档（${LITERALNESS_LEVELS[1].name}）不合并子句，span 只能是 1`);
+      }
       if (item.text.trim() === '') {
         fail(bcv, clause.id, 'text 为空');
       }
+      const note = item.note.trim();
+      const text = item.text.trim();
+      let segments: ReturnType<typeof markupToSegments>;
+      try {
+        segments = markupToSegments(text, note, item.supplied);
+      } catch (error) {
+        fail(bcv, clause.id, (error as Error).message);
+        segments = [{ text: text.replace(/[[\]]/g, '') }];
+      }
+      if (isMeaningBased(level) && segments.some((segment) => segment.styleName)) {
+        fail(bcv, clause.id, `第 ${level} 档（${LITERALNESS_LEVELS[level as 4 | 5].name}）不用 [ ] 标补词：去掉括号，把补出的词直接写进译文`);
+      }
+      const plain = segments.map((segment) => segment.text).join('');
       const first = covered[0].firstWordId;
       const last = covered[covered.length - 1].lastWordId;
       const span = tokens.filter((token) => token.id >= first && token.id <= last);
@@ -465,20 +502,19 @@ export function checkTranslations(
           fail(bcv, clause.id, `rendering ${rendering.tokens} 不在本句（含合并句）范围内`);
         }
         if (rendering.zh === NOT_TRANSLATED) {
-          if (!rendering.note) {
+          if (!rendering.note && !isMeaningBased(level)) {
             fail(bcv, clause.id, `rendering ${rendering.tokens} 标为不译（∅）时必须写 note`);
           }
-        } else if (!item.text.includes(rendering.zh)) {
+        } else if (!plain.includes(rendering.zh)) {
           fail(bcv, clause.id, `rendering「${rendering.zh}」没有出现在译文里`);
         }
         hit.forEach((token) => renderedIds.add(token.id));
       }
       const unrendered = span.filter((token) => isContentWord(token.morph, token.strong) && !renderedIds.has(token.id));
       if (unrendered.length > 0) {
-        fail(bcv, clause.id, `实词缺 rendering: ${unrendered.map((token) => `${token.id}(${token.surface} ${token.glossEn})`).join('、')}；若该词确实不译，给 rendering 写 zh="${NOT_TRANSLATED}" 并加 note`);
+        fail(bcv, clause.id, `实词缺 rendering: ${unrendered.map((token) => `${token.id}(${token.surface} ${token.glossEn})`).join('、')}；${isMeaningBased(level) ? `几个词合译时用 \`首-末\` 区间对应整个短语；确实不译的写 zh="${NOT_TRANSLATED}"` : `若该词确实不译，给 rendering 写 zh="${NOT_TRANSLATED}" 并加 note`}`);
       }
       const coveredDisputes = covered.map((c) => disputes.get(c.id)).filter((d): d is ClauseDisputes => d !== undefined);
-      const note = item.note.trim();
       if (coveredDisputes.some((d) => d.analysis.length > 0)) {
         if (item.alternatives.length === 0) {
           fail(bcv, clause.id, `子句分析标为 ambiguous（${coveredDisputes.flatMap((d) => d.analysis.map((a) => a.summary)).join('；')}），须在 alternatives 给出另一读法的译文与依据`);
@@ -494,12 +530,11 @@ export function checkTranslations(
       if (item.alternatives.length > 0 && !note) {
         fail(bcv, clause.id, '给了 alternatives 时须在 note 写明主译的取舍理由');
       }
-      const text = item.text.trim();
-      const positions = resolveAlignment(text, item.renderings);
+      const positions = resolveAlignment(plain, item.renderings);
       rows.push({
         bcv, sub,
         translationSpan: item.span,
-        formatted: JSON.stringify([note ? { text, note } : { text }]),
+        formatted: JSON.stringify(segments),
         paraTitle: toParaTitle(item.paraTitle),
         renderings: item.renderings.map(({ at: _, ...rendering }, index) => {
           const at = positions[index];
@@ -508,6 +543,7 @@ export function checkTranslations(
         alternatives: item.alternatives,
         sources: item.sources,
         version: 0,
+        literalness: level,
       });
     }
     if (!errors.has(bcv)) {

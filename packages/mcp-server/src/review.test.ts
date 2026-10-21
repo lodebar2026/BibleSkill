@@ -38,8 +38,8 @@ const cleanTexts = [
   text('b', '神大地', [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }]),
 ];
 
-function review(entities: ClauseEntity[], texts: ClauseText[], glossary: GlossaryEntry[] = []) {
-  return reviewChapter({ bookName: '创世记', entities, texts, tokensByVerse: new Map([[BCV, tokens]]), variants: [], glossary });
+function review(entities: ClauseEntity[], texts: ClauseText[], glossary: GlossaryEntry[] = [], level?: number) {
+  return reviewChapter({ bookName: '创世记', entities, texts, tokensByVerse: new Map([[BCV, tokens]]), variants: [], glossary, level });
 }
 
 test('与当前分析、术语表一致时没有问题', () => {
@@ -87,6 +87,26 @@ test('needs-review 子句列入人工复核；已处理的争议不报', () => {
     cleanTexts[1],
   ];
   assert.deepEqual(review(ambiguous, handled).issues, []);
+});
+
+test('档位：每节按写入时的档位复查，与当前档位不同的列入 otherLevel', () => {
+  const preferred: GlossaryEntry[] = [{ strong: 'H0430G', senseKey: null, lemma: '', zh: '上帝', level: 'preferred', note: '', scope: 'all', version: 0 }];
+  const level4 = cleanTexts.map((item) => ({ ...item, literalness: 4 }));
+  assert.deepEqual(review(twoClauses, level4, preferred, 4).issues, []);
+  assert.deepEqual(review(twoClauses, cleanTexts, preferred, 4).issues.map((issue) => issue.kind), ['glossary']);
+  assert.deepEqual(review(twoClauses, cleanTexts, [], 4).otherLevel, [BCV]);
+  assert.deepEqual(review(twoClauses, cleanTexts).otherLevel, []);
+});
+
+test('补词：分段存储的复查不报问题；括号还在正文里的旧数据列入 legacy', () => {
+  const segmented = [
+    text('a', '', [{ tokens: id(2), zh: '创造', at: 1 }], { formatted: JSON.stringify([{ text: '他', styleName: 'added', note: '补主语' }, { text: '创造' }]) }),
+    cleanTexts[1],
+  ];
+  const result = review(twoClauses, segmented);
+  assert.deepEqual(result.issues, []);
+  assert.deepEqual(result.legacy, []);
+  assert.deepEqual(review(twoClauses, [text('a', '[他]创造', [{ tokens: id(2), zh: '创造' }]), cleanTexts[1]]).legacy, [BCV]);
 });
 
 test('verseRanges 合并连续节', () => {

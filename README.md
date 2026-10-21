@@ -1,11 +1,11 @@
 # BibleSkill
 
-圣经原文**中文直译**的 AI 工作流：一组可公开的 skill，加一个基于开放数据的 MCP server。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
+圣经原文**中文翻译**的 AI 工作流：一组可公开的 skill，加一个基于开放数据的 MCP server。译文贴近原文形式还是偏重意义分 5 档（逐字、直译、平衡、意义对等、意译），按工作目录设定，默认直译。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
 
 工作流分四步，另有一个从修改历史学习的步骤：
 
 1. **analyze**：把经文切分为子句并确定从属关系。Macula 句法树作为第二意见，不当作标准答案。
-2. **translate**：逐子句直译，同时给出实词的译法对照，并强制检查用词统一。
+2. **translate**：按设定的档位逐子句翻译，同时给出实词的译法对照，并检查用词统一。
 3. **consistency**：汇总一词多译、多词一译，把判定结果固化进术语表。
 4. **review**：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围和需要人工复核的子句。
 5. **learn**：汇总人工修改历史，整理成术语偏好、个人风格和项目规则，经用户确认后写入；可以批量替换不一致的译词。
@@ -50,7 +50,7 @@ pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
 # 约 30 秒；输出各约映射率与 build_report 统计
 
 # 3. 安装到一个翻译工作目录
-./scripts/install.sh ~/圣经直译
+./scripts/install.sh ~/圣经翻译
 ```
 
 `install.sh` 写入以下内容：
@@ -65,6 +65,29 @@ pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
 个人风格与术语偏好：`install.sh --style <style.md> --terms <terms.yaml>` 拷进工作目录。不传时，如果 `~/.config/bibleskill/style.md`、`~/.config/bibleskill/terms.yaml` 存在、而工作目录里还没有，就自动拷入；工作目录里已有的不覆盖。
 
 **agy 无头模式**（`agy -p`）不能弹出权限确认。需要在 `~/.gemini/antigravity-cli/settings.json` 的 `permissions.allow` 里加入 `mcp(bibleskill/<工具名>)`，工具名见下表。
+
+## 翻译档位
+
+在工作目录的 `style.md` 里用 frontmatter 选项 `literalness` 设定档位（不写时为 2）：
+
+```markdown
+---
+literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
+---
+（下面是个人风格正文，可以不写）
+```
+
+| 档 | 名称 | 做法 | 校验 |
+|---|---|---|---|
+| 1 | 逐字 | 原文语序与词数，一个原文词对应一个译词 | 不能合并子句（span 只能为 1） |
+| 2 | 直译（默认） | 形式对等，中文不能成句时才调整语序、合并子句 | 原有规则 |
+| 3 | 平衡 | 保留意象与重要结构，句式按中文调整 | 同 2 |
+| 4 | 意义对等 | 按意思重组句子，比喻、成语、度量衡可译出其意，可补主语 | 不用 `[ ]`；∅ 不必写 note；偏离既有译法或 `preferred` 只提示不拦 |
+| 5 | 意译 | 释义，可补出读者理解所需的隐含信息，但不加原文没有的论断 | 同 4 |
+
+各档通用：依据原文、不照搬其他译本、争议必须标出、每个实词都要给 rendering（第 4、5 档可以用 `首-末` 区间对应整个短语）、`locked` 术语必须照用。各档的细则见 [prompts/literalness.md](prompts/literalness.md)。briefing 的 `approach` 把当前档位告诉模型。
+
+一个工作目录用一个档位。想要另一档的译本，另开一个工作目录。中途换档位时，已译的经文不会被改写：每条译文记下写入时的档位（`literalness`），审校按各自的档位复查，并在 `otherLevel` 里列出与当前档位不同的节。`clauseOrder`（后置状语从句合并前置还是保留原文语序）只在第 2、3 档起作用；第 1 档固定保留原文语序，第 4、5 档固定按中文语序。
 
 ## 使用
 
@@ -81,9 +104,9 @@ pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
 查看结果：
 
 ```bash
-pnpm view 创 1 --workdir ~/圣经直译                    # 终端文本
-pnpm view 创 1 --workdir ~/圣经直译 --html gen1.html   # 单文件 HTML（canvas 精确对齐分支位置）
-pnpm view 创 1 --workdir ~/圣经直译 --serve            # 可编辑视图：http://127.0.0.1:4310/（--port 改端口）
+pnpm view 创 1 --workdir ~/圣经翻译                    # 终端文本
+pnpm view 创 1 --workdir ~/圣经翻译 --html gen1.html   # 单文件 HTML（canvas 精确对齐分支位置）
+pnpm view 创 1 --workdir ~/圣经翻译 --serve            # 可编辑视图：http://127.0.0.1:4310/（--port 改端口）
 ```
 
 ### 在缩进视图里编辑
@@ -109,7 +132,7 @@ pnpm view 创 1 --workdir ~/圣经直译 --serve            # 可编辑视图：
 ### 在 agy 下跑端到端测试
 
 ```bash
-cd ~/圣经直译
+cd ~/圣经翻译
 printf '%s' '/bible-analyze 创 1:1-3' > /tmp/p.txt
 AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AGY_HARD=900 \
   python3 /path/to/BibleSkill/scripts/agy-pty.py
@@ -124,7 +147,7 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 | `get_passage` | 逐词数据（TSV）、词法说明、异文 |
 | `lookup_lexicon` | UBS 中文词典 + TBESH/TBESG |
 | `build_analysis_briefing` / `submit_clause_analysis` | 子句切分 |
-| `build_translation_briefing` / `submit_translation` | 直译 |
+| `build_translation_briefing` / `submit_translation` | 翻译（按档位） |
 | `view_clauses` | 缩进文本视图 |
 | `upsert_glossary` / `consistency_report` | 术语表与用词统一报告 |
 | `review_report` | 审校：复查已写入的译文，列出需要改译的范围与需要人工复核的子句 |
@@ -156,17 +179,26 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 config.json                        数据库路径
 glossary.json                      术语表 {strong, senseKey, lemma, zh, level: locked|preferred, note, scope}
 rules.json                         分析/翻译规则 {id, task, pattern, resolution, examples}（手工维护，或由 bible-learn 写入）
-style.md                           个人风格：Markdown，可带 frontmatter 选项（clauseOrder: fluent|source）
+style.md                           翻译档位与个人风格：Markdown，可带 frontmatter 选项（literalness: 1-5，clauseOrder: fluent|source）
 terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh, avoid?, note?}]，可写注释
 <中文书名>/chNN/clause_entities.json  子句分析
-<中文书名>/chNN/clauses.json          直译
+<中文书名>/chNN/clauses.json          译文
 <中文书名>/chNN/history.jsonl         译文修改历史 {bcv, sub, at, origin: ai|human|replace|import, before, after}
 ```
 
 `clause_entities.json`（`ClauseEntity`）与 `clauses.json`（`ClauseText`）的字段保持稳定，新功能只追加字段：
 
 - 子句：`status`（accepted / ambiguous / needs-review）、`alternatives`（其他切法与依据）、`seedDiff`、`sources`、`note`
-- 译文：`renderings`（每条可带 `at`：译词在本行译文中的位置，存盘时自动定位）、`alternatives`（其他译法 `{text, kind, basis}`）、`sources`；主译的取舍理由存在 `formatted` 的 note 里
+- 译文：`renderings`（每条可带 `at`：译词在本行译文中的位置，存盘时自动定位）、`alternatives`（其他译法 `{text, kind, basis}`）、`sources`、`literalness`（写入时的档位，旧数据没有，按 2 算）
+- `formatted` 是 `TranslationSegment[]`（`{text, styleName?, note?}`）的 JSON 字符串。补出的词单独成段，`styleName: "added"`，`text` 不带括号，`note` 是补词的说明；主译的取舍理由在最后一个普通段的 note 上。模型提交时仍在 `text` 里写 `[ ]`、用 `supplied: [{text, note}]` 写补词说明，由系统拆成段；briefing、文本视图里再拼回 `[ ]`。`renderings` 的 `zh`、`at` 按不带括号的纯文本计算。HTML 视图里补词显示为带括号的灰字，有说明时悬停可看。
+
+  旧版本把 `[ ]` 直接写在正文里。转换成补词段（文字不变，对齐位置随之调整，不记修改历史）：
+
+  ```bash
+  pnpm migrate:segments --workdir ~/圣经翻译 [--dry-run]
+  ```
+
+  `review_report` 会在 `legacy` 里列出还没转换的节。
 
 两个文件都有 `version` 字段，按节整体替换，写入是原子的（先写临时文件再 rename）。
 
@@ -176,7 +208,7 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 - **译法对照**：提交译文时，每个实词（名词、动词、形容词）都要给出 `renderings`。这些对照构成译法记忆，不另外落盘，扫描工作目录实时汇总。它们同时就是词级对齐：`zh` 在译文里出现不止一处、或落在别的译词里（「地」在「大地」里）时，存盘时按「给定的 `at` → 长词优先 → 词序」定到具体位置，视图据此做原文与译文的双向高亮。
 - **提交检查**：
   - 违反 `locked` 术语 → 拒绝该节。
-  - 偏离 `preferred` 术语或既有主导译法、又没写 `note` → 拒绝该节，并列出既有译法。
+  - 偏离 `preferred` 术语或既有主导译法、又没写 `note` → 拒绝该节，并列出既有译法（第 4、5 档只列出，不拒绝）。
   - 写了理由 → 放行。
 - **用词审校**：`consistency_report` 列出一词多译和多词一译，供 `bible-consistency` skill 判定后写入术语表。
 
@@ -194,12 +226,12 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 
 ## 个人风格、术语偏好与修改历史
 
-- **个人风格**（`style.md`）进入 analyze、translate briefing 和审校报告的 `style` 字段。它是偏好级：原文两种译法都成立时才采用，与直译原则、术语表冲突时以原则为准；审校不会因为风格不符要求重译。frontmatter 的 `clauseOrder` 控制后置状语从句是合并前置（`fluent`，默认）还是保留原文语序（`source`）。
+- **个人风格**（`style.md`）进入 analyze、translate briefing 和审校报告的 `style` 字段。它是偏好级：原文两种译法都成立时才采用，与当前档位的原则、术语表冲突时以原则为准（档位 `literalness` 本身不是偏好，必须遵守）；审校不会因为风格不符要求重译。frontmatter 的 `clauseOrder` 控制后置状语从句是合并前置（`fluent`，默认）还是保留原文语序（`source`）。
 - **术语偏好**（`terms.yaml`）在 translate briefing 的 `terms[].preference` 里提示，只对还没有术语表条目的词生效；`consistency_report` 的 `preferenceConflicts` 列出与偏好不同的现有译法。要强制统一，把它写成术语表的 `preferred`。
 - **修改历史**：每次写入译文，变化了的子句都把改前改后追加到该章的 `history.jsonl`，`origin` 区分 AI 提交（`ai`）、视图里的人工编辑（`human`）、批量替换（`replace`）和导入（`import`）。别处的修改历史可以导入：
 
   ```bash
-  pnpm revisions import 历史.jsonl --workdir ~/圣经直译
+  pnpm revisions import 历史.jsonl --workdir ~/圣经翻译
   # 每行 {"ref": "撒上 5:8", "before": "改前文本", "after": "改后文本"}，也可以用 bcv、sub、time
   ```
 
@@ -226,7 +258,7 @@ skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>
 ## 开发
 
 ```bash
-pnpm build && pnpm test        # 单元测试（校验器、审校、引用解析、句型换算、对齐定位、编辑操作）
+pnpm build && pnpm test        # 单元测试（校验器、档位、补词分段、审校、迁移、引用解析、句型换算、对齐定位、编辑操作）
 pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍完整流程，最后经 --serve 的接口做编辑
 ```
 

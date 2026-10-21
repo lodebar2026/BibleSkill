@@ -1,13 +1,13 @@
-# 圣经直译工作目录
+# 圣经翻译工作目录
 
-本目录是一个圣经原文直译项目，已安装 BibleSkill 的 skills 与 `bibleskill` MCP server（Claude Code、Gemini CLI、agy、Codex 通用）。
+本目录是一个圣经原文中文翻译项目，已安装 BibleSkill 的 skills 与 `bibleskill` MCP server（Claude Code、Gemini CLI、agy、Codex 通用）。翻译档位（1 逐字、2 直译、3 平衡、4 意义对等、5 意译）由 `style.md` 的 frontmatter 选项 `literalness` 设定，默认 2。
 
 ## 任务入口
 
 | 用户说 | 使用的 skill |
 |---|---|
 | 分析 / 切分 / 断句 某段经文 | `bible-analyze` |
-| 翻译 / 直译 某段经文 | `bible-translate` |
+| 翻译 / 直译 / 意译 某段经文 | `bible-translate` |
 | 检查用词统一、一词多译、整理术语表 | `bible-consistency` |
 | 审校、复查哪些译文需要改 | `bible-review` |
 | 从修改历史学习、生成术语偏好、整理个人风格 | `bible-learn` |
@@ -29,9 +29,9 @@
 config.json                 数据库路径
 glossary.json               术语表（用词统一）
 rules.json                  积累的分析/翻译规则（可手工维护）
-style.md                    个人风格（偏好级，可手工维护）
+style.md                    翻译档位 literalness 与个人风格（可手工维护）
 terms.yaml                  术语偏好（偏好级，可手工维护，可写注释）
 <书名>/chNN/history.jsonl          译文修改历史（自动记录）
 <书名>/chNN/clause_entities.json   子句分析
-<书名>/chNN/clauses.json           直译与实词译法对照
+<书名>/chNN/clauses.json           译文与实词译法对照
 ```

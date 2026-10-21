@@ -12,6 +12,7 @@ import {
   parseSegments,
   resolveAlignment,
   segmentsText,
+  formattedMarkup,
   strongMatches,
   type BibleDb,
   type ClauseText,
@@ -122,7 +123,8 @@ function plainText(value: HistoryEntry['before']): string {
   if (value === null) {
     return '';
   }
-  return typeof value === 'string' ? value : segmentsText(value.formatted);
+  // 导入的纯文本历史里补词带着 [ ]，工具写入的也拼回标记文本，两者才能对比
+  return typeof value === 'string' ? value : formattedMarkup(value.formatted);
 }
 
 export type RenderingChange = {
@@ -344,7 +346,7 @@ export async function replaceRendering(db: BibleDb, store: WorkFileStore, scope:
         result.skipped.push({ clause, reason: outcome.skipped });
         continue;
       }
-      result.matched.push({ clause, before: segmentsText(text.formatted), after: segmentsText(outcome.next.formatted) });
+      result.matched.push({ clause, before: formattedMarkup(text.formatted), after: formattedMarkup(outcome.next.formatted) });
       changed.set(`${text.bcv}${text.sub}`, outcome.next);
     }
     if (apply && changed.size > 0) {

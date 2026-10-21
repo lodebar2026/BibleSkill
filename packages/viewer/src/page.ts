@@ -52,6 +52,9 @@ table.ot td.orig { direction: rtl; text-align: right; }
 td.zh { font-size: 16px; line-height: 1.6; white-space: pre-line; min-width: 14em; }
 .tree-prefix { white-space: pre; font-family: "Times New Roman", Times, serif; font-size: 25pt; color: var(--muted); }
 .word.aligned, .zh-seg.aligned { background: var(--align); border-radius: 3px; }
+.zh-added { color: var(--muted); }
+.zh-added::before { content: '['; }
+.zh-added::after { content: ']'; }
 .word.pending { background: var(--pending); border-radius: 3px; }
 #details .renderings input { width: 100%; font: inherit; font-size: 12px; }
 #details .renderings button { font-size: 12px; padding: 0 4px; }

@@ -3,7 +3,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import type { ClauseText } from './schemas.js';
+import { effectiveClauseOrder, type ClauseText } from './schemas.js';
 import { WorkFileStore, parseStyle } from './store.js';
 
 const BCV = 1001001;
@@ -35,10 +35,20 @@ test('整节替换只把有变化的子句记进 history.jsonl，并带上来源
 
 test('style.md 的 frontmatter 选项与正文', () => {
   const style = parseStyle('---\nclauseOrder: source  # 保留原文语序\n---\n## 用语\n- 用现代口语词\n');
-  assert.deepEqual(style.options, { clauseOrder: 'source' });
+  assert.deepEqual(style.options, { clauseOrder: 'source', literalness: 2 });
   assert.equal(style.text, '## 用语\n- 用现代口语词');
-  assert.deepEqual(parseStyle('只有正文').options, { clauseOrder: 'fluent' });
+  assert.deepEqual(parseStyle('只有正文').options, { clauseOrder: 'fluent', literalness: 2 });
   assert.throws(() => parseStyle('---\nclauseOrder: maybe\n---\n'), /选项不对/);
+});
+
+test('style.md 的翻译档位', () => {
+  assert.equal(parseStyle('---\nliteralness: 4  # 意义对等\n---\n').options.literalness, 4);
+  assert.throws(() => parseStyle('---\nliteralness: 0\n---\n'), /选项不对/);
+  assert.throws(() => parseStyle('---\nliteralness: 6\n---\n'), /选项不对/);
+  const order = (text: string) => effectiveClauseOrder(parseStyle(text).options);
+  assert.equal(order('---\nliteralness: 1\nclauseOrder: fluent\n---\n'), 'source');
+  assert.equal(order('---\nliteralness: 3\nclauseOrder: source\n---\n'), 'source');
+  assert.equal(order('---\nliteralness: 5\nclauseOrder: source\n---\n'), 'fluent');
 });
 
 test('terms.yaml 合并条目时保留注释', async () => {

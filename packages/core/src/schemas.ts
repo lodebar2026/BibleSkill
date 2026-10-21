@@ -3,6 +3,7 @@
  */
 import { z } from 'zod';
 import { isTokenId } from './ids.js';
+import { segmentsMarkup } from './segments.js';
 
 const TokenId = z.string().refine(isTokenId, { message: '不是合法词 id' });
 const TokenRange = z.string().regex(/^[on]\d{11,12}(-[on]\d{11,12})?$/, '词范围应为 id 或 id-id');
@@ -99,6 +100,8 @@ export const ClauseTextSchema = z.object({
   alternatives: z.array(TranslationAlternativeSchema).default([]),
   sources: z.array(z.string()),
   version: z.number().int().nonnegative(),
+  /** 写入时的翻译档位（style.md 的 literalness）；旧数据没有，按 2（直译）算。 */
+  literalness: z.number().int().min(1).max(5).optional(),
 });
 
 export type ClauseText = z.infer<typeof ClauseTextSchema>;
@@ -150,12 +153,41 @@ export type Rule = z.infer<typeof RuleSchema>;
 /** 个人风格的结构化选项（style.md 的 frontmatter）。 */
 export const CLAUSE_ORDERS = ['fluent', 'source'] as const;
 
+/** 翻译档位：1 最贴近原文形式，5 最偏意义。详细规则见 prompts/literalness.md。 */
+export const LITERALNESS_LEVELS = {
+  1: { name: '逐字', summary: '尽量保留原文语序与词数，一个原文词对应一个译词；不合并子句；补出的词都放进 [ ]' },
+  2: { name: '直译', summary: '形式对等：保留子句划分、语序中的强调、重复与修辞；只在中文不能成句时调整语序或合并子句；补词放进 [ ]；严格统一用词' },
+  3: { name: '平衡', summary: '保留原文意象与重要结构，句式可按中文调整，原因、目的从句也可合并；用词统一照旧；只有带实质内容的补词放进 [ ]' },
+  4: { name: '意义对等', summary: '按意思用自然的中文重组句子；比喻、成语、度量衡、修辞问句可译出其意；可补名词主语；不用 [ ]；用词统一只作提示' },
+  5: { name: '意译', summary: '释义：用当代中文说清原文的意思，可补出读者理解所需的隐含信息（指代、文化背景），但不加原文没有的论断；不用 [ ]' },
+} as const satisfies Record<number, { name: string; summary: string }>;
+
+export type Literalness = keyof typeof LITERALNESS_LEVELS;
+
+/** 默认档位：直译（本项目原有的规则）。 */
+export const DEFAULT_LITERALNESS: Literalness = 2;
+
 export const StyleOptionsSchema = z.object({
-  /** 后置状语：fluent = 中文不通顺时合并前置（默认）；source = 时间、“直到”从句保留原文语序。 */
+  /** 后置状语：fluent = 中文不通顺时合并前置（默认）；source = 时间、“直到”从句保留原文语序。只在第 2、3 档生效。 */
   clauseOrder: z.enum(CLAUSE_ORDERS).default('fluent'),
+  /** 翻译档位 1–5，见 LITERALNESS_LEVELS。 */
+  literalness: z.coerce.number().int().min(1).max(5).default(DEFAULT_LITERALNESS).transform((value) => value as Literalness),
 });
 
 export type StyleOptions = z.infer<typeof StyleOptionsSchema>;
+
+/** 实际生效的 clauseOrder：第 1 档总是保留原文语序，第 4、5 档总是按中文语序。 */
+export function effectiveClauseOrder(options: StyleOptions): (typeof CLAUSE_ORDERS)[number] {
+  if (options.literalness === 1) {
+    return 'source';
+  }
+  return options.literalness >= 4 ? 'fluent' : options.clauseOrder;
+}
+
+/** 第 4、5 档：用词统一只作提示，不用 [ ] 标补词。 */
+export function isMeaningBased(level: number): boolean {
+  return level >= 4;
+}
 
 export type Style = { options: StyleOptions; text: string };
 
@@ -196,6 +228,12 @@ export function parseSegments(formatted: string): TranslationSegment[] {
   return z.array(TranslationSegmentSchema).parse(JSON.parse(formatted));
 }
 
+/** 纯文本（补词不带括号）；rendering 的 zh、at 按它算。 */
 export function segmentsText(formatted: string): string {
   return parseSegments(formatted).map((segment) => segment.text).join('');
+}
+
+/** 标记文本（补词带 [ ]）；给模型看、给人编辑用。 */
+export function formattedMarkup(formatted: string): string {
+  return segmentsMarkup(parseSegments(formatted));
 }

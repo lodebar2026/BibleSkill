@@ -217,6 +217,15 @@ export class WorkFileStore {
     return replaced;
   }
 
+  /** 格式迁移：整体重写一章的译文（文字内容不变），不记修改历史。 */
+  async rewriteClauseTexts(bookName: string, chapter: number, rows: ClauseText[]): Promise<void> {
+    const filePath = this.chapterFile(bookName, chapter, 'clauses');
+    const existing = await readJsonArray(filePath, ClauseTextSchema);
+    const byKey = new Map(existing.map((item) => [`${item.bcv}${item.sub}`, item]));
+    const next = rows.map((item) => ClauseTextSchema.parse({ ...item, version: nextVersion(byKey.get(`${item.bcv}${item.sub}`), item) }));
+    await atomicWrite(filePath, next.sort(clauseTextOrder));
+  }
+
   async appendHistory(bookName: string, chapter: number, entries: HistoryEntry[]): Promise<void> {
     if (entries.length === 0) {
       return;

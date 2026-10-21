@@ -121,6 +121,21 @@ test('译文合并与拆开', () => {
   assert.throws(() => splitTranslation(texts, chapter, `${V1}a`, '', ''), /没有可拆/);
 });
 
+test('译文合并与拆开：补词段与补词说明保留', () => {
+  const texts = [
+    text('a', '', { formatted: JSON.stringify([{ text: '他', styleName: 'added', note: '补主语' }, { text: '说', note: '甲' }]) }),
+    text('b', '', { formatted: JSON.stringify([{ text: '要有' }, { text: '光', styleName: 'added' }]) }),
+  ];
+  const merged = mergeTranslationWithNext(texts, `${V1}a`);
+  assert.deepEqual(JSON.parse(merged[0].formatted), [
+    { text: '他', styleName: 'added', note: '补主语' }, { text: '说要有', note: '甲' }, { text: '光', styleName: 'added' },
+  ]);
+  const split = splitTranslation(merged, chapter, `${V1}a`, '[他]说', '要有[光]');
+  assert.deepEqual(JSON.parse(split[0].formatted), [{ text: '他', styleName: 'added', note: '补主语' }, { text: '说', note: '甲' }]);
+  assert.deepEqual(JSON.parse(split[1].formatted), [{ text: '要有' }, { text: '光', styleName: 'added' }]);
+  assert.throws(() => splitTranslation(merged, chapter, `${V1}a`, '[他说', '要有'), /不成对/);
+});
+
 test('词级对齐：找译文行、设定 / 修改 / 删除对照', () => {
   const texts = [
     text('a', '起初神创造天地', { translationSpan: 2, renderings: [{ tokens: w(1, 1), zh: '创造', at: 3 }, { tokens: w(1, 5), zh: '天', note: '理由' }] }),

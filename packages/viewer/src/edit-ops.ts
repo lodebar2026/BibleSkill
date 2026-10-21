@@ -4,7 +4,8 @@
  * 只从 @bs/core 引类型：core 的运行时代码依赖 node:sqlite，不能打进浏览器包。
  * 拆分 / 合并后按词序把本节子句重排为 a、b、c…，并按改名表重写全章的 parentId。
  */
-import type { ClauseEntity, ClauseText, Rendering, TranslationSegment } from '@bs/core';
+import type { ClauseEntity, ClauseText, Rendering } from '@bs/core';
+import { ADDED_STYLE, clauseNote, markupToSegments, parseFormatted, plainText, suppliedNotes, type Segment } from '@bs/core/segments';
 
 type Word = { id: string };
 
@@ -260,20 +261,47 @@ export function finalizeClauses(before: ClauseEntity[], after: ClauseEntity[]): 
 
 // ---------------------------------------------------------------- 译文 translationSpan
 
-function segmentsOf(formatted: string): TranslationSegment[] {
-  return JSON.parse(formatted) as TranslationSegment[];
-}
-
 function textOf(formatted: string): string {
-  return segmentsOf(formatted).map((segment) => segment.text).join('');
+  return plainText(parseFormatted(formatted));
 }
 
 function noteOf(formatted: string): string {
-  return segmentsOf(formatted).map((segment) => segment.note ?? '').filter(Boolean).join('；');
+  return clauseNote(parseFormatted(formatted));
 }
 
-function formattedOf(text: string, note: string): string {
-  return JSON.stringify([note ? { text, note } : { text }]);
+/** 两行译文的分段相接：补词段（连同说明）保留，主译理由合到最后一个普通段上。 */
+function concatFormatted(head: string, next: string): string {
+  const segments: Segment[] = [...parseFormatted(head), ...parseFormatted(next)]
+    .map((segment) => (segment.styleName === ADDED_STYLE ? { ...segment } : { text: segment.text, ...(segment.styleName ? { styleName: segment.styleName } : {}) }))
+    .filter((segment) => segment.text || segment.styleName)
+    .reduce<Segment[]>((merged, segment) => {
+      const previous = merged.at(-1);
+      if (previous && !previous.styleName && !segment.styleName) {
+        previous.text += segment.text;
+      } else {
+        merged.push(segment);
+      }
+      return merged;
+    }, []);
+  const note = [noteOf(head), noteOf(next)].filter(Boolean).join('；');
+  const target = [...segments].reverse().find((segment) => segment.styleName !== ADDED_STYLE);
+  if (note) {
+    if (target) {
+      target.note = note;
+    } else {
+      segments.push({ text: '', note });
+    }
+  }
+  return JSON.stringify(segments);
+}
+
+/** 人工改写的标记文本（补词带 [ ]）→ 分段；原来的补词说明按补词文字带过去。 */
+function formattedOf(markup: string, note: string, previous?: string): string {
+  const bracketed = new Set([...markup.matchAll(/\[([^[\]\n]*)\]/g)].map((match) => match[1]));
+  const supplied = previous
+    ? suppliedNotes(parseFormatted(previous)).filter((item) => bracketed.has(item.text)).map(({ text, note: itemNote }) => ({ text, note: itemNote }))
+    : [];
+  return JSON.stringify(markupToSegments(markup, note, [...new Map(supplied.map((item) => [item.text, item])).values()]));
 }
 
 function verseTexts(texts: ClauseText[], bcv: number): ClauseText[] {
@@ -310,7 +338,7 @@ export function mergeTranslationWithNext(texts: ClauseText[], key: string): Clau
   const merged: ClauseText = {
     ...head,
     translationSpan: head.translationSpan + next.translationSpan,
-    formatted: formattedOf(textOf(head.formatted) + textOf(next.formatted), [noteOf(head.formatted), noteOf(next.formatted)].filter(Boolean).join('；')),
+    formatted: concatFormatted(head.formatted, next.formatted),
     renderings: [...head.renderings, ...next.renderings.map((rendering) => shiftAt(rendering, textOf(head.formatted).length))],
     alternatives: [...head.alternatives, ...next.alternatives],
     sources: [...new Set([...head.sources, ...next.sources, 'human'])],
@@ -352,7 +380,7 @@ export function splitTranslation(texts: ClauseText[], entities: ClauseEntity[], 
       return {
         ...head,
         translationSpan: head.translationSpan - 1,
-        formatted: formattedOf(kept.trim(), noteOf(head.formatted)),
+        formatted: formattedOf(kept.trim(), noteOf(head.formatted), head.formatted),
         renderings: head.renderings.filter((rendering) => !moves(rendering.tokens)).map(withoutAt),
         sources,
       };
@@ -361,7 +389,7 @@ export function splitTranslation(texts: ClauseText[], entities: ClauseEntity[], 
       return {
         ...item,
         translationSpan: 1,
-        formatted: formattedOf(detached.trim(), ''),
+        formatted: formattedOf(detached.trim(), '', head.formatted),
         renderings: head.renderings.filter((rendering) => moves(rendering.tokens)).map(withoutAt),
         alternatives: [],
         sources,

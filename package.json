@@ -12,6 +12,7 @@
     "data:build": "node ./packages/data-build/dist/cli.js",
     "view": "node ./packages/viewer/dist/cli.js",
     "revisions": "node ./packages/viewer/dist/revisions-cli.js",
+    "migrate:segments": "node ./packages/viewer/dist/migrate-cli.js",
     "verify:passage": "node ./scripts/verify-passage.mjs"
   },
   "devDependencies": {

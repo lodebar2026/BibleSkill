@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { renderClausesText } from '@bs/clause-tree';
-import { BibleDb, WorkFileStore, chapterFromBcv, loadChapterViews, parseScriptureRange, resolveConfig, segmentsText } from '@bs/core';
+import { BibleDb, WorkFileStore, chapterFromBcv, loadChapterViews, formattedMarkup, parseScriptureRange, resolveConfig } from '@bs/core';
 import { renderPage } from './page.js';
 import { serve } from './serve.js';
 
@@ -76,7 +76,7 @@ if (values.serve) {
     const byKey = new Map(view.texts.map((text) => [`${text.bcv}${text.sub}`, text]));
     const clauses = view.clauses.map((clause) => {
       const text = byKey.get(clause.id);
-      return { ...clause, translation: text && text.translationSpan > 0 ? segmentsText(text.formatted) : null, alternatives: text?.alternatives };
+      return { ...clause, translation: text && text.translationSpan > 0 ? formattedMarkup(text.formatted) : null, alternatives: text?.alternatives };
     });
     const paragraphStarts = new Set(view.texts.filter((text) => text.paraTitle !== null).map((text) => `${text.bcv}${text.sub}`));
     process.stdout.write(`${renderClausesText(clauses, view.words, { leftToRight: !view.isOT, paragraphStarts })}\n\n`);

@@ -27,8 +27,9 @@ import {
   KIND_LABELS,
   el,
   renderChapter,
+  segmentsMarkupText,
   segmentsNote,
-  segmentsText,
+  suppliedLines,
   verseLabel,
   type Chapter,
   type ClauseEntity,
@@ -545,12 +546,13 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
       panel.append(el('p', 'muted', '这一句的译文并在前一行里。'));
       return;
     }
-    const value = segmentsText(text.formatted);
+    const value = segmentsMarkupText(text.formatted);
     panel.append(el('p', '', value));
     const reason = segmentsNote(text.formatted);
     if (reason) {
       panel.append(el('p', 'muted', `主译取舍：${reason}`));
     }
+    suppliedLines(text.formatted).forEach((line) => panel.append(el('p', 'muted', `补词 ${line}`)));
     for (const alt of text.alternatives) {
       const line = el('div', 'alt-line');
       line.append(el('span', 'alt-kind', KIND_LABELS[alt.kind] ?? alt.kind), document.createTextNode(` ${alt.text}`));

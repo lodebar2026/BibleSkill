@@ -17,6 +17,7 @@ import {
   createDeps,
   getPassage,
   lookupLexicon,
+  reviewReport,
   submitClauseAnalysis,
   submitTranslation,
   upsertGlossary,
@@ -123,6 +124,21 @@ server.registerTool('consistency_report', {
   }
   const book = findBookByName(raw);
   return json(await consistencyReport(getDeps(), book ? resolveRange({ range: `${book.name} 1` }) : resolveRange({ range: raw })));
+});
+
+server.registerTool('review_report', {
+  description:
+    '审校报告：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围（retranslate：译文与子句对不上、未处理的争议、违反术语表）'
+    + '和需要人工复核的子句（needs-review / ambiguous）。range 给书卷名审整卷，给经文范围只审该范围，不给审全部。',
+  inputSchema: loose({ range }),
+  annotations: { readOnlyHint: true },
+}, async (args) => {
+  const raw = optionalString(args, ['range', 'book', 'passage', 'reference', 'ref']);
+  if (!raw) {
+    return json(await reviewReport(getDeps(), {}));
+  }
+  const book = findBookByName(raw);
+  return json(await reviewReport(getDeps(), book ? { books: new Set([book.name]) } : { range: resolveRange({ range: raw }) }));
 });
 
 await server.connect(new StdioServerTransport());

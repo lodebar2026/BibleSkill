@@ -28,12 +28,14 @@ import {
   buildConsistencyReport,
   checkRenderings,
   glossaryFor,
+  listChapterDirs,
   renderingDistribution,
   tokenSenseKey,
   type ConsistencyIssue,
 } from './consistency.js';
 import { checkClauseAnalysis, checkTranslations, type SeedOverride, type VerseError } from './validate.js';
 import { collectDisputes, hasDisputes } from './disputes.js';
+import { reviewChapter, verseRanges, type HumanReviewItem, type ReviewIssue } from './review.js';
 
 export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool };
 
@@ -248,6 +250,7 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
   const errors: VerseError[] = [];
   const written: string[] = [];
   const overrides: SeedOverride[] = [];
+  const translatedVerses: string[] = [];
   for (const chapter of chaptersBetween(range.startBcv, range.endBcv)) {
     const chapterVerses = new Map([...verses].filter(([bcv]) => chapterFromBcv(bcv) === chapter));
     if (chapterVerses.size === 0) {
@@ -268,6 +271,8 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
       const acceptedVerses = new Set(result.accepted.map((clause) => parseClauseId(clause.id).bcv));
       await deps.store.replaceClauseEntitiesForVerses(range.bookName, chapter, acceptedVerses, result.accepted);
       written.push(...[...acceptedVerses].map(verseLabel));
+      const texts = await deps.store.readClauseTexts(range.bookName, chapter);
+      translatedVerses.push(...[...new Set(texts.map((text) => text.bcv))].filter((bcv) => acceptedVerses.has(bcv)).map(verseLabel));
     }
   }
   const unclaimed = rawClauses.filter((raw) => {
@@ -281,6 +286,9 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
     writtenVerses: written,
     errors: errors.map((error) => ({ verse: verseLabel(error.bcv), clauseIds: error.clauseIds, messages: error.messages })),
     needsReview: overrides.length > 0 ? overrides : undefined,
+    translatedVerses: translatedVerses.length > 0
+      ? `这些节已有译文，子句分析变了译文可能对不上：${translatedVerses.join(', ')}。用 review_report 检查，需要时整节重译`
+      : undefined,
     next: errors.length > 0
       ? '按 errors 修正后整节重提这些节（已写入的节不必重提）'
       : overrides.length > 0
@@ -459,7 +467,10 @@ export async function upsertGlossary(deps: Deps, rawEntries: unknown[]) {
     }
     return parsed.data;
   });
-  return { written: await deps.store.upsertGlossary(entries) };
+  return {
+    written: await deps.store.upsertGlossary(entries),
+    next: '已译的经文不会自动按新术语表复查：用 review_report(书卷) 列出需要改译的节',
+  };
 }
 
 export async function consistencyReport(deps: Deps, range: ScriptureRange | null) {
@@ -472,5 +483,76 @@ export async function consistencyReport(deps: Deps, range: ScriptureRange | null
     oneToMany: report.oneToMany.slice(0, 200),
     manyToOne: report.manyToOne.slice(0, 200),
     guidance: '一词多译：先判断是否原文义项不同（senseKey 已按 Macula 义项分开，仍可能需人工再分）或合理的中文同义变化；同一义项内的非同义分叉才需统一。多词一译：虚词归并正常，实词误并要修。判定后用 upsert_glossary 固化。',
+  };
+}
+
+// ---------------------------------------------------------------- 审校
+
+const REVIEW_MESSAGES_PER_VERSE = 8;
+const REVIEW_VERSE_LIMIT = 300;
+
+/** 审校报告：range 给出时只审该范围，否则审 books 中的书卷（不给则全部）。 */
+export async function reviewReport(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }) {
+  const { range } = target;
+  const chapters = range
+    ? chaptersBetween(range.startBcv, range.endBcv).map((chapter) => ({ bookName: range.bookName, chapter }))
+    : listChapterDirs(deps.store, target.books);
+  const glossary = await deps.store.readGlossary();
+  const issues: Array<ReviewIssue & { bookName: string }> = [];
+  const humanReview: HumanReviewItem[] = [];
+  const retranslate: string[] = [];
+  const untranslated: string[] = [];
+  for (const { bookName, chapter } of chapters) {
+    const keep = (bcv: number) => !range || inRange(bcv, range);
+    const entities = (await deps.store.readClauseEntities(bookName, chapter)).filter((clause) => keep(parseClauseId(clause.id).bcv));
+    const texts = (await deps.store.readClauseTexts(bookName, chapter)).filter((text) => keep(text.bcv));
+    if (entities.length === 0 && texts.length === 0) {
+      continue;
+    }
+    const bcvs = [...entities.map((clause) => parseClauseId(clause.id).bcv), ...texts.map((text) => text.bcv)];
+    const [startBcv, endBcv] = [Math.min(...bcvs), Math.max(...bcvs)];
+    const review = reviewChapter({
+      bookName,
+      entities,
+      texts,
+      tokensByVerse: groupByVerse(deps.db.tokensInRange(startBcv, endBcv)),
+      variants: deps.db.variantsInRange(startBcv, endBcv),
+      glossary,
+    });
+    issues.push(...review.issues.map((issue) => ({ ...issue, bookName })));
+    humanReview.push(...review.humanReview);
+    retranslate.push(...verseRanges(bookName, review.issues.map((issue) => issue.bcv)));
+    untranslated.push(...verseRanges(bookName, review.untranslated));
+  }
+
+  const counts: Record<string, number> = {};
+  const verses = new Map<string, { verse: string; issues: Array<{ kind: string; message: string }>; more?: number }>();
+  for (const issue of issues) {
+    counts[issue.kind] = (counts[issue.kind] ?? 0) + 1;
+    const label = `${issue.bookName} ${verseLabel(issue.bcv)}`;
+    const entry = verses.get(label) ?? { verse: label, issues: [] };
+    if (entry.issues.length < REVIEW_MESSAGES_PER_VERSE) {
+      entry.issues.push({ kind: issue.kind, message: issue.message });
+    } else {
+      entry.more = (entry.more ?? 0) + 1;
+    }
+    verses.set(label, entry);
+  }
+  humanReview.forEach((item) => { counts[item.status] = (counts[item.status] ?? 0) + 1; });
+  const scope = range
+    ? `${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel(range.endBcv)}`
+    : target.books ? [...target.books].join('、') : '全部';
+  return {
+    scope,
+    counts,
+    retranslate,
+    verses: [...verses.values()].slice(0, REVIEW_VERSE_LIMIT),
+    humanReview: humanReview.length > 0 ? humanReview : undefined,
+    untranslated: untranslated.length > 0 ? untranslated : undefined,
+    next: retranslate.length > 0
+      ? 'retranslate 中的范围按 bible-translate 流程整节重提（structure 里提示没有子句分析或子句对不上的，先 analyze）；humanReview 逐条列给用户复核'
+      : humanReview.length > 0
+        ? '译文与当前分析、术语表一致；humanReview 逐条列给用户复核'
+        : '没有需要处理的问题',
   };
 }

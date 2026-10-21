@@ -119,6 +119,24 @@ try {
   const report = await call('consistency_report', { range: '创世记' });
   check('consistency_report 报出 אֶרֶץ 一词多译', report.oneToMany.some((item) => item.strong === 'H0776G'), `${report.senses} 个义项`);
 
+  // 审校：术语表或子句分析在翻译之后变了，review_report 应列出受影响的节
+  const clean = await call('review_report', { range: '创世记' });
+  check('review_report 初始无需改译', clean.retranslate.length === 0, JSON.stringify(clean.verses).slice(0, 120));
+  await call('upsert_glossary', { entries: [{ strong: 'H0776G', zh: '大地', level: 'locked', lemma: 'אֶרֶץ' }] });
+  const afterGlossary = await call('review_report', { range: '创世记' });
+  check('锁定术语后 review_report 要求改译 1:2', afterGlossary.retranslate.join() === '创世记 1:2' && afterGlossary.counts.glossary === 1,
+    JSON.stringify(afterGlossary.retranslate));
+  const reanalyzed = await call('submit_clause_analysis', {
+    range: '创 1:1',
+    clauses: [{ id: '1001001a', firstWordId: 'o010010010011', lastWordId: 'o010010010072', type: 'qatal', verbRange: 'o010010010021', subjectRange: 'o010010010031', parentId: null, modifies: null,
+      status: 'ambiguous', alternatives: [{ summary: '1:1 作 1:2 的时间状语从句', basis: '测试' }] }],
+  });
+  check('重新分析已译的节时提示 review_report', /review_report/.test(reanalyzed.translatedVerses ?? ''), reanalyzed.translatedVerses);
+  const afterAnalysis = await call('review_report', { range: '创 1:1-2' });
+  check('子句改为 ambiguous 后报未处理的争议并列入人工复核',
+    afterAnalysis.retranslate.join() === '创世记 1:1-2' && afterAnalysis.counts.dispute > 0 && afterAnalysis.humanReview?.[0]?.clauseId === '1001001a',
+    JSON.stringify(afterAnalysis.counts));
+
   // 约 1:1 / 1:3：主语检查（Macula 主语为证据）
   const john11 = (subject, extra = {}) => [
     { id: '43001001a', firstWordId: 'n43001001001', lastWordId: 'n43001001005', type: 'imperfect_ind', verbRange: 'n43001001003', subjectRange: 'n43001001004-n43001001005' },

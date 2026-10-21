@@ -9,6 +9,7 @@
 | 分析 / 切分 / 断句 某段经文 | `bible-analyze` |
 | 翻译 / 直译 某段经文 | `bible-translate` |
 | 检查用词统一、一词多译、整理术语表 | `bible-consistency` |
+| 审校、复查哪些译文需要改 | `bible-review` |
 
 经文范围用中文或英文书名都可以，如 `创 1:1-5`、`约 1`、`John 3:16`。
 

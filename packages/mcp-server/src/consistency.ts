@@ -48,6 +48,30 @@ export function singleContentToken(rendering: Pick<Rendering, 'tokens'>, ordered
   return content.length === 1 ? content[0] : null;
 }
 
+/** 工作目录里已有的章目录（<书名>/chNN），按书卷顺序。 */
+export function listChapterDirs(store: WorkFileStore, bookFilter?: Set<string>): Array<{ bookName: string; chapter: number; dir: string }> {
+  const result: Array<{ bookName: string; chapter: number; dir: string }> = [];
+  for (const book of listBooks()) {
+    if (bookFilter && !bookFilter.has(book.name)) {
+      continue;
+    }
+    const bookDir = path.join(store.projectRoot, book.name);
+    let entries: string[];
+    try {
+      entries = readdirSync(bookDir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const match = entry.match(/^ch(\d+)$/);
+      if (match) {
+        result.push({ bookName: book.name, chapter: Number(match[1]), dir: path.join(bookDir, entry) });
+      }
+    }
+  }
+  return result;
+}
+
 type CacheEntry = { mtimeMs: number; uses: Array<{ token: Token; use: RenderingUse }> };
 
 /**
@@ -60,26 +84,7 @@ export class RenderingMemoryIndex {
   constructor(private readonly store: WorkFileStore, private readonly db: BibleDb) {}
 
   private chapterFiles(bookFilter?: Set<string>): Array<{ bookName: string; chapter: number; file: string }> {
-    const result: Array<{ bookName: string; chapter: number; file: string }> = [];
-    for (const book of listBooks()) {
-      if (bookFilter && !bookFilter.has(book.name)) {
-        continue;
-      }
-      const bookDir = path.join(this.store.projectRoot, book.name);
-      let entries: string[];
-      try {
-        entries = readdirSync(bookDir);
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        const match = entry.match(/^ch(\d+)$/);
-        if (match) {
-          result.push({ bookName: book.name, chapter: Number(match[1]), file: path.join(bookDir, entry, 'clauses.json') });
-        }
-      }
-    }
-    return result;
+    return listChapterDirs(this.store, bookFilter).map((item) => ({ ...item, file: path.join(item.dir, 'clauses.json') }));
   }
 
   private async chapterUses(bookName: string, chapter: number, file: string): Promise<CacheEntry['uses']> {

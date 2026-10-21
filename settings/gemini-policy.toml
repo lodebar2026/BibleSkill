@@ -1,5 +1,5 @@
 [[rule]]
 toolName = "activate_skill"
-argsPattern = '"name":"bible-(analyze|translate|consistency)"'
+argsPattern = '"name":"bible-(analyze|translate|consistency|review)"'
 decision = "allow"
 priority = 200

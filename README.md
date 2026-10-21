@@ -2,11 +2,12 @@
 
 圣经原文**中文直译**的 AI 工作流：一组可公开的 skill，加一个基于开放数据的 MCP server。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
 
-工作流分三步：
+工作流分四步：
 
 1. **analyze**：把经文切分为子句并确定从属关系。Macula 句法树作为第二意见，不当作标准答案。
 2. **translate**：逐子句直译，同时给出实词的译法对照，并强制检查用词统一。
 3. **consistency**：汇总一词多译、多词一译，把判定结果固化进术语表。
+4. **review**：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围和需要人工复核的子句。
 
 结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML。
 
@@ -70,6 +71,7 @@ pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
 /bible-analyze 创 1:1-5
 /bible-translate 创 1:1-5
 /bible-consistency 创世记
+/bible-review 创世记
 ```
 
 查看结果：
@@ -100,6 +102,7 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 | `build_translation_briefing` / `submit_translation` | 直译 |
 | `view_clauses` | 缩进文本视图 |
 | `upsert_glossary` / `consistency_report` | 术语表与用词统一报告 |
+| `review_report` | 审校：复查已写入的译文，列出需要改译的范围与需要人工复核的子句 |
 
 入参都用 `range`（如 `创 1:1-5`、`John 3`），schema 写得宽松，校验在工具内部进行：校验失败作为工具错误返回，模型能照着改。
 
@@ -144,7 +147,19 @@ rules.json                         分析/翻译规则 {id, task, pattern, resol
   - 违反 `locked` 术语 → 拒绝该节。
   - 偏离 `preferred` 术语或既有主导译法、又没写 `note` → 拒绝该节，并列出既有译法。
   - 写了理由 → 放行。
-- **审校**：`consistency_report` 列出一词多译和多词一译，供 `bible-consistency` skill 判定后写入术语表。
+- **用词审校**：`consistency_report` 列出一词多译和多词一译，供 `bible-consistency` skill 判定后写入术语表。
+
+## 审校
+
+提交时的检查只在提交那一刻生效。之后术语表改了，或者重新做了子句分析，已写入的译文不会自动复查。`review_report` 会把已存的译文还原成提交格式，按当前数据重跑提交检查：
+
+| 类别 | 含义 |
+|---|---|
+| `structure` | 子句分析在翻译之后改过，译文对不上：缺译子句、子句 id 变了、rendering 越界、实词缺 rendering、本节没有子句分析 |
+| `dispute` | 子句后来标为 ambiguous，或有影响翻译的异文，但译文还没有处理 |
+| `glossary` | 违反当前术语表（`locked` 不符；`preferred` 不符且没写 note） |
+
+报告给出两份清单：`retranslate` 把需要改译的节合并成连续范围（如 `创世记 1:3-5`），可以直接交给 bible-translate；`humanReview` 列出 needs-review / ambiguous 子句，交人工复核。`bible-review` skill 按这份报告逐段重译，最后再跑一次确认清零。`upsert_glossary` 返回时会提示跑审校；重新分析已有译文的节时，`submit_clause_analysis` 会在 `translatedVerses` 里提醒。
 
 ## 争议处理
 
@@ -166,7 +181,7 @@ skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>
 ## 开发
 
 ```bash
-pnpm build && pnpm test        # 单元测试（校验器、引用解析、句型换算）
+pnpm build && pnpm test        # 单元测试（校验器、审校、引用解析、句型换算）
 pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍完整流程
 ```
 
@@ -183,5 +198,4 @@ pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍�
 
 - 在缩进视图里编辑：拆分 / 合并子句、改挂接、modifies、br、span，带撤销
 - 词级对齐
-- 审校
 - 新约引用旧约的译法对照

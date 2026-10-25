@@ -168,7 +168,7 @@ export type Literalness = keyof typeof LITERALNESS_LEVELS;
 export const DEFAULT_LITERALNESS: Literalness = 2;
 
 export const StyleOptionsSchema = z.object({
-  /** 后置状语：fluent = 中文不通顺时合并前置（默认）；source = 时间、“直到”从句保留原文语序。只在第 2、3 档生效。 */
+  /** 后置状语与简短限制性关系从句：fluent = 中文不通顺时合并前置（默认）；source = 时间、“直到”从句保留原文语序，关系从句不合并。只在第 2、3 档生效。 */
   clauseOrder: z.enum(CLAUSE_ORDERS).default('fluent'),
   /** 翻译档位 1–5，见 LITERALNESS_LEVELS。 */
   literalness: z.coerce.number().int().min(1).max(5).default(DEFAULT_LITERALNESS).transform((value) => value as Literalness),

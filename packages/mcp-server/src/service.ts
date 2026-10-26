@@ -51,6 +51,7 @@ import {
 } from './consistency.js';
 import { checkClauseAnalysis, checkTranslations, type SeedOverride, type VerseError } from './validate.js';
 import { collectDisputes, hasDisputes } from './disputes.js';
+import { ambiguityHints } from './ambiguity.js';
 import { reviewChapter, verseRanges, type HumanReviewItem, type ReviewIssue } from './review.js';
 import {
   LEARN_ORIGINS,
@@ -295,6 +296,7 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
     morphLegend: morphLegend(deps, verses),
     maculaSeeds: seedsTsv(deps.db.seedsInRange(range.startBcv, range.endBcv), verses),
     textualVariants: textualVariantLines(deps, range, verses),
+    ambiguityHints: ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)),
     existingClauses: existing.length > 0 ? existing : undefined,
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
@@ -511,6 +513,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     baseText: range.isOT ? undefined : na28Check(deps.criticalText),
     clauseView: view,
     clauses: clauseLines,
+    ambiguityHints: ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)),
     tokens: tokensTsv(verses),
     terms,
     precedingTranslations: preceding.length > 0 ? preceding : undefined,

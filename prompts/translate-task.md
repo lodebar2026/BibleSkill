@@ -5,7 +5,7 @@
 ## 流程
 
 1. 调 `build_translation_briefing(range)` 一次。还没有子句分析的节会报错，先做 analyze。范围较大时按自然段分批。
-2. 读 `approach`（档位）、`clauseView`（缩进结构）、`clauses`、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
+2. 读 `approach`（档位）、`clauseView`（缩进结构）、`clauses`、`ambiguityHints`（旧约，见下文“争议”）、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
 3. 逐子句翻译，组成 `translations` 数组提交。
 4. 若返回 `errors` 或 `consistency`，按提示修正后**整节**重提；已写入的节不要重提。
 5. 本段新确定的专名、术语，用 `upsert_glossary` 写入术语表。
@@ -47,7 +47,13 @@
 - `analysis`：子句分析标为 ambiguous 的其他读法 → **必须**给 alternatives，并在 note 写主译理由。
 - `textual`：影响翻译的经文异文 → 给 `kind: "textual"` 的 alternative（异文读法的译文），或在 note 说明为何不影响译文。
 
-此外**主动**标出其他争议（断句、句法、词义），类型与写法见 principles.md 的“争议处理”。例：
+`ambiguityHints`（旧约）是系统按词形与重音找出的歧义线索。子句分析没有处理到的，逐条检验，成立的列 alternatives。
+
+此外**主动**标出其他争议（断句、句法、词义），类型与写法见 principles.md 的“争议处理”。提交前自查两点：
+
+- 隐含的主语、宾语，以及你补出的指代词（如“[这些]”），所指是否还有第二个候选？
+- 译文与前后文（尤其后面几节的叙事）有没有说不通的地方？经文自身的张力往往说明还有另一种读法，应列为 alternative，不要在 note 里替原文调和掉。
+- note 里写到“也可理解为……”“另一读法……”的，就要列为 alternative，不要以“意思相近”“不影响译文”为由省掉；是否采用由人工决定。例：
 
 ```json
 {

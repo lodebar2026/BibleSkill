@@ -13,7 +13,8 @@
     "view": "node ./packages/viewer/dist/cli.js",
     "revisions": "node ./packages/viewer/dist/revisions-cli.js",
     "migrate:segments": "node ./packages/viewer/dist/migrate-cli.js",
-    "verify:passage": "node ./scripts/verify-passage.mjs"
+    "verify:passage": "node ./scripts/verify-passage.mjs",
+    "passage": "node ./scripts/run-passage.mjs"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

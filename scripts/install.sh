@@ -3,6 +3,7 @@
 #
 #   ./scripts/install.sh /path/to/workdir [--data /path/to/bible.sqlite] [--ext /path/to/ext.json | --no-ext]
 #                        [--style /path/to/style.md] [--terms /path/to/terms.yaml]
+#                        [--analyze-model <spec>] [--translate-model <spec>]
 #
 # --ext：私有扩展 MCP 的配置（{"mcpServers": {...}}，格式同 .mcp.json），合并进各 CLI 的配置；
 #        不给时若 ~/.config/bibleskill/ext.json 存在则自动使用。每个扩展分到一个隔离目录
@@ -11,12 +12,15 @@
 #        可选顶层字段 "criticalText": {"server", "tool", "args"} 声明能取新约 NA28/UBS 原文的扩展工具。
 # --style / --terms：个人风格（style.md）与术语偏好（terms.yaml），拷进工作目录（覆盖已有的）。
 #        不给时若 ~/.config/bibleskill/ 下有同名文件、且工作目录里还没有，就拷过去。
+# --analyze-model / --translate-model：子句分析、翻译用的模型（写进 config.json 的 models，pnpm passage 按它调用），
+#        写法 claude:<模型>[@思考级别] 或 agy:<模型>。不给时沿用 config.json 已有的；都没有时用
+#        ~/.config/bibleskill/models.json（{"analyze": …, "translate": …}），再没有就用默认（agy:gemini-4-argon-medium、claude:opus）。
 #
 # 安装内容：
 #   Claude Code   .claude/skills/<skill>/、.mcp.json
 #   agy / Gemini  .agents/skills/<skill>/、.agents/mcp_config.json、.gemini/settings.json、.gemini/policies/
 #   Codex         .agents/skills/<skill>/（MCP 需写入 ~/.codex/config.toml，脚本打印片段）
-#   通用          AGENTS.md、config.json（dataDb）、style.md / terms.yaml（有个人设置时）
+#   通用          AGENTS.md、config.json（dataDb、models）、style.md / terms.yaml（有个人设置时）
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,9 +33,11 @@ EXT_CONFIG=""
 
 STYLE_FILE=""
 TERMS_FILE=""
+ANALYZE_MODEL=""
+TRANSLATE_MODEL=""
 
 usage() {
-  sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 if [ "$#" -lt 1 ]; then
@@ -47,6 +53,8 @@ while [ "$#" -gt 0 ]; do
     --no-ext) EXT_CONFIG=""; shift ;;
     --style) STYLE_FILE="$2"; shift 2 ;;
     --terms) TERMS_FILE="$2"; shift 2 ;;
+    --analyze-model) ANALYZE_MODEL="$2"; shift 2 ;;
+    --translate-model) TRANSLATE_MODEL="$2"; shift 2 ;;
     *) usage >&2; exit 1 ;;
   esac
 done
@@ -145,11 +153,18 @@ echo "installed ${WORKDIR}/.gemini/policies/bibleskill.toml"
 cp "${REPO_ROOT}/settings/workdir-AGENTS.md" "${WORKDIR}/AGENTS.md"
 echo "installed ${WORKDIR}/AGENTS.md"
 
-node - "${WORKDIR}/config.json" "${DATA_DB}" <<'NODE'
+node - "${WORKDIR}/config.json" "${DATA_DB}" "${ANALYZE_MODEL}" "${TRANSLATE_MODEL}" "${HOME}/.config/bibleskill/models.json" <<'NODE'
 const fs = require('fs');
-const [file, dataDb] = process.argv.slice(2);
+const [file, dataDb, analyze, translate, fallback] = process.argv.slice(2);
 const config = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
 config.dataDb = dataDb;
+// 模型：命令行给的覆盖；工作目录已有的不动；都没有时取用户级默认
+if (!config.models && fs.existsSync(fallback)) {
+  config.models = JSON.parse(fs.readFileSync(fallback, 'utf8'));
+}
+if (analyze || translate) {
+  config.models = { ...(config.models ?? {}), ...(analyze ? { analyze } : {}), ...(translate ? { translate } : {}) };
+}
 fs.writeFileSync(file, `${JSON.stringify(config, null, 2)}\n`);
 NODE
 echo "installed ${WORKDIR}/config.json"

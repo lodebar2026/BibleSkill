@@ -35,7 +35,7 @@ let deps: Deps | undefined;
 function getDeps(): Deps {
   if (!deps) {
     const config = resolveConfig();
-    deps = createDeps(new BibleDb(config.dataDb), new WorkFileStore(config.workdir), config.criticalText);
+    deps = createDeps(new BibleDb(config.dataDb), new WorkFileStore(config.workdir), config.criticalText, config.models);
   }
   return deps;
 }

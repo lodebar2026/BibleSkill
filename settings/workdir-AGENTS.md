@@ -26,7 +26,7 @@
 ## 工作文件
 
 ```
-config.json                 数据库路径
+config.json                 数据库路径、各任务的模型（models）
 glossary.json               术语表（用词统一）
 rules.json                  积累的分析/翻译规则（可手工维护）
 style.md                    翻译档位 literalness 与个人风格（可手工维护）

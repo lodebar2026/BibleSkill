@@ -109,6 +109,26 @@ pnpm view 创 1 --workdir ~/圣经翻译 --html gen1.html   # 单文件 HTML（c
 pnpm view 创 1 --workdir ~/圣经翻译 --serve            # 可编辑视图：http://127.0.0.1:4310/（--port 改端口）
 ```
 
+### 按设定的模型跑分析与翻译
+
+子句分析和翻译可以交给不同的模型。默认分析用 agy 的 Gemini 4 Argon（找争议最全），翻译用 Claude Code 的 Opus（译文最好）：
+
+```bash
+pnpm passage 创 30:32-33 --workdir ~/圣经翻译                      # 先分析再翻译
+pnpm passage 创 30:32-33 --workdir ~/圣经翻译 --step translate     # 只翻译
+pnpm passage 创 30:32-33 --workdir ~/圣经翻译 --translate claude:opus@high   # 本次临时换模型
+```
+
+模型写在工作目录 `config.json` 的 `models` 里，写法 `claude:<模型>[@思考级别]` 或 `agy:<模型>`（agy 的思考级别含在模型名里，见 `agy models`）：
+
+```json
+{ "models": { "analyze": "agy:gemini-4-argon-medium", "translate": "claude:opus" } }
+```
+
+安装时用 `install.sh --analyze-model <写法> --translate-model <写法>` 设定；不给时沿用已有设定，或取 `~/.config/bibleskill/models.json`，再没有就用上面的默认。agy 默认带 `--dangerously-skip-permissions` 运行（无头模式不能弹权限确认）；已在 agy 设置里放行 bibleskill 工具的，可加 `--no-skip-permissions`。
+
+在 CLI 里直接 `/bible-translate` 而经文还没有分析时，模型会说明设定的分析模型和命令，问你是去跑那个模型，还是由它直接分析。
+
 ### 在缩进视图里编辑
 
 `--serve` 按整章打开（拆分、合并会给本节子句重新编号，要连带改全章的 parentId），只监听本机。工具条选模式后点原文的词：

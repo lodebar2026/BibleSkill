@@ -27,6 +27,7 @@ import {
   strongMatches,
   type BibleDb,
   type CriticalTextTool,
+  type TaskModels,
   type ClauseEntity,
   type ClauseText,
   type HistoryOrigin,
@@ -67,10 +68,10 @@ export { importRevisions, type ImportLine } from './revisions.js';
 export { migrateSegments } from './migrate.js';
 export type { ReviewIssue } from './review.js';
 
-export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool };
+export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool; models?: TaskModels };
 
-export function createDeps(db: BibleDb, store: WorkFileStore, criticalText?: CriticalTextTool): Deps {
-  return { db, store, memory: new RenderingMemoryIndex(store, db), criticalText };
+export function createDeps(db: BibleDb, store: WorkFileStore, criticalText?: CriticalTextTool, models?: TaskModels): Deps {
+  return { db, store, memory: new RenderingMemoryIndex(store, db), criticalText, models };
 }
 
 function groupByVerse(tokens: Token[]): Map<number, Token[]> {
@@ -441,7 +442,11 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   const clauses = [...entitiesByChapter.values()].flat().filter((clause) => inRange(parseClauseId(clause.id).bcv, range));
   const missingVerses = [...verses.keys()].filter((bcv) => !clauses.some((clause) => parseClauseId(clause.id).bcv === bcv));
   if (missingVerses.length > 0) {
-    throw new Error(`这些节还没有子句分析，请先运行 analyze：${missingVerses.map(verseLabel).join(', ')}`);
+    const analyzeModel = deps.models?.analyze;
+    const delegate = analyzeModel
+      ? `。本工作目录设定子句分析用 ${analyzeModel}（config.json 的 models.analyze）：先问用户是用该模型运行（在 BibleSkill 仓库执行 pnpm passage "${range.bookName} ${verseLabel(missingVerses[0])}-${verseLabel(missingVerses.at(-1)!)}" --workdir ${deps.store.projectRoot} --step analyze），还是由你按 bible-analyze skill 直接分析`
+      : '';
+    throw new Error(`这些节还没有子句分析，请先运行 analyze：${missingVerses.map(verseLabel).join(', ')}${delegate}`);
   }
   const glossary = await deps.store.readGlossary();
   const preferences = await deps.store.readTermPreferences();

@@ -18,6 +18,7 @@ import {
   getPassage,
   lookupLexicon,
   replaceRendering,
+  renderDiagram,
   reviewReport,
   revisionReport,
   submitClauseAnalysis,
@@ -121,6 +122,19 @@ server.registerTool('view_clauses', {
   inputSchema: loose({ range }),
   annotations: { readOnlyHint: true },
 }, async (args) => text(await viewClauses(getDeps(), resolveRange(args))));
+
+server.registerTool('render_diagram', {
+  description:
+    '生成原文结构图（单文件交互 HTML，写到工作目录的 图示/ 下）：按子句分析分层画出主句、从句与挂接关系，点开看词义、要点与词典。'
+    + 'annotations 为 JSON 数组，每个子句一项 {clauseId, label?（子句功能，如 时间状语从句）, link?（与母句的关系，如 当…时、直到、修饰“王”）, '
+    + 'gist?（中文大意）, notes?:[要点]}，按 clauseId 存进 diagram.json，之后重画沿用；不给则只用已存的说明。open: true 时用浏览器打开。',
+  inputSchema: loose({ range, annotations: z.any().optional(), open: z.any().optional() }),
+}, async (args) => json(await renderDiagram(
+  getDeps(),
+  resolveRange(args),
+  args.annotations === undefined && args.clauses === undefined ? [] : resolveArray(args, ['annotations', 'clauses', 'notes', 'items']),
+  args.open === true || args.open === 'true',
+)));
 
 server.registerTool('upsert_glossary', {
   description:

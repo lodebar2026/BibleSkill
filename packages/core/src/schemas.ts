@@ -106,6 +106,26 @@ export const ClauseTextSchema = z.object({
 
 export type ClauseText = z.infer<typeof ClauseTextSchema>;
 
+/**
+ * 结构图上的说明（bible-diagram 写入 diagram.json）：子句的功能、连线标签、大意、要点。
+ * 记下写入时子句的首末词：子句重新切分后对不上的说明不再使用。
+ */
+export const DiagramNoteSchema = z.object({
+  clauseId: ClauseKey,
+  firstWordId: TokenId,
+  lastWordId: TokenId,
+  /** 子句功能，如「时间状语从句」「关系从句」。 */
+  label: z.string().optional(),
+  /** 连线标签：与母句的关系，如「当…时」「直到」「修饰“王”」。 */
+  link: z.string().optional(),
+  /** 中文大意，一句话。 */
+  gist: z.string().optional(),
+  /** 要点：语法、旧约出处等（分析与译文里已有的备注、其他读法会自动列出，不必重复）。 */
+  notes: z.array(z.string()).default([]),
+});
+
+export type DiagramNote = z.infer<typeof DiagramNoteSchema>;
+
 export const GLOSSARY_LEVELS = ['locked', 'preferred'] as const;
 
 export const GlossaryEntrySchema = z.object({

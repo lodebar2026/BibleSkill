@@ -99,6 +99,7 @@ literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
 /bible-consistency 创世记
 /bible-review 创世记
 /bible-learn 创世记
+/bible-diagram 徒 7:17-18
 ```
 
 查看结果：
@@ -107,7 +108,19 @@ literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
 pnpm view 创 1 --workdir ~/圣经翻译                    # 终端文本
 pnpm view 创 1 --workdir ~/圣经翻译 --html gen1.html   # 单文件 HTML（canvas 精确对齐分支位置）
 pnpm view 创 1 --workdir ~/圣经翻译 --serve            # 可编辑视图：http://127.0.0.1:4310/（--port 改端口）
+pnpm view 徒 7:17-18 --workdir ~/圣经翻译 --diagram acts7.html   # 原文结构图
 ```
+
+### 原文结构图
+
+`/bible-diagram <范围>` 按子句分析画一张可交互的结构图（单文件 HTML，写到工作目录的 `图示/`，并在浏览器打开）：
+
+- **层级**：主句在最上，修饰它的从句在下一行，从句的从句再下一行；同一行内左右即原文先后（旧约自右向左）。同一句里的并列主句并排。
+- **连线**：从从句首词出发，在两行之间折行，指到母句里被修饰的词（加下划线），线上标出关系（当…时、直到、修饰“王”）。
+- **成分**：主语、谓语取自分析的 `subjectRange`、`verbRange`，句首连接词按词法认出，其余相邻的词合成一块。结构一律以子句分析为准，不取 Macula。
+- **交互**：点框头展开逐词词义、要点与“分析与翻译记录”（分析备注、另一种分析、译注、其他译法、异文，自动列出）；点词弹出词卡（词法、本处译法、UBS 中文词典、STEPBible 简明词典）；可切换词法、英文、明暗。
+
+子句功能、连线标签、中文大意和要点由模型写（`render_diagram` 的 `annotations`），存在 `<书名>/chNN/diagram.json`，重画时沿用；子句重新切分后对不上的自动作废。没有说明时用默认值：顶层为“主句”、修饰名词的为“定语从句”，大意取该子句的译文。
 
 ### 按设定的模型跑分析与翻译
 
@@ -169,6 +182,7 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 | `build_analysis_briefing` / `submit_clause_analysis` | 子句切分 |
 | `build_translation_briefing` / `submit_translation` | 翻译（按档位） |
 | `view_clauses` | 缩进文本视图 |
+| `render_diagram` | 原文结构图（HTML），写入子句功能、连线标签、大意与要点 |
 | `upsert_glossary` / `consistency_report` | 术语表与用词统一报告 |
 | `review_report` | 审校：复查已写入的译文，列出需要改译的范围与需要人工复核的子句 |
 | `revision_report` | 修改历史：按原文义项汇总人工改过的译词，以及导入历史里的文本替换 |
@@ -203,6 +217,8 @@ style.md                           翻译档位与个人风格：Markdown，可�
 terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh, avoid?, note?}]，可写注释
 <中文书名>/chNN/clause_entities.json  子句分析
 <中文书名>/chNN/clauses.json          译文
+<中文书名>/chNN/diagram.json          结构图上的说明 {clauseId, firstWordId, lastWordId, label, link, gist, notes}
+图示/                               结构图 HTML
 <中文书名>/chNN/history.jsonl         译文修改历史 {bcv, sub, at, origin: ai|human|replace|import, before, after}
 ```
 
@@ -286,7 +302,7 @@ pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍�
 |---|---|
 | `packages/core` | 经文引用、词 id、schema、工作文件存储、数据库读取 |
 | `packages/data-build` | 开放数据 → sqlite |
-| `packages/clause-tree` | 子句树算法（建树、缩进、树形前缀） |
+| `packages/clause-tree` | 子句树算法（建树、缩进、树形前缀）与结构图页面 |
 | `packages/mcp-server` | MCP 工具与提交校验 |
 | `packages/viewer` | 缩进查看（终端 / HTML）与可编辑视图（`--serve`） |
 | `skills/`、`prompts/` | skill 与规则文档（安装时把 prompts 复制进各 skill 的 `references/`） |

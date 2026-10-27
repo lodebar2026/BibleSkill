@@ -4,8 +4,13 @@
  * 输出控制体积：逐词数据用 TSV 文本而不是 JSON 对象数组（大 payload 下模型摘要会失真，
  * 在 Codex/agy 上实测过）。
  */
-import { renderClausesText, type TextViewClause } from '@bs/clause-tree';
+import { spawn } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { renderClausesText, renderDiagramPage, type TextViewClause } from '@bs/clause-tree';
 import {
+  DiagramNoteSchema,
   GlossaryEntrySchema,
   RuleSchema,
   TermPreferenceSchema,
@@ -20,6 +25,8 @@ import {
   isContentWord,
   isMeaningBased,
   loadChapterViews,
+  loadDiagram,
+  rangeLabel,
   parseSegments,
   suppliedNotes,
   parseClauseId,
@@ -30,6 +37,7 @@ import {
   type TaskModels,
   type ClauseEntity,
   type ClauseText,
+  type DiagramNote,
   type HistoryOrigin,
   type Literalness,
   type ScriptureRange,
@@ -609,6 +617,81 @@ export async function viewClauses(deps: Deps, range: ScriptureRange): Promise<st
     parts.push(`${view.bookName} ${view.chapter} 章`, renderClausesText(textViewClauses(view.clauses, view.texts), view.words, { leftToRight: !view.isOT, paragraphStarts }));
   }
   return parts.join('\n\n');
+}
+
+/** 用系统默认浏览器打开文件；失败不影响结果。 */
+function openInBrowser(file: string): void {
+  const [command, args] = process.platform === 'darwin' ? ['open', [file]]
+    : process.platform === 'win32' ? ['cmd', ['/c', 'start', '', file]]
+      : ['xdg-open', [file]];
+  try {
+    spawn(command, args, { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+  } catch {
+    // 没有图形界面时打不开，路径照样返回
+  }
+}
+
+/**
+ * 结构图：先写入 annotations（子句功能、连线标签、大意、要点），再按子句分析生成单文件 HTML，
+ * 写到 <工作目录>/图示/。annotations 里的子句必须在范围内且已分析。
+ */
+export async function renderDiagram(deps: Deps, range: ScriptureRange, rawAnnotations: unknown[], open: boolean) {
+  const clausesByChapter = new Map<number, ClauseEntity[]>();
+  for (const chapter of chaptersBetween(range.startBcv, range.endBcv)) {
+    clausesByChapter.set(chapter, await deps.store.readClauseEntities(range.bookName, chapter));
+  }
+  const notesByChapter = new Map<number, DiagramNote[]>();
+  rawAnnotations.forEach((raw, index) => {
+    const record = (raw ?? {}) as Record<string, unknown>;
+    const clauseId = String(record.clauseId ?? record.id ?? '');
+    const { bcv } = parseClauseId(clauseId);
+    if (bcv < range.startBcv || bcv > range.endBcv) {
+      throw new Error(`第 ${index + 1} 条说明的子句 ${clauseId} 不在范围内`);
+    }
+    const chapter = chapterFromBcv(bcv);
+    const clause = clausesByChapter.get(chapter)?.find((item) => item.id === clauseId);
+    if (!clause) {
+      throw new Error(`第 ${index + 1} 条说明的子句 ${clauseId} 还没有分析：用 view_clauses 看现有子句 id`);
+    }
+    const notes = record.notes ?? record.points;
+    const parsed = DiagramNoteSchema.safeParse({
+      clauseId,
+      firstWordId: clause.firstWordId,
+      lastWordId: clause.lastWordId,
+      label: record.label ?? record.function,
+      link: record.link,
+      gist: record.gist,
+      notes: typeof notes === 'string' ? [notes] : notes ?? [],
+    });
+    if (!parsed.success) {
+      throw new Error(`第 ${index + 1} 条说明格式不对: ${parsed.error.message}`);
+    }
+    notesByChapter.set(chapter, [...(notesByChapter.get(chapter) ?? []), parsed.data]);
+  });
+  for (const [chapter, notes] of notesByChapter) {
+    await deps.store.upsertDiagramNotes(range.bookName, chapter, notes);
+  }
+
+  const data = await loadDiagram(deps.db, deps.store, range);
+  if (data.clauses.length === 0) {
+    throw new Error(`${data.title} 还没有子句分析：先用 bible-analyze 切分`);
+  }
+  const analyzed = new Set(data.clauses.map((clause) => parseClauseId(clause.id).bcv));
+  const file = path.join(deps.store.projectRoot, '图示', `${range.bookName}${rangeLabel(range).replace(/:/g, '_')}.html`);
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, renderDiagramPage(data));
+  if (open) {
+    openInBrowser(file);
+  }
+  return {
+    file,
+    url: pathToFileURL(file).href,
+    opened: open,
+    clauses: data.clauses.length,
+    /** 还没有 bible-diagram 说明的子句：功能、连线、大意用的是默认值。 */
+    withoutNotes: data.clauses.filter((clause) => !clause.annotated).map((clause) => clause.id),
+    unanalyzedVerses: data.verses.filter((verse) => !analyzed.has(verse.bcv)).map((verse) => verse.verse),
+  };
 }
 
 export async function upsertGlossary(deps: Deps, rawEntries: unknown[]) {

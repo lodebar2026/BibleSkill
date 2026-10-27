@@ -11,6 +11,7 @@
 | 检查用词统一、一词多译、整理术语表 | `bible-consistency` |
 | 审校、复查哪些译文需要改 | `bible-review` |
 | 从修改历史学习、生成术语偏好、整理个人风格 | `bible-learn` |
+| 原文结构、结构图、子句层级图示 | `bible-diagram` |
 
 经文范围用中文或英文书名都可以，如 `创 1:1-5`、`约 1`、`John 3:16`。
 
@@ -34,4 +35,6 @@ terms.yaml                  术语偏好（偏好级，可手工维护，可写�
 <书名>/chNN/history.jsonl          译文修改历史（自动记录）
 <书名>/chNN/clause_entities.json   子句分析
 <书名>/chNN/clauses.json           译文与实词译法对照
+<书名>/chNN/diagram.json           结构图上的说明（bible-diagram 写入）
+图示/                              结构图 HTML（render_diagram 生成）
 ```

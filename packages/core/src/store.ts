@@ -13,6 +13,7 @@ import { parseClauseId } from './ref.js';
 import {
   ClauseEntitySchema,
   ClauseTextSchema,
+  DiagramNoteSchema,
   GlossaryEntrySchema,
   HistoryEntrySchema,
   RuleSchema,
@@ -21,6 +22,7 @@ import {
   strongMatches,
   type ClauseEntity,
   type ClauseText,
+  type DiagramNote,
   type GlossaryEntry,
   type HistoryEntry,
   type HistoryOrigin,
@@ -40,6 +42,7 @@ const FILE_NAMES = {
   clause_entities: 'clause_entities.json',
   clauses: 'clauses.json',
   history: 'history.jsonl',
+  diagram: 'diagram.json',
 } as const;
 
 type ChapterFile = keyof typeof FILE_NAMES;
@@ -176,6 +179,20 @@ export class WorkFileStore {
 
   readClauseTexts(bookName: string, chapter: number): Promise<ClauseText[]> {
     return readJsonArray(this.chapterFile(bookName, chapter, 'clauses'), ClauseTextSchema);
+  }
+
+  readDiagramNotes(bookName: string, chapter: number): Promise<DiagramNote[]> {
+    return readJsonArray(this.chapterFile(bookName, chapter, 'diagram'), DiagramNoteSchema);
+  }
+
+  /** 按 clauseId 写入结构图说明，覆盖同一子句的旧说明。 */
+  async upsertDiagramNotes(bookName: string, chapter: number, notes: DiagramNote[]): Promise<void> {
+    const filePath = this.chapterFile(bookName, chapter, 'diagram');
+    const merged = new Map((await readJsonArray(filePath, DiagramNoteSchema)).map((note) => [note.clauseId, note]));
+    for (const note of notes) {
+      merged.set(note.clauseId, DiagramNoteSchema.parse(note));
+    }
+    await atomicWrite(filePath, [...merged.values()].sort((a, b) => a.clauseId.localeCompare(b.clauseId)));
   }
 
   /** 用 incoming 整体替换 verses 中各节的子句（整节为单位，不做节内合并）。 */

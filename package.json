@@ -1,6 +1,31 @@
 {
   "name": "bible-skill",
   "private": true,
+  "description": "AI workflow for translating the Hebrew Bible and Greek New Testament into Chinese: agent skills + open-data MCP server (圣经原文中文翻译)",
+  "keywords": [
+    "bible",
+    "bible-translation",
+    "chinese-bible",
+    "biblical-hebrew",
+    "koine-greek",
+    "greek-new-testament",
+    "hebrew-bible",
+    "mcp",
+    "mcp-server",
+    "claude-code",
+    "agent-skills",
+    "gemini-cli",
+    "codex",
+    "stepbible",
+    "macula"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/lodebar2026/BibleSkill#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lodebar2026/BibleSkill.git"
+  },
+  "bugs": "https://github.com/lodebar2026/BibleSkill/issues",
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {

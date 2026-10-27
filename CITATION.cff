@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below, and keep the data attributions in NOTICE.md."
+title: "BibleSkill: an AI workflow for translating the Hebrew Bible and Greek New Testament into Chinese"
+abstract: >-
+  Agent skills and a Model Context Protocol (MCP) server for translating the
+  biblical source texts into Chinese with large language models: clause
+  analysis, clause-by-clause translation at five literalness levels,
+  glossary consistency, review, and flagging of textual variants and
+  interpretive disputes. Built only from openly licensed data (STEPBible,
+  Macula, UBS Chinese dictionaries).
+type: software
+authors:
+  - alias: lodebar2026
+repository-code: "https://github.com/lodebar2026/BibleSkill"
+url: "https://github.com/lodebar2026/BibleSkill"
+license: MIT
+keywords:
+  - Bible translation
+  - Chinese Bible
+  - Biblical Hebrew
+  - Koine Greek
+  - Greek New Testament
+  - Hebrew Bible
+  - clause analysis
+  - Model Context Protocol
+  - large language models
+  - STEPBible
+  - Macula

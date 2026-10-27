@@ -1,6 +1,6 @@
 # BibleSkill
 
-圣经原文**中文翻译**的 AI 工作流：一组可公开的 skill，加一个基于开放数据的 MCP server。译文贴近原文形式还是偏重意义分 5 档（逐字、直译、平衡、意义对等、意译），按工作目录设定，默认直译。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
+把**希伯来文旧约**和**希腊文新约**译成**中文**的 AI 工作流：一组可公开的 skill，加一个基于开放数据（STEPBible、Macula、UBS 中文词典）的 MCP server。模型先做子句分析，再逐子句翻译，并检查用词统一、标出经文异文与解经争议。译文贴近原文形式还是偏重意义分 5 档（逐字、直译、平衡、意义对等、意译），按工作目录设定，默认直译。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
 
 工作流分四步，另有一个从修改历史学习的步骤：
 
@@ -10,7 +10,9 @@
 4. **review**：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围和需要人工复核的子句。
 5. **learn**：汇总人工修改历史，整理成术语偏好、个人风格和项目规则，经用户确认后写入；可以批量替换不一致的译词。
 
-结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。
+结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。`/bible-diagram` 还能画出一段经文的原文结构图（主句、从句与修饰关系）。
+
+> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`, `bible-diagram`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results can be viewed as an indented clause tree in the terminal, as a standalone HTML page, or edited in a local browser view. MIT licensed.
 
 ## 数据来源
 
@@ -290,6 +292,29 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>` 安装（不传时自动读取 `~/.config/bibleskill/ext.json`），格式同 `.mcp.json`。每个扩展分到隔离目录 `<workdir>/.ext/<名字>/`，配置里的 `${EXT_DIR}` 会替换成这个目录：如果扩展自带写工作文件的工具，就让它写到这里。
 
 新约断句以 NA28/UBS 为准。ext.json 里可以用顶层字段 `"criticalText": {"server", "tool", "args"}` 声明哪个扩展工具能取 NA28 原文。声明后，新约 briefing 会点名让模型调用这个工具，按 NA28 断句，并把校勘符号（`⸀ ⸂⸃ ⸋⸌ ˸` 等）当作争议线索。没有扩展的用户不受影响：模型按自己对 NA28/UBS 断句的了解判断，拿不准就标为争议。`--no-ext` 可以跳过自动读取扩展配置。如果环境里有其他 MCP 工具提供学术词典、注释书、交叉引用、引语层级、语法书检索等能力，skill 会用它们辅助判断，并在 `sources` 中记为 `ext:<能力>`。工作文件里只写结论，不写入受版权保护的原文。
+
+## 常见问题
+
+**BibleSkill 是什么？**
+一个开源的圣经原文中文翻译工作流。它让 AI 模型按“子句分析 → 逐子句翻译 → 用词统一 → 审校”的步骤，把希伯来文旧约和希腊文新约译成中文，每一步的结果都写进工作目录，可以人工复核和修改。
+
+**用的是什么原文底本？**
+新约以 NA28/UBS5 为准（取 STEPBible TAGNT 中 NA28 的词），旧约用列宁格勒抄本（TAHOT 的 L，并按读型 Qere 读）。异文另存，影响翻译的会作为争议列出。详见“主干选择”。
+
+**支持哪些 AI 模型和工具？**
+同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）和 Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型；子句分析和翻译还可以分别交给不同的模型。
+
+**是不是照抄和合本或其他现成译本？**
+不是。原则是依据原文翻译、不照搬其他译本；节号沿用英文（NRSV）体系，与和合本基本一致，只为方便对照。
+
+**直译还是意译？**
+可以选。档位分 5 级：逐字、直译、平衡、意义对等、意译，默认直译。一个工作目录用一个档位。
+
+**原文数据从哪里来，能否商用？**
+只用开放许可的数据：STEPBible-Data 与 Macula 为 CC BY 4.0，UBS 中文词典为 CC BY-SA 4.0。数据库在本地构建，不随仓库分发；使用时请保留 [NOTICE.md](NOTICE.md) 中的署名。代码为 MIT 许可。
+
+**需要联网或付费数据吗？**
+MCP server 和数据库都在本地运行，不依赖任何私有或付费数据。翻译时调用的模型取决于你使用的 CLI。
 
 ## 开发
 

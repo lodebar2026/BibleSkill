@@ -1,0 +1,38 @@
+# BibleSkill
+
+> Open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese (圣经原文中文翻译). It provides agent skills for Claude Code, Gemini CLI, Google Antigravity CLI (agy) and OpenAI Codex, plus a local Model Context Protocol (MCP) server built only from openly licensed data (STEPBible TAHOT/TAGNT, Macula Hebrew/Greek, UBS Chinese dictionaries). MIT licensed.
+
+Key facts:
+
+- Workflow: clause analysis (bible-analyze) → clause-by-clause translation (bible-translate) → glossary consistency (bible-consistency) → review (bible-review); plus learning from human edits (bible-learn) and interactive source-text structure diagrams (bible-diagram).
+- Five literalness levels, set per working directory: 1 word-for-word, 2 literal (default), 3 balanced, 4 dynamic equivalence, 5 paraphrase.
+- Base text: New Testament follows NA28/UBS5; Old Testament follows the Leningrad Codex with Qere readings. Textual variants and interpretive disputes are flagged with alternative renderings.
+- Every content word gets a recorded rendering, giving word-level source–translation alignment and enforced terminology consistency.
+- Verse numbering follows the English (NRSV) system, close to the Chinese Union Version.
+- Data is built locally (`pnpm data:build`) and not redistributed; attribution in NOTICE.md.
+
+## Docs
+
+- [README (Chinese, with English summary)](https://github.com/lodebar2026/BibleSkill/blob/main/README.md): installation, literalness levels, usage, MCP tools, storage format, review and dispute handling, FAQ
+- [Data attribution](https://github.com/lodebar2026/BibleSkill/blob/main/NOTICE.md): STEPBible-Data and Macula (CC BY 4.0), UBS dictionaries (CC BY-SA 4.0)
+
+## Skills
+
+- [bible-analyze](https://github.com/lodebar2026/BibleSkill/blob/main/skills/bible-analyze/SKILL.md): split a passage into clauses and their dependencies
+- [bible-translate](https://github.com/lodebar2026/BibleSkill/blob/main/skills/bible-translate/SKILL.md): translate clause by clause at the configured literalness level
+- [bible-consistency](https://github.com/lodebar2026/BibleSkill/blob/main/skills/bible-consistency/SKILL.md): resolve one-word-many-renderings and fix them in the glossary
+- [bible-review](https://github.com/lodebar2026/BibleSkill/blob/main/skills/bible-review/SKILL.md): recheck saved translations against current analysis and glossary
+- [bible-learn](https://github.com/lodebar2026/BibleSkill/blob/main/skills/bible-learn/SKILL.md): learn term preferences and style from human revisions
+- [bible-diagram](https://github.com/lodebar2026/BibleSkill/blob/main/skills/bible-diagram/SKILL.md): render an interactive clause-structure diagram of the source text
+
+## Translation principles
+
+- [Principles](https://github.com/lodebar2026/BibleSkill/blob/main/prompts/principles.md)
+- [Literalness levels](https://github.com/lodebar2026/BibleSkill/blob/main/prompts/literalness.md)
+- [Analysis task](https://github.com/lodebar2026/BibleSkill/blob/main/prompts/analyze-task.md)
+- [Translation task](https://github.com/lodebar2026/BibleSkill/blob/main/prompts/translate-task.md)
+
+## Optional
+
+- [MCP server source](https://github.com/lodebar2026/BibleSkill/tree/main/packages/mcp-server/src)
+- [Database schema](https://github.com/lodebar2026/BibleSkill/blob/main/packages/core/src/db-schema.ts)

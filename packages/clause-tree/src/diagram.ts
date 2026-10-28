@@ -1,8 +1,8 @@
 /**
  * 结构图：单文件交互 HTML。
  *
- * 上下表示层级（主句在最上，从句在它下面一行，从句的从句再下一行），同一行内按原文先后排；
- * 连线从从句首词出发，在两行之间的空隙里折行，指到母句里被修饰的词。
+ * 每个子句一行，按原文先后自上而下排（叙事链、话语内容的序列一句接一句往下读），缩进表示从属；
+ * 框头标子句编号。连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框。
  * 点框头展开词义与要点，点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
  */
 import type { DiagramData } from '@bs/core';
@@ -19,21 +19,21 @@ function safeJson(value: unknown): string {
 const STYLE = `
 :root {
   --bg: #f7f5f0; --panel: #ffffff; --ink: #1f1d1a; --muted: #6b665d; --line: #dcd6ca; --soft: #efebe2;
-  --accent: #8a4b16; --wire: #8a4b16;
+  --accent: #8a4b16; --wire: #8a4b16; --logic: #0f766e;
   --r-v: #b42318; --r-s: #1d4ed8; --r-conj: #6b665d; --r-none: #b8b0a2;
   --hl: #fde68a; --amb: #fff1c7; --rev: #fde2e2;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #171614; --panel: #201e1b; --ink: #ece7dd; --muted: #a39d92; --line: #3a3631; --soft: #2a2724;
-    --accent: #e0a46a; --wire: #e0a46a;
+    --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
     --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
     --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
   }
 }
 :root[data-theme="dark"] {
   --bg: #171614; --panel: #201e1b; --ink: #ece7dd; --muted: #a39d92; --line: #3a3631; --soft: #2a2724;
-  --accent: #e0a46a; --wire: #e0a46a;
+  --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
   --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
   --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
 }
@@ -61,23 +61,48 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 
 .scroller { overflow-x: auto; padding-bottom: 6px; }
 .canvas { position: relative; }
-.forest { display: flex; flex-wrap: wrap; gap: 40px 48px; align-items: flex-start; }
-.tree { display: grid; grid-auto-columns: minmax(min-content, auto); row-gap: 72px; column-gap: 18px; padding-top: 4px; }
-.box { position: relative; z-index: 2; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; justify-self: center; align-self: start; }
+.forest { display: flex; flex-direction: column; align-items: flex-start; gap: 30px; padding: 4px 0; }
+.forest .box.vstart { margin-top: 14px; }
+.forest .box.vstart:first-child { margin-top: 0; }
+.box { position: relative; z-index: 2; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
+/* 方框宽度只由原文成分决定：框头、说明、展开内容不参与宽度计算，在框内换行 */
+.box > .bh, .box > .up, .box > .more { contain: inline-size; }
 .box.root { border: 2.5px solid var(--accent); box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent); }
 .box.ambiguous { background: color-mix(in srgb, var(--amb) 45%, var(--panel)); }
 .bh { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; cursor: pointer; user-select: none; direction: ltr; }
 .bh .tw { font-size: 12px; color: var(--muted); width: 10px; }
+.box[data-form] { border-color: var(--tc); border-width: 2px; }
+.box.root[data-form] { border-width: 3px; box-shadow: none; }
+.box[data-form="wayyiqtol"] { --tc: #F656B8; } .box[data-form="qatal"] { --tc: #FF0000; } .box[data-form="weqatal"] { --tc: #2A7FFF; }
+.box[data-form="yiqtol"] { --tc: #00CC00; } .box[data-form="participle"] { --tc: #9E5329; } .box[data-form="infinitive"] { --tc: #6B6B6B; }
+.box[data-form="imperative"] { --tc: #A449FF; } .box[data-form="nominal"] { --tc: #B8B0A2; }
+.bh .ty { font-size: 12px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-family: ui-monospace, Menlo, monospace; }
+.bh .mk { font-size: 11px; border-radius: 4px; padding: 0 5px; color: var(--ink); background: var(--soft); border: 1px dashed var(--muted); }
+.forest.ot-forms { padding-inline-start: 30px; }
+.hide-forms .box[data-form] { border-color: var(--line); border-width: 1.5px; }
+.hide-forms .box.root[data-form] { border-color: var(--accent); border-width: 2.5px; }
+.hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .dot, .hide-forms #wires .spine { display: none; }
+#wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
+#wires .dot { stroke-width: 2; opacity: .7; }
+.forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.forms-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; border: 2px solid var(--tc); }
+.forms-legend i.dot { width: 10px; border-radius: 50%; background: var(--muted); border-color: var(--muted); }
+.forms-legend i.dot.o { background: none; }
+.bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+.box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.box[hidden] { display: none; }
+.bh .cid { font-size: 12px; font-weight: 700; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
 .bh .lab { font-size: 12px; font-weight: 600; color: var(--panel); background: var(--muted); border-radius: 4px; padding: 0 6px; }
 .box.root .bh .lab { background: var(--accent); }
 .bh .st { font-size: 11px; border-radius: 4px; padding: 0 5px; }
 .bh .st.ambiguous { background: var(--amb); color: var(--ink); border: 1px solid var(--accent); }
 .bh .st.needs-review { background: var(--rev); color: var(--ink); border: 1px solid var(--r-v); }
-.bh .gist { font-size: 14px; max-width: 34em; }
+.bh .gist { font-size: 14px; flex: 1 1 9em; min-width: 0; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
 .chip { display: flex; flex-direction: column; border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 6px; padding: 0 2px 2px; background: color-mix(in srgb, var(--c) 6%, var(--panel)); --c: var(--r-none); }
 .chip > .rl { font-size: 11px; color: var(--c); font-weight: 600; padding: 1px 4px 0; min-height: 1.4em; direction: ltr; }
 .chip > .ws { display: flex; flex-wrap: wrap; }
+.chip > .ws > .lb { flex-basis: 100%; height: 4px; }
 .chip.r-v { --c: var(--r-v); } .chip.r-s { --c: var(--r-s); }
 .chip.r-conj { --c: var(--r-conj); border-style: dashed; border-top-style: solid; }
 .w { display: inline-flex; flex-direction: column; align-items: center; padding: 1px 4px 2px; border-radius: 5px; cursor: pointer; }
@@ -99,16 +124,19 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .more details { margin-top: 6px; }
 .more summary { cursor: pointer; color: var(--accent); }
 .more .tag { font-weight: 600; }
-.up { display: none; font-size: 12px; color: var(--accent); margin-top: 6px; direction: ltr; }
-#wires { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; overflow: visible; }
+.up { font-size: 12px; color: var(--accent); margin-top: 6px; direction: ltr; }
+#wires { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; overflow: visible; }
 #wires path { fill: none; stroke: var(--wire); stroke-width: 2; }
 #wires path.tip { fill: var(--wire); stroke: none; }
-.wl { position: absolute; z-index: 4; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--wire); background: var(--panel); border: 1.5px solid var(--wire); border-radius: 999px; padding: 0 8px; white-space: nowrap; pointer-events: none; direction: ltr; }
+#wires path.logic { stroke: var(--logic); stroke-dasharray: 6 4; }
+#wires path.logic-tip { fill: var(--logic); stroke: none; }
+.ll { position: absolute; z-index: 4; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--logic); background: var(--panel); border: 1.5px dashed var(--logic); border-radius: 999px; padding: 0 7px; white-space: nowrap; pointer-events: none; direction: ltr; }
+.hide-logic .ll { display: none; }
+.up .lg { color: var(--logic); }
 @media (max-width: 760px) {
-  .tree { display: flex; flex-direction: column; gap: 12px; }
-  .box { justify-self: stretch; }
-  #wires, .wl { display: none; }
-  .up { display: block; }
+  .forest { gap: 12px; }
+  .box { margin-inline-start: calc(var(--depth, 0) * 14px); max-width: calc(100% - var(--depth, 0) * 14px); }
+  #wires, .ll { display: none; }
 }
 .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 12px; }
 .legend span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 4px; vertical-align: middle; background: var(--c); }
@@ -163,33 +191,70 @@ function diagramClient(D: DiagramData): void {
     trans.insertAdjacentHTML('beforeend', ` <span class="hint">（${esc(D.literalness)}）</span>`);
   }
 
-  // ---------- 结构图：每个句子一个网格，叶子子句占一列，母句横跨其子句所占的列 ----------
+  // ---------- 结构图：每个子句一行，按原文先后排，缩进 = 从属层级 ----------
   const byId = new Map(D.clauses.map((clause) => [clause.id, clause]));
-  const children = new Map<string, typeof D.clauses>();
-  const roots: typeof D.clauses = [];
   const firstWord = (clause: (typeof D.clauses)[number]) => clause.chips[0]?.wordIds[0] ?? clause.fromWordId;
+  const kids = new Map<string, string[]>();
   for (const clause of D.clauses) {
     if (clause.parentId && byId.has(clause.parentId)) {
-      children.set(clause.parentId, [...(children.get(clause.parentId) ?? []), clause]);
-    } else {
-      roots.push(clause);
+      kids.set(clause.parentId, [...(kids.get(clause.parentId) ?? []), clause.id]);
     }
   }
-  const sortByWord = (list: typeof D.clauses) => list.sort((a, b) => firstWord(a).localeCompare(firstWord(b)));
-  const leaves = (clause: (typeof D.clauses)[number]): number => {
-    const kids = children.get(clause.id) ?? [];
-    return kids.length === 0 ? 1 : kids.reduce((sum, kid) => sum + leaves(kid), 0);
+  const descendants = (id: string, seen = new Set<string>()): string[] =>
+    (kids.get(id) ?? []).filter((kid) => !seen.has(kid) && seen.add(kid)).flatMap((kid) => [kid, ...descendants(kid, seen)]);
+  const depthOf = (clause: (typeof D.clauses)[number]): number => {
+    let depth = 0;
+    const seen = new Set<string>();
+    for (let parent = clause.parentId; parent && byId.has(parent) && !seen.has(parent); parent = byId.get(parent)!.parentId) {
+      seen.add(parent);
+      depth += 1;
+    }
+    return depth;
   };
   const targets = new Set(D.clauses.map((clause) => clause.targetWordId).filter(Boolean));
+  // 旧约句型码 → 动词形式（着色用，配色同 BibleCenter）；X 在动词前 = 成分前置
+  const formOf = (type: string): string | null => {
+    if (!D.isOT || !type) return null;
+    if (/^Way/.test(type)) return 'wayyiqtol';
+    if (type === 'WQtl') return 'weqatal';
+    if (/Qtl/.test(type)) return 'qatal';
+    if (/Yqt/.test(type)) return 'yiqtol';
+    if (type === 'Impv') return 'imperative';
+    if (type === 'Ptcp') return 'participle';
+    if (/^Inf/.test(type)) return 'infinitive';
+    if (type === 'NmCl') return 'nominal';
+    return null;
+  };
+  const FORM_ZH: Record<string, string> = { wayyiqtol: 'wayyiqtol', qatal: 'qatal', weqatal: 'weqatal', yiqtol: 'yiqtol', participle: '分词', infinitive: '不定式', imperative: '祈使', nominal: '名词句' };
+  const fronted = (type: string) => /^X(Qtl|Yqt)/.test(type);
+  // 叙事主线：顶层子句里 wayyiqtol 是主线，其余形式离开主线（背景、评述、凸显）
+  const offline = (clause: (typeof D.clauses)[number]) => !clause.parentId && formOf(clause.type) !== null && formOf(clause.type) !== 'wayyiqtol';
+  // 子句编号：bcv+字母，显示为「节+字母」；范围跨章时带章号
+  const chapterOf = (id: string) => Math.floor(Number(id.match(/^\d+/)![0]) / 1000) % 1000;
+  const multiChapter = new Set(D.clauses.map((clause) => chapterOf(clause.id))).size > 1;
+  const clauseNo = (id: string) => {
+    const [, bcv, sub] = id.match(/^(\d+)([a-z]+)$/) ?? [, '0', id];
+    const verse = Number(bcv) % 1000;
+    return multiChapter ? `${chapterOf(id)}:${verse}${sub}` : `${verse}${sub}`;
+  };
 
-  function renderBox(clause: (typeof D.clauses)[number], depth: number, column: number, tree: HTMLElement): void {
+  function renderBox(clause: (typeof D.clauses)[number], forest: HTMLElement, verseStart: boolean): void {
+    const depth = depthOf(clause);
     const box = document.createElement('div');
-    box.className = `box${depth === 0 ? ' root' : ''}${clause.status === 'ambiguous' ? ' ambiguous' : ''}`;
+    box.className = `box${depth === 0 ? ' root' : ''}${clause.status === 'ambiguous' ? ' ambiguous' : ''}${verseStart ? ' vstart' : ''}`;
     box.dataset.box = clause.id;
-    box.style.gridRow = String(depth + 1);
-    box.style.gridColumn = `${column} / span ${leaves(clause)}`;
+    box.style.setProperty('--depth', String(depth));
+    const form = formOf(clause.type);
+    if (form) {
+      box.dataset.form = form;
+    }
+    const marks = [fronted(clause.type) ? '<span class="mk" title="动词前有成分前置（X-动词语序），常用来凸显、对比或转入背景">前置</span>' : '',
+      offline(clause) ? '<span class="mk" title="顶层叙事不用 wayyiqtol：离开主线，多为背景、评述或凸显">离线</span>' : ''].join('');
+    const typeBadge = form ? `<span class="ty" title="${esc(FORM_ZH[form])}">${esc(clause.type)}</span>${marks}` : '';
     const status = clause.status === 'ambiguous' ? '<span class="st ambiguous">有歧义</span>' : clause.status === 'needs-review' ? '<span class="st needs-review">待复核</span>' : '';
-    box.innerHTML = `<div class="bh" title="点击展开/收起"><span class="tw">▸</span><span class="lab">${esc(clause.label)}</span>${status}<span class="gist">${esc(clause.gist)}</span></div>`;
+    const branch = descendants(clause.id).length;
+    const foldButton = branch > 0 ? `<button type="button" class="fold" title="收起/展开这个分支">▾ ${branch}</button>` : '';
+    box.innerHTML = `<div class="bh" title="点击展开/收起"><span class="tw">▸</span>${foldButton}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<span class="gist">${esc(clause.gist)}</span></div>`;
     const chips = document.createElement('div');
     chips.className = 'chips';
     for (const chip of clause.chips) {
@@ -204,6 +269,9 @@ function diagramClient(D: DiagramData): void {
         w.dataset.id = id;
         w.innerHTML = `<span class="g o">${esc(word.text)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
           + `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`;
+        if (chip.pauses) {
+          w.dataset.pause = String(chip.pauses[chip.wordIds.indexOf(id)]);
+        }
         ws.append(w);
       }
       chips.append(el);
@@ -214,49 +282,127 @@ function diagramClient(D: DiagramData): void {
     box.insertAdjacentHTML('beforeend', `<div class="more">${points ? `<ul>${points}</ul>` : ''}`
       + (records ? `<details${points ? '' : ' open'}><summary>分析与翻译记录（${clause.records.length}）</summary><ul>${records}</ul></details>` : '')
       + (!points && !records ? '<span class="hint">没有备注。</span>' : '') + '</div>');
-    if (clause.link && clause.targetWordId) {
-      box.insertAdjacentHTML('beforeend', `<div class="up">↑ ${esc(clause.link)} → <span class="o">${esc(words[clause.targetWordId]?.text)}</span></div>`);
+    const ups: string[] = [];
+    if (clause.parentId && byId.has(clause.parentId)) {
+      const target = clause.targetWordId ? ` <span class="o">${esc(words[clause.targetWordId]?.text)}</span>` : '';
+      ups.push(`↳ 句法：属 ${esc(clauseNo(clause.parentId))}${clause.link ? ` · ${esc(clause.link)}` : ''}${target}`);
+    }
+    if (clause.logic) {
+      ups.push(`<span class="lg">⇢ 逻辑：${esc(clause.logic.label)} → ${esc(clause.logic.targetText)}${clause.logic.note ? ` · ${esc(clause.logic.note)}` : ''}</span>`);
+    }
+    if (ups.length > 0) {
+      box.insertAdjacentHTML('beforeend', `<div class="up">${ups.join('<br>')}</div>`);
     }
     $('.bh', box).addEventListener('click', () => setOpen(box, !box.classList.contains('open')));
-    tree.append(box);
-    let next = column;
-    for (const kid of sortByWord(children.get(clause.id) ?? [])) {
-      renderBox(kid, depth + 1, next, tree);
-      next += leaves(kid);
-    }
+    box.querySelector('.fold')?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setFolded(clause.id, !box.classList.contains('folded'));
+    });
+    forest.append(box);
   }
 
-  // 句子：到句末标点为止；同一句里的并列主句放在同一个网格里并排
-  const sentenceOf = new Map<string, number>();
-  let sentence = 0;
-  for (const verse of D.verses) {
-    for (const id of verse.wordIds) {
-      sentenceOf.set(id, sentence);
-      if (/[.;;·!?׃]/.test(words[id].after)) {
-        sentence += 1;
+  const forest = $('#forest');
+  forest.classList.toggle('ot-forms', D.clauses.some((clause) => formOf(clause.type)));
+  let lastVerse = '';
+  for (const clause of [...D.clauses].sort((a, b) => firstWord(a).localeCompare(firstWord(b)))) {
+    const verse = clause.id.replace(/[a-z]+$/, '');
+    renderBox(clause, forest, verse !== lastVerse);
+    lastVerse = verse;
+  }
+
+  // ---------- 成分块切行：按实际排版宽度，超宽时在停顿最强处切（同样强取两边最匀的位置），递归到每行够窄 ----------
+  const LINE_MAX = 460;
+  function layoutChips(scope: ParentNode = document): void {
+    const forestWidth = $('#forest').clientWidth;
+    for (const ws of $$('.chip > .ws', scope)) {
+      $$('.lb', ws).forEach((lb) => lb.remove());
+      ws.style.width = '';
+      const items = $$('.w', ws);
+      if (items.length < 2 || !items[0].dataset.pause) {
+        continue;
+      }
+      const box = ws.closest<HTMLElement>('.box')!;
+      const depth = Number(box.style.getPropertyValue('--depth') || 0);
+      const max = Math.max(160, Math.min(LINE_MAX, forestWidth - depth * 40 - 140));
+      const widths = items.map((item) => item.getBoundingClientRect().width);
+      const pauses = items.map((item) => Number(item.dataset.pause));
+      const cuts = new Set<number>();
+      const width = (from: number, to: number) => widths.slice(from, to).reduce((sum, value) => sum + value, 0);
+      const split = (from: number, to: number): void => {
+        if (width(from, to) <= max) {
+          return;
+        }
+        let best = -1;
+        for (let index = from; index < to - 1; index += 1) {
+          if (pauses[index] < 0) {
+            continue;
+          }
+          const balance = (i: number) => Math.abs(width(from, i + 1) - width(i + 1, to));
+          if (best < 0 || pauses[index] > pauses[best] || (pauses[index] === pauses[best] && balance(index) < balance(best))) {
+            best = index;
+          }
+        }
+        if (best < 0) {
+          return;
+        }
+        cuts.add(best);
+        split(from, best + 1);
+        split(best + 1, to);
+      };
+      let start = 0;
+      pauses.forEach((pause, index) => {
+        if (pause >= 9 && index < items.length - 1) {
+          cuts.add(index);
+          split(start, index + 1);
+          start = index + 1;
+        }
+      });
+      split(start, items.length);
+      for (const index of cuts) {
+        items[index].insertAdjacentHTML('afterend', '<span class="lb"></span>');
+      }
+      // 折行后块宽取最宽的一行，方框随之收窄（否则仍按未折行的整行宽度撑开）
+      if (cuts.size > 0) {
+        const ends = [...cuts].sort((a, b) => a - b).map((index) => index + 1);
+        const lines = [0, ...ends].map((from, i) => width(from, ends[i] ?? items.length));
+        ws.style.width = `${Math.ceil(Math.max(...lines)) + 1}px`;
       }
     }
   }
-  const forest = $('#forest');
-  let tree: HTMLElement | null = null;
-  let treeSentence = -1;
-  let column = 1;
-  for (const root of sortByWord(roots)) {
-    const rootSentence = sentenceOf.get(firstWord(root)) ?? -1;
-    if (!tree || rootSentence !== treeSentence) {
-      tree = document.createElement('div');
-      tree.className = 'tree';
-      forest.append(tree);
-      treeSentence = rootSentence;
-      column = 1;
+
+  // ---------- 分支展开/收起：收起的方框隐藏全部下属子句，按钮显示收起了几句 ----------
+  function applyFolds(): void {
+    const hidden = new Set($$('.box.folded').flatMap((box) => descendants(box.dataset.box!)));
+    for (const box of $$('.box')) {
+      box.hidden = hidden.has(box.dataset.box!);
     }
-    renderBox(root, 0, column, tree);
-    column += leaves(root);
+    for (const box of $$('.box')) {
+      const button = box.querySelector<HTMLElement>('.fold');
+      if (button) {
+        const count = descendants(box.dataset.box!).length;
+        button.textContent = box.classList.contains('folded') ? `▸ 已收起 ${count} 句` : `▾ ${count}`;
+      }
+    }
+    hidePop();
+    redraw();
   }
+  function setFolded(id: string, folded: boolean): void {
+    $(`[data-box="${id}"]`)?.classList.toggle('folded', folded);
+    applyFolds();
+  }
+  $('#foldAll').addEventListener('click', () => {
+    $$('.box').forEach((box) => box.classList.toggle('folded', !byId.get(box.dataset.box!)?.parentId && kids.has(box.dataset.box!)));
+    applyFolds();
+  });
+  $('#unfoldAll').addEventListener('click', () => {
+    $$('.box').forEach((box) => box.classList.remove('folded'));
+    applyFolds();
+  });
 
   function setOpen(box: HTMLElement, open: boolean): void {
     box.classList.toggle('open', open);
     $('.tw', box).textContent = open ? '▾' : '▸';
+    layoutChips(box);
     hidePop();
   }
   $('#openAll').addEventListener('click', () => $$('.box').forEach((box) => setOpen(box, true)));
@@ -265,65 +411,160 @@ function diagramClient(D: DiagramData): void {
     const on = button.getAttribute('aria-pressed') !== 'true';
     button.setAttribute('aria-pressed', String(on));
     $('#canvas').classList.toggle(`hide-${button.dataset.toggle}`, !on);
+    layoutChips();
+    redraw();
   }));
 
-  // ---------- 连线：折线走在两行之间的空隙里，不穿过任何框 ----------
+  // ---------- 连线：竖线走在子句缩进留出的沟槽里，到母句旁的空隙再横折，指到被修饰的词 ----------
   const SVG = 'http://www.w3.org/2000/svg';
   function drawWires(): void {
     const canvas = $('#canvas');
     const svg = $<SVGSVGElement>('#wires');
-    $$('.wl', canvas).forEach((label) => label.remove());
-    svg.innerHTML = '<defs><marker id="ah" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path class="tip" d="M0,1 L10,5 L0,9 z"/></marker></defs>';
+    $$('.ll', canvas).forEach((label) => label.remove());
+    svg.innerHTML = '<defs><marker id="ah" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path class="tip" d="M0,1 L10,5 L0,9 z"/></marker>'
+      + '<marker id="lh" viewBox="0 0 10 10" refX="10" refY="5" markerUnits="userSpaceOnUse" markerWidth="9" markerHeight="9" orient="auto"><path class="logic-tip" d="M0,1 L10,5 L0,9 z"/></marker></defs>';
     const base = canvas.getBoundingClientRect();
     svg.setAttribute('width', String(canvas.scrollWidth));
     svg.setAttribute('height', String(canvas.scrollHeight));
     if (matchMedia('(max-width: 760px)').matches) {
       return;
     }
-    // 同一个词有几条线指过来时，终点左右错开
-    const fan = new Map<string, string[]>();
+    const rtl = D.isOT;
+    const start = (rect: DOMRect) => (rtl ? rect.right : rect.left) - base.left;
+    const allBoxes = $$('.box', canvas);
+    // 指向同一个词的线共用一条横道（汇成主干）；同一母句里指向不同词的，横道上下错开
+    const lanes = new Map<string, Map<string, number>>();
     for (const clause of D.clauses) {
-      if (clause.parentId && clause.targetWordId && byId.has(clause.parentId)) {
-        const key = `${clause.parentId}|${clause.targetWordId}`;
-        fan.set(key, [...(fan.get(key) ?? []), clause.id]);
-      }
-    }
-    for (const clause of D.clauses) {
-      if (!clause.parentId || !clause.targetWordId || !byId.has(clause.parentId)) {
+      if (!clause.parentId || !byId.has(clause.parentId)) {
         continue;
       }
       const childBox = $(`[data-box="${clause.id}"]`);
       const parentBox = $(`[data-box="${clause.parentId}"]`);
-      const from = childBox && $(`[data-id="${clause.fromWordId}"]`, childBox);
-      const to = parentBox && $(`[data-id="${clause.targetWordId}"]`, parentBox);
-      if (!from || !to) {
+      if (!childBox || !parentBox || childBox.hidden || parentBox.hidden) {
         continue;
       }
-      const peers = fan.get(`${clause.parentId}|${clause.targetWordId}`) ?? [clause.id];
-      const offset = (peers.indexOf(clause.id) - (peers.length - 1) / 2) * 28;
-      const a = from.getBoundingClientRect();
-      const b = $('.g', to).getBoundingClientRect();
-      const x1 = a.left + a.width / 2 - base.left;
-      const y1 = childBox.getBoundingClientRect().top - base.top;
-      const x2 = b.left + b.width / 2 - base.left + offset;
-      const y2 = parentBox.getBoundingClientRect().bottom - base.top + 1;
-      const ym = (y1 + y2) / 2;
-      const r = Math.min(10, Math.abs(x2 - x1) / 2);
-      const dir = Math.sign(x2 - x1);
+      const c = childBox.getBoundingClientRect();
+      const p = parentBox.getBoundingClientRect();
+      const below = c.top >= p.bottom;
+      const laneKey = `${clause.parentId}|${below ? 'b' : 'a'}`;
+      const byTarget = lanes.get(laneKey) ?? new Map<string, number>();
+      const targetKey = clause.targetWordId ?? '';
+      if (!byTarget.has(targetKey)) {
+        byTarget.set(targetKey, byTarget.size);
+      }
+      lanes.set(laneKey, byTarget);
+      const lane = byTarget.get(targetKey)!;
+      // 沟槽要在子句与母句之间所有方框的起始侧之外，否则竖线会被中间更宽（层级更浅）的框挡住
+      let gutter = start(c) + (rtl ? 16 : -16);
+      const [spanTop, spanBottom] = below ? [p.bottom, c.top] : [c.bottom, p.top];
+      for (const box of allBoxes) {
+        const r = box.getBoundingClientRect();
+        if (!box.hidden && box !== childBox && box !== parentBox && r.top < spanBottom && r.bottom > spanTop) {
+          gutter = rtl ? Math.max(gutter, start(r) + 10) : Math.min(gutter, start(r) - 10);
+        }
+      }
+      const yChild = c.top + Math.min(22, c.height / 2) - base.top;
+      const target = clause.targetWordId ? $(`[data-id="${clause.targetWordId}"] .g`, parentBox) : null;
+      const t = target?.getBoundingClientRect();
+      const xTarget = t ? t.left + t.width / 2 - base.left : gutter;
+      const edge = (below ? p.bottom : p.top) - base.top;
+      const yLane = below ? edge + 8 + lane * 6 : edge - 8 - lane * 6;
       const path = document.createElementNS(SVG, 'path');
-      path.setAttribute('d', Math.abs(x2 - x1) < 1
-        ? `M${x1},${y1} L${x2},${y2}`
-        : `M${x1},${y1} L${x1},${ym + r} Q${x1},${ym} ${x1 + dir * r},${ym} L${x2 - dir * r},${ym} Q${x2},${ym} ${x2},${ym - r} L${x2},${y2}`);
+      // 子句框头 → 沟槽 → 母句旁的空隙 → 横到被修饰的词 → 进母句
+      path.setAttribute('d', `M${start(c)},${yChild} L${gutter},${yChild} L${gutter},${yLane} L${xTarget},${yLane} L${xTarget},${below ? edge + 1 : edge - 1}`);
       path.setAttribute('marker-end', 'url(#ah)');
       svg.append(path);
-      if (clause.link) {
-        const label = document.createElement('div');
-        label.className = 'wl';
-        label.textContent = clause.link;
-        label.style.left = `${(x1 + x2) / 2}px`;
-        label.style.top = `${ym}px`;
-        canvas.append(label);
+    }
+    // 序列：会话（同一母句下的各句）在句法主干上打点，叙事主线（顶层各句）连成最外侧的脊线；点按动词形式着色，离线/前置为空心
+    const dot = (x: number, y: number, clause: (typeof D.clauses)[number], box: HTMLElement) => {
+      const circle = document.createElementNS(SVG, 'circle');
+      const hollow = fronted(clause.type) || offline(clause);
+      circle.setAttribute('class', 'dot');
+      circle.setAttribute('cx', String(x));
+      circle.setAttribute('cy', String(y));
+      circle.setAttribute('r', '6');
+      const color = getComputedStyle(document.body).color;
+      circle.setAttribute('stroke', color);
+      circle.setAttribute('fill', hollow ? getComputedStyle(document.body).backgroundColor : color);
+      svg.append(circle);
+    };
+    const roots: Array<[number, (typeof D.clauses)[number], HTMLElement]> = [];
+    for (const clause of D.clauses) {
+      const box = $(`[data-box="${clause.id}"]`);
+      if (!box || !box.dataset.form || box.hidden) {
+        continue;
       }
+      const r = box.getBoundingClientRect();
+      const y = r.top + Math.min(22, r.height / 2) - base.top;
+      if (clause.parentId && byId.has(clause.parentId)) {
+        dot(start(r) + (rtl ? 16 : -16), y, clause, box);
+      } else {
+        roots.push([y, clause, box]);
+      }
+    }
+    if (roots.length > 0) {
+      const forestRect = $('#forest').getBoundingClientRect();
+      const x = start(forestRect) + (rtl ? -12 : 12);
+      const spine = document.createElementNS(SVG, 'path');
+      spine.setAttribute('class', 'spine');
+      spine.setAttribute('d', `M${x},${roots[0][0]} L${x},${roots.at(-1)![0]}`);
+      svg.append(spine);
+      for (const [y, clause, box] of roots) {
+        const tick = document.createElementNS(SVG, 'path');
+        tick.setAttribute('class', 'spine');
+        tick.setAttribute('d', `M${x},${y} L${start(box.getBoundingClientRect())},${y}`);
+        tick.style.strokeWidth = '1.5';
+        svg.append(tick);
+        dot(x, y, clause, box);
+      }
+    }
+    if (canvas.classList.contains('hide-logic')) {
+      return;
+    }
+    // 逻辑关系：虚线走在框的另一侧（尾侧），从本句连到关联子句（一段时连到首句并标出范围）。
+    // 竖线避开这一段所有框的尾侧；与已画的竖线纵向重叠又靠得太近时再往外挪一道；指向同一句的箭头上下错开
+    const end = (rect: DOMRect) => (rtl ? rect.left : rect.right) - base.left;
+    const outer = (a: number, b: number) => (rtl ? Math.min(a, b) : Math.max(a, b));
+    const placed: Array<{ x: number; top: number; bottom: number }> = [];
+    const incoming = new Map<string, number>();
+    for (const clause of D.clauses) {
+      const targetId = clause.logic?.targetIds[0];
+      const childBox = targetId ? $(`[data-box="${clause.id}"]`) : null;
+      const targetBox = targetId ? $(`[data-box="${targetId}"]`) : null;
+      if (!clause.logic || !childBox || !targetBox || childBox.hidden || targetBox.hidden) {
+        continue;
+      }
+      const c = childBox.getBoundingClientRect();
+      const t = targetBox.getBoundingClientRect();
+      const top = Math.min(c.top, t.top) - base.top;
+      const bottom = Math.max(c.bottom, t.bottom) - base.top;
+      let edge = outer(end(c), end(t));
+      for (const box of allBoxes) {
+        const r = box.getBoundingClientRect();
+        if (!box.hidden && r.bottom - base.top >= top && r.top - base.top <= bottom) {
+          edge = outer(edge, end(r));
+        }
+      }
+      let x = edge + (rtl ? -18 : 18);
+      while (placed.some((line) => line.top < bottom && line.bottom > top && Math.abs(line.x - x) < 12)) {
+        x += rtl ? -14 : 14;
+      }
+      placed.push({ x, top, bottom });
+      const arrivals = incoming.get(targetId!) ?? 0;
+      incoming.set(targetId!, arrivals + 1);
+      const y1 = c.top + Math.min(22, c.height / 2) - base.top;
+      const y2 = t.top + Math.min(14 + arrivals * 9, t.height - 6) - base.top;
+      const path = document.createElementNS(SVG, 'path');
+      path.setAttribute('class', 'logic');
+      path.setAttribute('d', `M${end(c)},${y1} L${x},${y1} L${x},${y2} L${end(t)},${y2}`);
+      path.setAttribute('marker-end', 'url(#lh)');
+      svg.append(path);
+      const label = document.createElement('div');
+      label.className = 'll';
+      label.textContent = clause.logic.targetIds.length > 1 ? `${clause.logic.label} → ${clause.logic.targetText}` : clause.logic.label;
+      label.style.left = `${x}px`;
+      label.style.top = `${(y1 + y2) / 2}px`;
+      canvas.append(label);
     }
   }
   let frame = 0;
@@ -332,8 +573,15 @@ function diagramClient(D: DiagramData): void {
     frame = requestAnimationFrame(drawWires);
   };
   new ResizeObserver(redraw).observe($('#forest'));
-  addEventListener('resize', redraw);
-  void document.fonts?.ready.then(redraw);
+  addEventListener('resize', () => {
+    layoutChips();
+    redraw();
+  });
+  layoutChips();
+  void document.fonts?.ready.then(() => {
+    layoutChips();
+    redraw();
+  });
 
   // ---------- 悬停高亮、点词弹出词卡 ----------
   const mark = (id: string, cls: string) => $$(`[data-id="${id}"]`).forEach((el) => el.classList.add(cls));
@@ -397,6 +645,9 @@ function diagramClient(D: DiagramData): void {
   if (location.hash === '#open') {
     $$('.box').forEach((box) => setOpen(box, true));
   }
+  if (location.hash === '#roots') {
+    $('#foldAll').click();
+  }
 }
 
 export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
@@ -414,7 +665,7 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
 <body>
 <header>
   <h1>${escapeHtml(data.title)} · 原文结构</h1>
-  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 越往上层级越高，同一行左右为原文先后${ot ? '（自右向左）' : ''} · 点框头展开词义与要点，点词看词典</div>
+  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点框头展开词义与要点，点词看词典</div>
 </header>
 <main>
   <section class="card">
@@ -427,9 +678,12 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
       <span class="toolbar">
         <button type="button" id="openAll">全部展开</button>
         <button type="button" id="closeAll">全部收起</button>
+        <button type="button" id="foldAll" title="把所有分支收到主句，只看主线">只看主句</button>
+        <button type="button" id="unfoldAll">展开分支</button>
         <button type="button" data-toggle="z" aria-pressed="true">中文</button>
         <button type="button" data-toggle="m" aria-pressed="false">词法</button>
         <button type="button" data-toggle="e" aria-pressed="false">英文</button>
+        <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>${ot ? '\n        <button type="button" data-toggle="forms" aria-pressed="true">句型与主线</button>' : ''}
       </span>
     </h2>
     <div class="scroller">
@@ -441,8 +695,15 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
     </div>
     <div class="legend">
       <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--r-none)">其他成分</span>
-      <span>· 下划线 = 被从句修饰的词 · <b style="color:var(--accent)">异</b> = 有异文</span>
-    </div>
+      <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
+    </div>${ot ? `
+    <div class="forms-legend">
+      <span>边框颜色 = 动词形式：</span>
+      <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
+      <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
+      <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
+      <span>· 最外侧竖线 = 叙事主线，句法主干上的点 = 会话序列 · <i class="dot"></i>实心 = 顺序推进 <i class="dot o"></i>空心 = 前置（X-动词，凸显/对比）或离开 wayyiqtol 主线</span>
+    </div>` : ''}
   </section>
 </main>
 <script id="data" type="application/json">${safeJson(data)}</script>

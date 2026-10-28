@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Token } from './db.js';
-import { buildDiagram, rangeLabel } from './diagram.js';
+import { PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, rangeLabel } from './diagram.js';
 import { parseScriptureRange } from './ref.js';
 import type { ClauseEntity, ClauseText, DiagramNote } from './schemas.js';
 
@@ -93,4 +93,21 @@ test('范围简写', () => {
   assert.equal(rangeLabel(parseScriptureRange('徒 7:17-18')), '7:17-18');
   assert.equal(rangeLabel(parseScriptureRange('徒 7')), '7');
   assert.equal(rangeLabel(parseScriptureRange('徒 7:17')), '7:17');
+});
+
+test('切行停顿：旧约按停顿重音分强弱，词缀相连处不能断，br 必断；新约按标点', () => {
+  const hw = (n: number, surface: string, after = ' ') => ({ id: `o0100103200${n}1`, surface, after });
+  // 创 30:32b：כָּל־ 与下词相连；טָל֗וּא 带 revia，בַּכְּשָׂבִ֔ים 带 zaqef，בָּעִזִּ֑ים 带 atnach
+  const words = [hw(1, 'כָּל־', ''), hw(2, 'שֶׂ֣ה'), hw(3, 'טָל֗וּא'), hw(4, 'בַּכְּשָׂבִ֔ים'), hw(5, 'בָּעִזִּ֑ים')];
+  assert.deepEqual(chipPauses(words, true), [PAUSE_JOINED, 0, 2, 3, 4]);
+  assert.deepEqual(chipPauses(words, true, new Set([words[1].id])), [PAUSE_JOINED, PAUSE_FORCED, 2, 3, 4]);
+  const gw = (n: number, after = ' ') => ({ id: `n4400701800${n}`, surface: `w${n}`, after });
+  assert.deepEqual(chipPauses([gw(1), gw(2, ', '), gw(3, '. ')], false), [0, 5, 6]);
+});
+
+test('逻辑关系：结构图给出关系名与关联子句，一段时列出范围内的子句', () => {
+  const logic = { relation: 'cause' as const, target: '44007018a', note: '理由' };
+  const data = buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: [CLAUSES[0], { ...CLAUSES[1], logic }], texts: TEXTS, tokens: TOKENS, variants: [], notes: [], morphExpansion: () => null });
+  assert.deepEqual(data.clauses[1].logic, { relation: 'cause', label: '原因', targetIds: ['44007018a'], targetText: '18a', note: '理由' });
+  assert.equal(data.clauses[0].logic, null);
 });

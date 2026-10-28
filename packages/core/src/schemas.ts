@@ -3,13 +3,25 @@
  */
 import { z } from 'zod';
 import { isTokenId } from './ids.js';
+import { LOGIC_RELATIONS } from './logic.js';
 import { segmentsMarkup } from './segments.js';
 
 const TokenId = z.string().refine(isTokenId, { message: '不是合法词 id' });
 const TokenRange = z.string().regex(/^[on]\d{11,12}(-[on]\d{11,12})?$/, '词范围应为 id 或 id-id');
 const ClauseKey = z.string().regex(/^\d{7,}[a-z]+$/, '子句 id 应为 bcv+sub，如 1001001a');
+/** 关联读法组：几个子句的可选读法要连起来才成立时，标同一个 R1、R2…（本章内唯一）。 */
+const ReadingLabel = z.string().regex(/^R\d+$/, '关联读法组应写 R1、R2…');
 
 export const CLAUSE_STATUSES = ['accepted', 'ambiguous', 'needs-review'] as const;
+
+/** 逻辑上关联的子句：单个子句 id，或连续一段「首id-末id」。 */
+export const ClauseLogicSchema = z.object({
+  relation: z.enum(LOGIC_RELATIONS),
+  target: z.string().regex(/^\d{7,}[a-z]+(-\d{7,}[a-z]+)?$/, 'logic.target 应为子句 id 或「首id-末id」，如 1030025d-1030026c'),
+  note: z.string().optional(),
+});
+
+export type ClauseLogic = z.infer<typeof ClauseLogicSchema>;
 
 export const ClauseAlternativeSchema = z.object({
   /** 另一种读法的简述，如「2b 挂到 2a 作时间状语」。 */
@@ -20,6 +32,7 @@ export const ClauseAlternativeSchema = z.object({
   modifies: TokenId.nullable().optional(),
   firstWordId: TokenId.optional(),
   lastWordId: TokenId.optional(),
+  reading: ReadingLabel.optional(),
 });
 
 export const ClauseEntitySchema = z.object({
@@ -46,6 +59,8 @@ export const ClauseEntitySchema = z.object({
   sources: z.array(z.string()),
   note: z.string(),
   version: z.number().int().nonnegative(),
+  /** 逻辑关系与句法挂接不同、或需要点明时才有；没有就按句法关系看。 */
+  logic: ClauseLogicSchema.nullable().optional(),
 });
 
 export type ClauseEntity = z.infer<typeof ClauseEntitySchema>;
@@ -80,6 +95,8 @@ export const TranslationAlternativeSchema = z.object({
   kind: z.enum(DISPUTE_KINDS),
   /** 依据：哪个版本、哪种语法分析、哪类译本或学者采此读法。 */
   basis: z.string().min(1),
+  /** 与其他子句的可选译法属同一关联读法组时填（与子句分析的 reading 同一套编号）。 */
+  reading: ReadingLabel.optional(),
 });
 
 export type TranslationAlternative = z.infer<typeof TranslationAlternativeSchema>;

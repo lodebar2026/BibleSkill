@@ -1,6 +1,7 @@
 export * from './ref.js';
 export * from './ids.js';
 export * from './schemas.js';
+export * from './logic.js';
 export * from './store.js';
 export * from './content-word.js';
 export * from './db-schema.js';

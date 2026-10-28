@@ -8,6 +8,7 @@
 import type { BibleDb, Token, VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
+import { LOGIC_LABELS } from './logic.js';
 import { LITERALNESS_LEVELS, type ClauseEntity, type ClauseText, type DiagramNote } from './schemas.js';
 import { clauseNote, parseFormatted, plainText } from './segments.js';
 import type { WorkFileStore } from './store.js';
@@ -31,8 +32,46 @@ export type DiagramWord = {
   variant: string | null;
 };
 
-/** 成分块：主语、谓语取自分析；句首连接词按词法认出；其余相邻的词合成一块，不标角色。 */
-export type DiagramChip = { role: 's' | 'v' | 'conj' | null; wordIds: string[] };
+/**
+ * 成分块：主语、谓语取自分析；句首连接词按词法认出；其余相邻的词合成一块，不标角色。
+ * pauses：每个词之后能否换行、停顿多强（页面按实际排版宽度在停顿最强处切行）。
+ */
+export type DiagramChip = { role: 's' | 'v' | 'conj' | null; wordIds: string[]; pauses?: number[] };
+
+/** 词后不能断（词缀、maqqef 相连）。 */
+export const PAUSE_JOINED = -1;
+/** 子句分析 br 指定的换行：必断。 */
+export const PAUSE_FORCED = 9;
+
+/**
+ * 希伯来文停顿重音的强弱（越大停顿越强）：atnach；segolta、shalshelet、zaqef、tipcha；
+ * revia、zarqa、pashta、yetiv、tevir；geresh、gershayim、pazer、telisha gedola、legarmeh（paseq）。
+ */
+const HEBREW_PAUSE: Array<[RegExp, number]> = [
+  [/\u0591/, 4],
+  [/[\u0592\u0593\u0594\u0595\u0596]/, 3],
+  [/[\u0597\u0598\u05AE\u0599\u059A\u059B]/, 2],
+  [/[\u059C\u059D\u059E\u059F\u05A0\u05A1\u05C0]/, 1],
+];
+
+/** 一个词之后的停顿强度：句末、分句标点最强；旧约再看停顿重音；新约逗号次之；其余 0（可断，但不优先）。 */
+function pauseAfter(word: Pick<Token, 'surface' | 'after'>, isOT: boolean): number {
+  if (word.after === '') {
+    return PAUSE_JOINED;
+  }
+  if (/[.;;·׃!?]/.test(word.after)) {
+    return 6;
+  }
+  if (/[,，׀]/.test(word.after)) {
+    return isOT ? 1 : 5;
+  }
+  return isOT ? (HEBREW_PAUSE.find(([pattern]) => pattern.test(word.surface))?.[1] ?? 0) : 0;
+}
+
+/** 块内每个词之后的停顿强度；br 指定的词为 PAUSE_FORCED。 */
+export function chipPauses(words: Array<Pick<Token, 'id' | 'surface' | 'after'>>, isOT: boolean, manual: Set<string> = new Set()): number[] {
+  return words.map((word) => (manual.has(word.id) ? PAUSE_FORCED : pauseAfter(word, isOT)));
+}
 
 export type DiagramRecord = { tag: string; text: string };
 
@@ -44,10 +83,14 @@ export type DiagramClause = {
   link: string | null;
   gist: string;
   status: ClauseEntity['status'];
+  /** 旧约句型展示码（WayX、XQtl、NmCl…）；新约为空。 */
+  type: string;
   chips: DiagramChip[];
   /** 连线起点（本句首词）与终点（母句中被修饰的词）。 */
   fromWordId: string;
   targetWordId: string | null;
+  /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
+  logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
   /** 是否有 bible-diagram 写的说明（没有时功能、连线、大意用默认值）。 */
   annotated: boolean;
   /** bible-diagram 写的要点。 */
@@ -148,7 +191,36 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean): DiagramCh
       chips.push({ role, wordIds: [word.id] });
     }
   });
+  const manual = new Set((clause.br ?? '').split(',').map((id) => id.trim()).filter(Boolean));
+  const byId = new Map(words.map((word) => [word.id, word]));
+  for (const chip of chips.filter((item) => item.wordIds.length > 1)) {
+    chip.pauses = chipPauses(chip.wordIds.map((id) => byId.get(id)!), isOT, manual);
+  }
   return chips;
+}
+
+/** 逻辑关联：target 是单个子句或「首-末」一段，取范围内落在其间的子句。 */
+function logicOf(clause: ClauseEntity, all: ClauseEntity[]): DiagramClause['logic'] {
+  if (!clause.logic) {
+    return null;
+  }
+  const [first, last = first] = clause.logic.target.split('-');
+  const key = (id: string) => {
+    const { bcv, sub } = parseClauseId(id);
+    return `${String(bcv).padStart(9, '0')}${sub.padStart(4, ' ')}`;
+  };
+  const targetIds = all.map((item) => item.id).filter((id) => key(id) >= key(first) && key(id) <= key(last));
+  const short = (id: string) => {
+    const { bcv, sub } = parseClauseId(id);
+    return `${bcv % 1000}${sub}`;
+  };
+  return {
+    relation: clause.logic.relation,
+    label: LOGIC_LABELS[clause.logic.relation],
+    targetIds,
+    targetText: first === last ? short(first) : `${short(first)}–${short(last)}`,
+    note: clause.logic.note ?? null,
+  };
 }
 
 export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> {
@@ -242,9 +314,11 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       link: note?.link ?? (targetZh ? `修饰“${targetZh}”` : null),
       gist,
       status: clause.status,
+      type: clause.type,
       chips: chipsOf(clause, own, isOT),
       fromWordId: clause.firstWordId,
       targetWordId,
+      logic: logicOf(clause, input.clauses),
       annotated: note !== undefined,
       points: note?.notes ?? [],
       records,

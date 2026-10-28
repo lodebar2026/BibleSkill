@@ -3,6 +3,8 @@
  */
 import {
   ClauseAlternativeSchema,
+  ClauseLogicSchema,
+  LOGIC_RELATIONS,
   displayClauseType,
   validateBasicType,
   verbInfoFromMorph,
@@ -64,6 +66,8 @@ const FORMAT_HINTS: Record<string, string> = {
   lastWordId: 'firstWordId / lastWordId 是 briefing 里的词 id 字符串，如 o010010010011',
   parentId: 'parentId 是母句的子句 id（bcv+字母，如 1001001a），独立句为 null',
   status: 'status 只能是 accepted、ambiguous 或 needs-review',
+  relation: `logic.relation 只能是 ${LOGIC_RELATIONS.join('、')}`,
+  target: 'logic.target 是本章的子句 id 或「首id-末id」，如 1030025d-1030026c',
 };
 
 function formatError(label: string, index: number, error: z.ZodError): Error {
@@ -92,7 +96,15 @@ export const SubmittedClauseSchema = z.object({
   seedDiff: nullableString.default(null),
   sources: z.array(z.string()).default(['ai']),
   note: z.string().default(''),
+  logic: ClauseLogicSchema.nullable().default(null),
 }).loose();
+
+/** 子句 id 按节、再按字母序比较。 */
+function compareClauseIds(a: string, b: string): number {
+  const x = parseClauseId(a);
+  const y = parseClauseId(b);
+  return x.bcv - y.bcv || subOrdinal(x.sub) - subOrdinal(y.sub);
+}
 
 function formsCycle(clause: ClauseEntity, all: Map<string, ClauseEntity>): boolean {
   const seen = new Set<string>();
@@ -112,7 +124,24 @@ function formsCycle(clause: ClauseEntity, all: Map<string, ClauseEntity>): boole
 
 export type SeedOverride = { clauseId: string; seedDiff: string; overridden: string[] };
 
-export type AnalysisCheck = { accepted: ClauseEntity[]; errors: VerseError[]; overrides: SeedOverride[] };
+export type AnalysisCheck = { accepted: ClauseEntity[]; errors: VerseError[]; overrides: SeedOverride[]; readingWarnings: string[] };
+
+/** 关联读法组 → 涉及的子句 id（按 alternatives 的 reading 归并）。 */
+export function readingGroups(items: Array<{ id: string; alternatives: Array<{ reading?: string }> }>): Map<string, string[]> {
+  const groups = new Map<string, string[]>();
+  for (const item of items) {
+    for (const label of new Set(item.alternatives.map((alt) => alt.reading).filter((label): label is string => Boolean(label)))) {
+      groups.set(label, [...(groups.get(label) ?? []), item.id]);
+    }
+  }
+  return groups;
+}
+
+/** 只落在一个子句上的读法组：多半是漏标了另一半，或者本不需要分组。 */
+function loneReadingWarnings(groups: Map<string, string[]>, scope: string): string[] {
+  return [...groups].filter(([, ids]) => ids.length === 1).map(([label, [id]]) =>
+    `关联读法 ${label} 在${scope}只出现在 ${id}：关联读法要标在两个以上子句上；另一半漏标就补上，不需要关联就去掉 reading`);
+}
 
 function inSpan(id: string, first: string, last: string): boolean {
   return id >= first && id <= last;
@@ -224,6 +253,7 @@ export function checkClauseAnalysis(
       sources: clause.sources,
       note: clause.note,
       version: 0,
+      ...(clause.logic ? { logic: clause.logic } : {}),
     };
     byVerse.set(bcv, [...(byVerse.get(bcv) ?? []), entity]);
   });
@@ -325,6 +355,24 @@ export function checkClauseAnalysis(
       all.set(clause.id, clause);
     }
   }
+  // logic.target 要在本章找得到，范围首尾有序，不能指向自己
+  for (const [bcv, clauses] of byVerse) {
+    for (const clause of clauses) {
+      if (!clause.logic) {
+        continue;
+      }
+      const [first, last = first] = clause.logic.target.split('-');
+      const missing = [first, last].filter((id) => !all.has(id));
+      if (missing.length > 0) {
+        fail(bcv, clause.id, `logic.target ${missing.join('、')} 在本章找不到`);
+      } else if (compareClauseIds(first, last) > 0) {
+        fail(bcv, clause.id, `logic.target ${clause.logic.target} 首尾颠倒`);
+      } else if (compareClauseIds(first, clause.id) <= 0 && compareClauseIds(clause.id, last) <= 0) {
+        fail(bcv, clause.id, 'logic.target 不能包含本句');
+      }
+    }
+  }
+
   let changed = true;
   while (changed) {
     changed = false;
@@ -363,6 +411,7 @@ export function checkClauseAnalysis(
     accepted,
     errors: [...errors.values()].sort((a, b) => a.bcv - b.bcv),
     overrides: overrides.filter((item) => !errors.has(parseClauseId(item.clauseId).bcv)),
+    readingWarnings: loneReadingWarnings(readingGroups([...all.values()]), '本章'),
   };
 }
 
@@ -398,7 +447,7 @@ function toParaTitle(value: string | null): string | null {
   return value.trim().startsWith('[') ? value : JSON.stringify([{ text: value.trim() }]);
 }
 
-export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[] };
+export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[]; readingWarnings: string[] };
 
 /**
  * level：当前翻译档位（style.md 的 literalness）。
@@ -447,6 +496,7 @@ export function checkTranslations(
     submitted.set(bcv, verse);
   });
 
+  const analysisGroups = readingGroups([...clausesByVerse.values()].flat());
   const accepted: ClauseText[] = [];
   for (const [bcv, verse] of submitted) {
     const clauses = clausesByVerse.get(bcv) ?? [];
@@ -542,6 +592,10 @@ export function checkTranslations(
           fail(bcv, clause.id, '有争议时须在 note 写明主译采用哪种读法、依据是什么');
         }
       }
+      const labels = [...new Set(covered.flatMap((c) => c.alternatives.map((alt) => alt.reading).filter((label): label is string => Boolean(label))))];
+      for (const label of labels.filter((label) => !item.alternatives.some((alt) => alt.reading === label))) {
+        fail(bcv, clause.id, `子句分析的关联读法 ${label} 涉及 ${(analysisGroups.get(label) ?? []).join('、')}：按这组读法连起来译出本句的另一种译法，放进 alternatives 并标 reading: "${label}"，同组各句的这条译法要能连读`);
+      }
       const textual = coveredDisputes.flatMap((d) => d.textual);
       if (textual.length > 0 && !item.alternatives.some((alt) => alt.kind === 'textual') && !note) {
         fail(bcv, clause.id, `有影响翻译的经文异文：${textual.join('；')}。给 kind=textual 的 alternative，或在 note 说明为何不影响译文`);
@@ -569,5 +623,12 @@ export function checkTranslations(
       accepted.push(...rows);
     }
   }
-  return { accepted, errors: [...errors.values()].sort((a, b) => a.bcv - b.bcv) };
+  // 子句分析已成组的读法由上面的检查管；这里只提示译文里新起、却只标了一句的组
+  const submittedGroups = readingGroups([...submitted.values()].flatMap((verse) => [...verse.values()].map((item) => ({ id: item.clauseId, alternatives: item.alternatives }))));
+  const newGroups = new Map([...submittedGroups].filter(([label]) => !analysisGroups.has(label)));
+  return {
+    accepted,
+    errors: [...errors.values()].sort((a, b) => a.bcv - b.bcv),
+    readingWarnings: loneReadingWarnings(newGroups, '本次提交里'),
+  };
 }

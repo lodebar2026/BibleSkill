@@ -42,7 +42,8 @@
 | `br` | 可选，逗号分隔的词 id，在这些词之后换行显示（长子句） |
 | `alone` | 可选，`true` 表示从当前树组中独立出来、开始新的段落树 |
 | `status` | 可选，`accepted`（默认）/ `ambiguous` / `needs-review` |
-| `alternatives` | `ambiguous` 时必填：`[{summary, basis?, parentId?, modifies?, firstWordId?, lastWordId?}]` |
+| `alternatives` | `ambiguous` 时必填：`[{summary, basis?, parentId?, modifies?, firstWordId?, lastWordId?, reading?}]`；`reading` 是关联读法组（见 principles.md 的“关联读法”），几句的读法要连起来才成立时标同一个 `R1`、`R2`… |
+| `logic` | 可选，逻辑关系：`{relation, target, note?}`，见下文“逻辑关系” |
 | `seedDiff` | 与 Macula 种子不一致时写原因 |
 | `sources` | 默认 `["ai"]`；用了扩展工具时追加 `ext:<能力>` |
 | `note` | 可选说明 |
@@ -82,9 +83,25 @@
 
 ## 从属关系的判断
 
-- `parentId` / `modifies` 只表达**句法附着**，不表达因果、回应、叙事结果等语义关系。
+- `parentId` / `modifies` 只表达**句法附着**，不表达因果、回应、叙事结果等语义关系；语义关系写在 `logic`（见下）。
 - 引语：引语内容子句的 `parentId` 指向引导子句（如“说”）。引语结束、回到叙事主线后的子句恢复到外层层级，不挂在“说”下面。
 - 新约：`ὅτι` 引出的补语从句、`λέγων` 类分词引导的引语，内容子句都以引导子句为父。
 - 连续命令链、顺承动作链不要改写成逐级父子链；只有后一句在句法上嵌入前一句（作补足语或修饰语）才建立 `parentId`。
 - 定语（关系）子句挂在被修饰名词所在的子句下，`modifies` 指向该名词。
 - `modifies` 优先指向父句动词，或本句修饰的名词。
+
+## 逻辑关系（logic）
+
+句法挂接（`parentId` / `modifies`）之外，子句在**逻辑上**修饰谁、是什么关系，写在可选字段 `logic`：
+
+- `relation`：`cause` 原因、`purpose` 目的、`result` 结果、`condition` 条件、`time` 时间、`concession` 让步、`contrast` 对比、`content` 内容、`sequence` 承接、`elaboration` 说明、`comparison` 比较。
+- `target`：逻辑上关联的子句 id，或连续一段 `首id-末id`（如整段请求 `1030025d-1030026c`）；可以与 `parentId` 不同，可以指向后面的子句，不能包含本句。
+- `note`：可选，一句话说明。
+
+只在两种情况填：逻辑关联的对象**不同于**句法母句；或者句法上看不出的关系需要点明（并列的 wayyiqtol 实为结果，weqatal 链实为“每逢……就……”）。逻辑关系和句法母句一致、且关系从连词就看得出时不用填。例：
+
+- 创 30:26d `כִּי אַתָּה יָדַעְתָּ`：句法上挂在 26a 下，逻辑上是整段请求的理由 → `{"relation": "cause", "target": "1030025d-1030026c"}`。
+- 创 30:27d `וַיְבָרֲכֵנִי`：形式上是 wayyiqtol，逻辑上是 27c“我占卜得知”的内容 → `{"relation": "content", "target": "1030027c"}`。
+- 创 30:41–42 的 weqatal 链：后句是前句条件下的结果 → `{"relation": "result", "target": "<条件子句 id>"}`。
+
+逻辑关系有两种都说得通时，主读法写在 `logic`，另一种写进 `alternatives` 的 summary。

@@ -4,8 +4,8 @@
 
 ## 流程
 
-1. 调 `build_translation_briefing(range)` 一次。还没有子句分析的节会报错，先做 analyze。范围较大时按自然段分批。
-2. 读 `approach`（档位）、`clauseView`（缩进结构）、`clauses`、`ambiguityHints`（旧约，见下文“争议”）、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
+1. 调 `build_translation_briefing(range)` 一次。还没有子句分析的节会报错，先做 analyze。范围超过约 10 节时按自然段分批：每批取一次 briefing、提交一次，关联读法组不要拆到两批里。
+2. 读 `approach`（档位）、`clauseView`（缩进结构）、`clauses`（带 `logic` 的是子句分析标出的逻辑关系，选连词“因为”“于是”“就”等时参照它）、`ambiguityHints`（旧约，见下文“争议”）、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
 3. 逐子句翻译，组成 `translations` 数组提交。
 4. 若返回 `errors` 或 `consistency`，按提示修正后**整节**重提；已写入的节不要重提。
 5. 本段新确定的专名、术语，用 `upsert_glossary` 写入术语表。
@@ -35,7 +35,7 @@
   - `zh` 出现不止一处时，可以加 `at`（`zh` 在去掉 `[ ]` 后的译文中的起始位置，从 0 数）指明是哪一处；不给时系统按词序自动定位。briefing 里已有译文的 renderings 带着 `at`，改了译文后不必手算，删掉或留着都行。
   - 实词有意不译时 `zh` 写 `∅`；第 1–3 档还要加 `note`。
   - 虚词可以不给 rendering。
-- `alternatives`：争议处的其他译法，每条 `{text, kind, basis}`（见下文“争议”）。
+- `alternatives`：争议处的其他译法，每条 `{text, kind, basis, reading?}`（见下文“争议”）。
 - `note`：主译的取舍理由；有 alternatives 时必填。
 - `paraTitle`：可选，本子句开始新段落时给出段落标题（纯文本）。
 - 用了扩展工具时加 `"sources": ["ai", "ext:commentary"]`。
@@ -45,6 +45,7 @@
 系统已知的争议：
 
 - `clauses[].status` 为 `ambiguous`：子句分析的其他读法在该子句的 `alternatives` 里 → **必须**给 alternatives，并在 note 写主译理由。
+- `readings`：子句分析的关联读法组（如 `R1` 涉及 32b、32c、33b）→ 组内每句都要给 `reading` 相同的 alternative，按这组读法连起来译，连读要通；只给一句会被拒。译文里自己发现的关联读法也可以新起一组（编号不与已有的重复）。
 - `clauses[].disputes.textual`：影响翻译的经文异文 → 给 `kind: "textual"` 的 alternative（异文读法的译文），或在 note 说明为何不影响译文。
 
 `ambiguityHints`（旧约）是系统按词形与重音找出的歧义线索。子句分析没有处理到的，逐条检验，成立的列 alternatives。

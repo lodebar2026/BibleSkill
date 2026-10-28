@@ -106,7 +106,8 @@ function run(task) {
     result = spawnSync('claude', claudeArgs(spec, task), {
       cwd: workdir,
       stdio: ['ignore', 'inherit', 'inherit'],
-      env: { ...process.env, ENABLE_TOOL_SEARCH: 'false' },
+      // 整段 briefing 可能超过默认的 MCP 输出上限（约 2.5 万 token），超了会落盘、模型再分段读回或重取
+      env: { ...process.env, ENABLE_TOOL_SEARCH: 'false', MAX_MCP_OUTPUT_TOKENS: process.env.MAX_MCP_OUTPUT_TOKENS ?? '80000' },
     });
   } else {
     if (spec.effort) {

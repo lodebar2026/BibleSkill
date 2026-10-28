@@ -5,6 +5,7 @@
  */
 import type { ChapterView, ClauseEntity, ClauseText, ViewWord } from '@bs/core';
 import { alignmentSpans } from '@bs/core/align';
+import { LOGIC_LABELS } from '@bs/core/logic';
 import { addedRanges, clauseNote, parseFormatted, plainText, segmentsMarkup } from '@bs/core/segments';
 import { buildChapterTree, continuationPrefix, flipTreePrefix, type Measure } from '@bs/clause-tree';
 
@@ -59,6 +60,12 @@ export function suppliedLines(json: string): string[] {
 
 export const KIND_LABELS: Record<string, string> = { textual: '异文', punctuation: '断句', syntax: '句法', lexical: '词义', other: '其他' };
 
+/** 可选译法的标签：类型，属关联读法组时加上组号，如「句法 · 读法 R1」。 */
+export function altLabel(alt: { kind: string; reading?: string }): string {
+  const kind = KIND_LABELS[alt.kind] ?? alt.kind;
+  return alt.reading ? `${kind} · 读法 ${alt.reading}` : kind;
+}
+
 export function verseLabel(clauseId: string): string {
   const match = clauseId.match(/^\d+?(\d{3})([a-z]+)$/);
   return match ? `${Number(match[1])}${match[2]}` : clauseId;
@@ -72,6 +79,7 @@ export function showDetails(panel: HTMLElement, clause: Clause, text: Text | und
     ['父句', clause.parentId ? verseLabel(clause.parentId) : '—'],
     ['来源', [...clause.sources, ...(text?.sources ?? [])].filter((v, i, a) => a.indexOf(v) === i).join('、') || '—'],
   ];
+  if (clause.logic) rows.push(['逻辑关系', `${LOGIC_LABELS[clause.logic.relation]} → ${clause.logic.target.split('-').map(verseLabel).join('–')}${clause.logic.note ? `（${clause.logic.note}）` : ''}`]);
   if (clause.seedDiff) rows.push(['与 Macula 不同', clause.seedDiff]);
   if (clause.note) rows.push(['说明', clause.note]);
   const list = el('dl');
@@ -82,7 +90,7 @@ export function showDetails(panel: HTMLElement, clause: Clause, text: Text | und
   if (clause.alternatives.length > 0) {
     panel.append(el('h4', '', '结构上的其他读法'));
     const ul = el('ul');
-    clause.alternatives.forEach((alt) => ul.append(el('li', '', alt.basis ? `${alt.summary}（${alt.basis}）` : alt.summary)));
+    clause.alternatives.forEach((alt) => ul.append(el('li', '', `${alt.reading ? `[读法 ${alt.reading}] ` : ''}${alt.basis ? `${alt.summary}（${alt.basis}）` : alt.summary}`)));
     panel.append(ul);
   }
   const translationNote = text && text.translationSpan > 0 ? segmentsNote(text.formatted) : '';
@@ -101,7 +109,7 @@ export function showDetails(panel: HTMLElement, clause: Clause, text: Text | und
     const ul = el('ul', 'alternatives');
     for (const alt of text.alternatives) {
       const li = el('li');
-      li.append(el('span', 'alt-kind', KIND_LABELS[alt.kind] ?? alt.kind), el('span', '', ` ${alt.text}`), el('div', 'muted', alt.basis));
+      li.append(el('span', 'alt-kind', altLabel(alt)), el('span', '', ` ${alt.text}`), el('div', 'muted', alt.basis));
       ul.append(li);
     }
     panel.append(ul);
@@ -296,7 +304,7 @@ export function renderChapter(chapter: Chapter, panel: HTMLElement, hooks: Rende
       cell.append(translationLine(text, chapter.words));
       for (const alt of text.alternatives ?? []) {
         const line = el('div', 'alt-line');
-        line.append(el('span', 'alt-kind', KIND_LABELS[alt.kind] ?? alt.kind), document.createTextNode(` ${alt.text}`));
+        line.append(el('span', 'alt-kind', altLabel(alt)), document.createTextNode(` ${alt.text}`));
         cell.append(line);
       }
       cell.rowSpan = text.translationSpan;

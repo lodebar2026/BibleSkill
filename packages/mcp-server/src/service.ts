@@ -58,7 +58,7 @@ import {
   tokenSenseKey,
   type ConsistencyIssue,
 } from './consistency.js';
-import { checkClauseAnalysis, checkTranslations, type SeedOverride, type VerseError } from './validate.js';
+import { checkClauseAnalysis, checkTranslations, readingGroups, type SeedOverride, type VerseError } from './validate.js';
 import { collectDisputes } from './disputes.js';
 import { ambiguityHints } from './ambiguity.js';
 import { reviewChapter, verseRanges, type HumanReviewItem, type ReviewIssue } from './review.js';
@@ -342,6 +342,7 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
   const errors: VerseError[] = [];
   const written: string[] = [];
   const overrides: SeedOverride[] = [];
+  const readingWarnings: string[] = [];
   const translatedVerses: string[] = [];
   for (const chapter of chaptersBetween(range.startBcv, range.endBcv)) {
     const chapterVerses = new Map([...verses].filter(([bcv]) => chapterFromBcv(bcv) === chapter));
@@ -359,6 +360,7 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
     const result = checkClauseAnalysis(chapterClauses, chapterVerses, outside, seeds);
     errors.push(...result.errors);
     overrides.push(...result.overrides);
+    readingWarnings.push(...result.readingWarnings);
     if (result.accepted.length > 0) {
       const acceptedVerses = new Set(result.accepted.map((clause) => parseClauseId(clause.id).bcv));
       await deps.store.replaceClauseEntitiesForVerses(range.bookName, chapter, acceptedVerses, result.accepted, options.expected);
@@ -378,6 +380,7 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
     writtenVerses: written,
     errors: errors.map((error) => ({ verse: verseLabel(error.bcv), clauseIds: error.clauseIds, messages: error.messages })),
     needsReview: overrides.length > 0 ? overrides : undefined,
+    readingWarnings: readingWarnings.length > 0 ? readingWarnings : undefined,
     translatedVerses: translatedVerses.length > 0
       ? `这些节已有译文，子句分析变了译文可能对不上：${translatedVerses.join(', ')}。用 review_report 检查，需要时整节重译`
       : undefined,
@@ -483,6 +486,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
 
   const allTokens = [...verses.values()].flat();
   const disputes = collectDisputes(clauses, allTokens, deps.db.variantsInRange(range.startBcv, range.endBcv));
+  const readings = readingGroups(clauses);
   const clauseLines = clauses.map((clause) => {
     const tokens = allTokens.filter((token) => token.id >= clause.firstWordId && token.id <= clause.lastWordId);
     return {
@@ -492,6 +496,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       status: clause.status === 'accepted' ? undefined : clause.status,
       alternatives: clause.alternatives.length > 0 ? clause.alternatives : undefined,
       note: clause.note || undefined,
+      logic: clause.logic ?? undefined,
       text: tokens.map((token) => token.surface + token.after).join('').trim(),
       contentTokens: tokens.filter((token) => isContentWord(token.morph, token.strong)).map((token) => token.id).join(','),
       // 子句分析的其他读法已在 alternatives 里，这里只给异文
@@ -547,6 +552,9 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     baseText: range.isOT ? undefined : na28Check(deps.criticalText),
     clauseView: view,
     clauses: clauseLines,
+    readings: readings.size > 0
+      ? Object.fromEntries([...readings].map(([label, ids]) => [label, { clauses: ids, note: '这几句的同组可选读法要连起来才成立：各句都给 reading 相同的 alternative，连读要通' }]))
+      : undefined,
     ambiguityHints: ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)),
     tokens: tokensTsv(verses),
     terms,
@@ -617,6 +625,7 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
     writtenVerses: written,
     errors: structural.errors.map((error) => ({ verse: verseLabel(error.bcv), clauseIds: error.clauseIds, messages: error.messages })),
     consistency: consistency.length > 0 ? consistency : undefined,
+    readingWarnings: structural.readingWarnings.length > 0 ? structural.readingWarnings : undefined,
     next: structural.errors.length + blocked.size > 0
       ? '未写入的节：按 errors 修正；consistency 中的用词要么统一为既有/术语表译法，要么在该 rendering 写 note 说明理由，然后整节重提'
       : consistency.length > 0

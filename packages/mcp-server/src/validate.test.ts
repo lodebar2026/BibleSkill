@@ -206,3 +206,55 @@ test('档位：第 1 档不合并子句；第 4 档不用 [ ]、∅ 可不写 no
   assert.match(checkTranslations(legacy, clausesByVerse, verses, new Map(), { level: 4, itemLevels: true }).errors[0].messages.join(), /∅）时必须写 note/);
   assert.doesNotMatch(checkTranslations(legacy, clausesByVerse, verses, new Map(), { level: 4, itemLevels: true }).errors[0].messages.join(), /第 4 档/);
 });
+
+test('关联读法：分析只标一句时提示；成组的读法在译文里每句都要有同组的 alternative', () => {
+  const lone = checkClauseAnalysis([
+    clause('a', 1, 2, { status: 'ambiguous', alternatives: [{ summary: '吩咐对方', reading: 'R1' }] }),
+    clause('b', 3, 4, { type: 'nominal', verbRange: null }),
+  ], verses, []);
+  assert.match(lone.readingWarnings.join(), /R1 在本章只出现在 1001001a/);
+  const paired = checkClauseAnalysis([
+    clause('a', 1, 2, { status: 'ambiguous', alternatives: [{ summary: '吩咐对方', reading: 'R1' }] }),
+    clause('b', 3, 4, { type: 'nominal', verbRange: null, status: 'ambiguous', alternatives: [{ summary: '指日后新生的', reading: 'R1' }] }),
+  ], verses, []);
+  assert.deepEqual(paired.readingWarnings, []);
+
+  const grouped = new Map([[BCV, entities.map((entity) => ({ ...entity, status: 'ambiguous' as const, alternatives: [{ summary: 'x', reading: 'R1' }] }))]]);
+  const base = [
+    { clauseId: '1001001a', span: 1, text: '创造', renderings: [{ tokens: id(2), zh: '创造' }], note: '主读法' },
+    { clauseId: '1001001b', span: 1, text: '神大地', renderings: [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }], note: '主读法' },
+  ];
+  const ungrouped = checkTranslations([
+    { ...base[0], alternatives: [{ text: '你创造', kind: 'syntax', basis: 'b', reading: 'R1' }] },
+    { ...base[1], alternatives: [{ text: '日后的大地', kind: 'syntax', basis: 'b' }] },
+  ], grouped, verses);
+  assert.match(ungrouped.errors[0].messages.join(), /1001001b: 子句分析的关联读法 R1 涉及 1001001a、1001001b/);
+  const ok = checkTranslations([
+    { ...base[0], alternatives: [{ text: '你创造', kind: 'syntax', basis: 'b', reading: 'R1' }] },
+    { ...base[1], alternatives: [{ text: '日后的大地', kind: 'syntax', basis: 'b', reading: 'R1' }] },
+  ], grouped, verses);
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.accepted[1].alternatives[0].reading, 'R1');
+  // 译文里新起的组只标一句：提示，不拦
+  const fresh = checkTranslations([
+    { ...base[0], alternatives: [{ text: '你创造', kind: 'syntax', basis: 'b', reading: 'R1' }] },
+    { ...base[1], alternatives: [{ text: '日后的大地', kind: 'syntax', basis: 'b', reading: 'R1' }, { text: '大地', kind: 'lexical', basis: 'b', reading: 'R2' }] },
+  ], grouped, verses);
+  assert.deepEqual(fresh.errors, []);
+  assert.match(fresh.readingWarnings.join(), /R2 在本次提交里只出现在 1001001b/);
+});
+
+test('逻辑关系：target 要在本章找得到、首尾有序、不含本句；relation 只能取列表里的', () => {
+  const run = (logic: unknown) => checkClauseAnalysis([
+    clause('a', 1, 2),
+    clause('b', 3, 4, { type: 'nominal', verbRange: null, parentId: '1001001a', logic }),
+  ], verses, []);
+  const ok = run({ relation: 'cause', target: '1001001a', note: '整段请求的理由' });
+  assert.deepEqual(ok.errors, []);
+  assert.deepEqual(ok.accepted[1].logic, { relation: 'cause', target: '1001001a', note: '整段请求的理由' });
+  assert.equal(ok.accepted[0].logic, undefined);
+  assert.match(run({ relation: 'cause', target: '1001001c' }).errors[0].messages.join(), /1001001c 在本章找不到/);
+  assert.match(run({ relation: 'cause', target: '1001001b-1001001a' }).errors[0].messages.join(), /首尾颠倒/);
+  assert.match(run({ relation: 'cause', target: '1001001a-1001001b' }).errors[0].messages.join(), /不能包含本句/);
+  assert.throws(() => run({ relation: 'because', target: '1001001a' }), /logic\.relation 只能是/);
+});

@@ -24,7 +24,7 @@ import {
   verseOf,
 } from './edit-ops.js';
 import {
-  KIND_LABELS,
+  altLabel,
   el,
   renderChapter,
   segmentsMarkupText,
@@ -555,7 +555,7 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
     suppliedLines(text.formatted).forEach((line) => panel.append(el('p', 'muted', `补词 ${line}`)));
     for (const alt of text.alternatives) {
       const line = el('div', 'alt-line');
-      line.append(el('span', 'alt-kind', KIND_LABELS[alt.kind] ?? alt.kind), document.createTextNode(` ${alt.text}`));
+      line.append(el('span', 'alt-kind', altLabel(alt)), document.createTextNode(` ${alt.text}`));
       panel.append(line);
     }
     const key = clause.id;

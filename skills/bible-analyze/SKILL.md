@@ -13,10 +13,10 @@ description: 圣经原文子句切分。当用户要求分析、切分、断句�
 
 执行顺序：
 
-1. `build_analysis_briefing(range)`，只调一次；范围大时按自然段分批。
+1. `build_analysis_briefing(range)`，只调一次；范围超过约 10 节时按自然段分批，每批取一次 briefing、提交一次。
    新约：如果有能返回 NA28 原文的扩展工具，再用它取一次本范围带标点的整节原文，按 NA28 断句（规则见 principles.md 的“底本”）。
-2. 逐节切分。Macula 种子是第二意见：同意就照用，不同意要写 `seedDiff`，拿不准就标 `ambiguous` 并给 `alternatives`。
-3. `submit_clause_analysis(range, clauses)` 提交；有 `errors` 只重提出错的节。返回 `needsReview` 时，把这些子句和理由逐条告诉用户。
+2. 逐节切分。Macula 种子是第二意见：同意就照用，不同意要写 `seedDiff`，拿不准就标 `ambiguous` 并给 `alternatives`；几句的可选读法要连起来才成立时标同一个 `reading`。
+3. `submit_clause_analysis(range, clauses)` 提交；有 `errors` 只重提出错的节；有 `readingWarnings` 时补齐或去掉对应的 `reading` 再重提。返回 `needsReview` 时，把这些子句和理由逐条告诉用户。
 4. `view_clauses(range)` 看一眼缩进结构，把结构给用户看，并列出所有 `ambiguous`（含依据）与 `seedDiff` 处。
 
 约束：

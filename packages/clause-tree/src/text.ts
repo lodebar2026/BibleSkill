@@ -13,7 +13,7 @@ export type TextViewClause = TreeClause & {
   translation: string | null;
   status?: string;
   /** 争议处的其他译法。 */
-  alternatives?: Array<{ text: string; kind: string; basis: string }>;
+  alternatives?: Array<{ text: string; kind: string; basis: string; reading?: string }>;
 };
 
 export function renderClausesText(
@@ -39,7 +39,7 @@ export function renderClausesText(
       const indent = `${''.padEnd(6)}${' '.repeat(prefix.length)}  `;
       out.push(`${indent}${clause.translation}`);
       for (const alt of clause.alternatives ?? []) {
-        out.push(`${indent}≈ ${alt.text}（${alt.kind}：${alt.basis}）`);
+        out.push(`${indent}≈ ${alt.reading ? `[${alt.reading}] ` : ''}${alt.text}（${alt.kind}：${alt.basis}）`);
       }
     }
   });

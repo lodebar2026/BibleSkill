@@ -3,7 +3,7 @@
  *
  * 每个子句一行，按原文先后自上而下排（叙事链、话语内容的序列一句接一句往下读），缩进表示从属；
  * 框头标子句编号。连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框。
- * 点框头展开词义与要点，点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
+ * 点「详情」展开词义与要点，点「收起分支」隐藏下属子句，点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
  */
 import type { DiagramData } from '@bs/core';
 
@@ -69,8 +69,9 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .box > .bh, .box > .up, .box > .more { contain: inline-size; }
 .box.root { border: 2.5px solid var(--accent); box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent); }
 .box.ambiguous { background: color-mix(in srgb, var(--amb) 45%, var(--panel)); }
-.bh { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; cursor: pointer; user-select: none; direction: ltr; }
-.bh .tw { font-size: 12px; color: var(--muted); width: 10px; }
+.bh { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; user-select: none; direction: ltr; }
+.bh .det { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 999px; padding: 0 8px; cursor: pointer; margin-inline-start: auto; }
+.box.open .bh .det { color: var(--ink); border-color: var(--muted); }
 .box[data-form] { border-color: var(--tc); border-width: 2px; }
 .box.root[data-form] { border-width: 3px; box-shadow: none; }
 .box[data-form="wayyiqtol"] { --tc: #F656B8; } .box[data-form="qatal"] { --tc: #FF0000; } .box[data-form="weqatal"] { --tc: #2A7FFF; }
@@ -85,7 +86,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 #wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
 .forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
 .forms-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; border: 2px solid var(--tc); }
-.bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+.bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 .box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 .box[hidden] { display: none; }
 .bh .cid { font-size: 12px; font-weight: 700; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
@@ -249,9 +250,8 @@ function diagramClient(D: DiagramData): void {
       offline(clause) ? '<span class="mk" title="顶层叙事不用 wayyiqtol：离开主线，多为背景、评述或凸显">离线</span>' : ''].join('');
     const typeBadge = form ? `<span class="ty" title="${esc(FORM_ZH[form])}">${esc(clause.type)}</span>${marks}` : '';
     const status = clause.status === 'ambiguous' ? '<span class="st ambiguous">有歧义</span>' : clause.status === 'needs-review' ? '<span class="st needs-review">待复核</span>' : '';
-    const branch = descendants(clause.id).length;
-    const foldButton = branch > 0 ? `<button type="button" class="fold" title="收起/展开这个分支">▾ ${branch}</button>` : '';
-    box.innerHTML = `<div class="bh" title="点击展开/收起"><span class="tw">▸</span>${foldButton}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<span class="gist">${esc(clause.gist)}</span></div>`;
+    const foldButton = descendants(clause.id).length > 0 ? '<button type="button" class="fold" title="收起/展开这个分支（隐藏或显示下属子句）">收起分支</button>' : '';
+    box.innerHTML = `<div class="bh">${foldButton}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<span class="gist">${esc(clause.gist)}</span><button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button></div>`;
     const chips = document.createElement('div');
     chips.className = 'chips';
     for (const chip of clause.chips) {
@@ -290,7 +290,7 @@ function diagramClient(D: DiagramData): void {
     if (ups.length > 0) {
       box.insertAdjacentHTML('beforeend', `<div class="up">${ups.join('<br>')}</div>`);
     }
-    $('.bh', box).addEventListener('click', () => setOpen(box, !box.classList.contains('open')));
+    $('.det', box).addEventListener('click', () => setOpen(box, !box.classList.contains('open')));
     box.querySelector('.fold')?.addEventListener('click', (event) => {
       event.stopPropagation();
       setFolded(clause.id, !box.classList.contains('folded'));
@@ -372,12 +372,9 @@ function diagramClient(D: DiagramData): void {
     const hidden = new Set($$('.box.folded').flatMap((box) => descendants(box.dataset.box!)));
     for (const box of $$('.box')) {
       box.hidden = hidden.has(box.dataset.box!);
-    }
-    for (const box of $$('.box')) {
       const button = box.querySelector<HTMLElement>('.fold');
       if (button) {
-        const count = descendants(box.dataset.box!).length;
-        button.textContent = box.classList.contains('folded') ? `▸ 已收起 ${count} 句` : `▾ ${count}`;
+        button.textContent = box.classList.contains('folded') ? '展开分支' : '收起分支';
       }
     }
     hidePop();
@@ -398,7 +395,7 @@ function diagramClient(D: DiagramData): void {
 
   function setOpen(box: HTMLElement, open: boolean): void {
     box.classList.toggle('open', open);
-    $('.tw', box).textContent = open ? '▾' : '▸';
+    $('.det', box).textContent = open ? '详情 ▴' : '详情 ▾';
     layoutChips(box);
     hidePop();
   }
@@ -447,8 +444,20 @@ function diagramClient(D: DiagramData): void {
 
     // ---- 句法：指向同一个词的线共用一条横道（汇成主干）；同一母句里指向不同词的，横道上下错开 ----
     const lanes = new Map<string, Map<string, number>>();
-    type Wire = { gutters: number[]; points: (g: number) => Array<[number, number]>; span: number };
+    // 每条线有几种走法（从子句顶边/底边直接出、起始侧沟槽、尾侧沟槽），排除穿过其他方框的，
+    // 按「交叉数 → 折点数 → 长度」取最好的；跨度短的先定
+    type Wire = { candidates: Array<Array<[number, number]>>; span: number; farFrom: number };
+    // 尾侧是逻辑虚线走的地方：显示逻辑关系时，句法连线走尾侧要多付代价（逻辑线进出方框的横线都会穿过它）
+    const farPenalty = canvas.classList.contains('hide-logic') ? 0 : 1500;
     const wires: Wire[] = [];
+    const visible = allBoxes.filter((box) => !box.hidden).map((box) => {
+      const r = box.getBoundingClientRect();
+      return { box, left: r.left - base.left, right: r.right - base.left, top: r.top - base.top, bottom: r.bottom - base.top };
+    });
+    const endOf = (rect: DOMRect) => (rtl ? rect.left : rect.right) - base.left;
+    /** 竖线 x 从 y1 到 y2 是否穿过 skip 以外的方框。 */
+    const blockedV = (x: number, y1: number, y2: number, skip: HTMLElement[]) => visible.some((item) => !skip.includes(item.box)
+      && x > item.left - 3 && x < item.right + 3 && Math.max(y1, y2) > item.top && Math.min(y1, y2) < item.bottom);
     for (const clause of D.clauses) {
       if (!clause.parentId || !byId.has(clause.parentId)) {
         continue;
@@ -469,47 +478,73 @@ function diagramClient(D: DiagramData): void {
       }
       lanes.set(laneKey, byTarget);
       const lane = byTarget.get(targetKey)!;
-      // 沟槽要在子句与母句之间所有方框的起始侧之外，否则竖线会被中间更宽（层级更浅）的框挡住
-      let gutter = start(c) + (rtl ? 16 : -16);
-      const [spanTop, spanBottom] = below ? [p.bottom, c.top] : [c.bottom, p.top];
-      for (const box of allBoxes) {
-        const r = box.getBoundingClientRect();
-        if (!box.hidden && box !== childBox && box !== parentBox && r.top < spanBottom && r.bottom > spanTop) {
-          gutter = rtl ? Math.max(gutter, start(r) + 10) : Math.min(gutter, start(r) - 10);
-        }
-      }
+      const skip = [childBox, parentBox];
       const yChild = c.top + Math.min(22, c.height / 2) - base.top;
       const target = clause.targetWordId ? $(`[data-id="${clause.targetWordId}"] .g`, parentBox) : null;
       const t = target?.getBoundingClientRect();
       const edge = (below ? p.bottom : p.top) - base.top;
+      const tip = below ? edge + 1 : edge - 1;
       // 横道离母句至少 18px：箭头（9px）前留一段竖线，折点不直接接在箭头上
       const yLane = below ? edge + 18 + lane * 6 : edge - 18 - lane * 6;
-      const x0 = start(c);
-      wires.push({
-        // 候选沟槽：基准位置，以及往外每 6px 一档
-        gutters: [0, 1, 2, 3, 4, 5].map((k) => gutter + (rtl ? 1 : -1) * k * 6),
-        points: (g) => [[x0, yChild], [g, yChild], [g, yLane], [t ? t.left + t.width / 2 - base.left : g, yLane], [t ? t.left + t.width / 2 - base.left : g, below ? edge + 1 : edge - 1]],
-        span: Math.abs(yChild - yLane),
-      });
-    }
-    // 跨度短的先画（贴近母句），长的后画、在候选沟槽里挑交叉最少的
-    for (const wire of wires.sort((a, b) => a.span - b.span)) {
-      let best = wire.gutters[0];
-      let bestCost = Infinity;
-      for (const g of wire.gutters) {
-        const value = cost(polyline(wire.points(g)));
-        if (value < bestCost) {
-          best = g;
-          bestCost = value;
-        }
-        if (value === 0) {
-          break;
+      const xT = t ? t.left + t.width / 2 - base.left : (c.left + c.right) / 2 - base.left;
+      const candidates: Array<Array<[number, number]>> = [];
+      // 1) 从子句朝母句的那条边直接出：能对准被修饰词就一根竖线，否则在母句旁的空隙横折一次
+      const childEdge = (below ? c.top : c.bottom) - base.top;
+      const [cl, cr] = [c.left - base.left + 14, c.right - base.left - 14];
+      const exits = [...new Set([Math.min(Math.max(xT, cl), cr), (cl + cr) / 2, rtl ? cr : cl].map(Math.round))];
+      for (const x of exits) {
+        if (Math.abs(x - xT) < 1) {
+          if (!blockedV(xT, childEdge, tip, skip)) {
+            candidates.push([[xT, childEdge], [xT, tip]]);
+          }
+        } else if (!blockedV(x, childEdge, yLane, skip)) {
+          candidates.push([[x, childEdge], [x, yLane], [xT, yLane], [xT, tip]]);
         }
       }
-      const points = wire.points(best);
-      segs.push(...polyline(points));
+      // 2) 起始侧沟槽：在子句与母句之间所有方框的起始侧之外
+      let gutter = start(c) + (rtl ? 16 : -16);
+      for (const item of visible) {
+        if (!skip.includes(item.box) && item.top < Math.max(childEdge, edge) && item.bottom > Math.min(childEdge, edge)) {
+          gutter = rtl ? Math.max(gutter, (rtl ? item.right : item.left) + 10) : Math.min(gutter, item.left - 10);
+        }
+      }
+      for (let k = 0; k < 6; k += 1) {
+        const g = gutter + (rtl ? 1 : -1) * k * 6;
+        candidates.push([[start(c), yChild], [g, yChild], [g, yLane], [xT, yLane], [xT, tip]]);
+      }
+      // 3) 尾侧沟槽
+      let far = endOf(c);
+      for (const item of visible) {
+        if (item.top < Math.max(childEdge, edge) && item.bottom > Math.min(childEdge, edge)) {
+          far = rtl ? Math.min(far, item.left) : Math.max(far, item.right);
+        }
+      }
+      const farFrom = candidates.length;
+      for (let k = 0; k < 4; k += 1) {
+        const g = far + (rtl ? -1 : 1) * (10 + k * 6);
+        candidates.push([[endOf(c), yChild], [g, yChild], [g, yLane], [xT, yLane], [xT, tip]]);
+      }
+      wires.push({ candidates, span: Math.abs(childEdge - edge), farFrom });
+    }
+    const verticals: Array<{ x: number; top: number; bottom: number }> = [];
+    const length = (points: Array<[number, number]>) => points.slice(1).reduce((sum, [x, y], i) => sum + Math.abs(x - points[i][0]) + Math.abs(y - points[i][1]), 0);
+    for (const wire of wires.sort((a, b) => a.span - b.span)) {
+      let best = wire.candidates[0];
+      let bestScore = Infinity;
+      for (const [index, points] of wire.candidates.entries()) {
+        const score = cost(polyline(points)) * 1000 + (points.length - 2) * 40 + length(points) * 0.05 + (index >= wire.farFrom ? farPenalty : 0);
+        if (score < bestScore) {
+          best = points;
+          bestScore = score;
+        }
+      }
+      segs.push(...polyline(best));
+      // 句法竖线也记下，逻辑虚线不贴着它们走
+      for (const seg of polyline(best).filter((item) => item.x1 === item.x2)) {
+        verticals.push({ x: seg.x1, top: Math.min(seg.y1, seg.y2), bottom: Math.max(seg.y1, seg.y2) });
+      }
       const path = document.createElementNS(SVG, 'path');
-      path.setAttribute('d', pathD(points));
+      path.setAttribute('d', pathD(best));
       path.setAttribute('marker-end', 'url(#ah)');
       svg.append(path);
     }
@@ -567,14 +602,25 @@ function diagramClient(D: DiagramData): void {
       }
       links.push({ clause, c, t, top, bottom, edge });
     }
-    const verticals: Array<{ x: number; top: number; bottom: number }> = [];
-    const incoming = new Map<string, number>();
-    for (const { clause, c, t, top, bottom, edge } of links.sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top))) {
-      const targetId = clause.logic!.targetIds[0];
-      const arrivals = incoming.get(targetId) ?? 0;
-      incoming.set(targetId, arrivals + 1);
-      const y1 = c.top + Math.min(22, c.height / 2) - base.top;
-      const y2 = t.top + Math.min(14 + arrivals * 9, t.height - 6) - base.top;
+    // 每个框上的连接点按方向和跨度排好上下：往上走的在上、往下走的在下；
+    // 往上的跨度越长越靠下、往下的跨度越长越靠上（外圈的横线不会横穿内圈的竖线）
+    const anchors = new Map<string, Array<{ key: string; up: boolean; span: number; rect: DOMRect }>>();
+    const addAnchor = (id: string, key: string, up: boolean, span: number, rect: DOMRect) => anchors.set(id, [...(anchors.get(id) ?? []), { key, up, span, rect }]);
+    links.forEach(({ clause, c, t, top, bottom }, index) => {
+      addAnchor(clause.id, `${index}c`, t.top < c.top, bottom - top, c);
+      addAnchor(clause.logic!.targetIds[0], `${index}t`, c.top < t.top, bottom - top, t);
+    });
+    const anchorY = new Map<string, number>();
+    for (const list of anchors.values()) {
+      list.sort((a, b) => (a.up === b.up ? (a.up ? a.span - b.span : b.span - a.span) : a.up ? -1 : 1));
+      const rect = list[0].rect;
+      const step = Math.min(10, (rect.height - 16) / Math.max(1, list.length));
+      list.forEach((item, i) => anchorY.set(item.key, rect.top - base.top + 12 + i * step));
+    }
+    const order = links.map((link, index) => ({ ...link, index }));
+    for (const { clause, c, t, top, bottom, edge, index } of order.sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top))) {
+      const y1 = anchorY.get(`${index}c`)!;
+      const y2 = anchorY.get(`${index}t`)!;
       const points = (x: number): Array<[number, number]> => [[end(c), y1], [x, y1], [x, y2], [end(t), y2]];
       let best = 0;
       let bestCost = Infinity;
@@ -705,7 +751,7 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
 <body>
 <header>
   <h1>${escapeHtml(data.title)} · 原文结构</h1>
-  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点框头展开词义与要点，点词看词典</div>
+  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」隐藏下属子句，点词看词典</div>
 </header>
 <main>
   <section class="card">
@@ -716,8 +762,8 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
   <section class="card">
     <h2>结构图
       <span class="toolbar">
-        <button type="button" id="openAll">全部展开</button>
-        <button type="button" id="closeAll">全部收起</button>
+        <button type="button" id="openAll">展开详情</button>
+        <button type="button" id="closeAll">收起详情</button>
         <button type="button" id="foldAll" title="把所有分支收到主句，只看主线">只看主句</button>
         <button type="button" id="unfoldAll">展开分支</button>
         <button type="button" data-toggle="z" aria-pressed="true">中文</button>

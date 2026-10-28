@@ -9,7 +9,8 @@
 #        不给时若 ~/.config/bibleskill/ext.json 存在则自动使用。每个扩展分到一个隔离目录
 #        <workdir>/.ext/<名字>/，配置里的 ${EXT_DIR} 会替换成它（扩展自带写工作文件的工具时，
 #        让它写到这里，不会碰本项目的工作文件）；${WORKDIR} 替换成工作目录。
-#        可选顶层字段 "criticalText": {"server", "tool", "args"} 声明能取新约 NA28/UBS 原文的扩展工具。
+#        可选顶层字段 "criticalText": {"server", "tool", "args"} 声明能取新约 NA28/UBS 原文的扩展工具；
+#        "hideTools": {"<服务器>": [工具名…]} 列出扩展里用不到的工具，不放进模型上下文。
 # --style / --terms：个人风格（style.md）与术语偏好（terms.yaml），拷进工作目录（覆盖已有的）。
 #        不给时若 ~/.config/bibleskill/ 下有同名文件、且工作目录里还没有，就拷过去。
 # --analyze-model / --translate-model：子句分析、翻译用的模型（写进 config.json 的 models，pnpm passage 按它调用），
@@ -37,7 +38,7 @@ ANALYZE_MODEL=""
 TRANSLATE_MODEL=""
 
 usage() {
-  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 if [ "$#" -lt 1 ]; then
@@ -124,10 +125,23 @@ if (extConfig.criticalText) {
   fs.writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
   console.log(`configured criticalText: ${extConfig.criticalText.server}/${extConfig.criticalText.tool}`);
 }
+// 可选：hideTools {"<服务器>": [工具名…]} 把扩展里用不到的工具（写入、校验、自有工作流）从模型上下文里拿掉：
+// agy 写成 disabledTools、Gemini 写成 excludeTools；Claude Code 的 .mcp.json 没有这个字段，记进 config.json 由 pnpm passage 转成 --disallowedTools
+const hideTools = extConfig.hideTools || {};
+{
+  const configFile = path.join(workdir, 'config.json');
+  const config = fs.existsSync(configFile) ? JSON.parse(fs.readFileSync(configFile, 'utf8')) : {};
+  if (Object.keys(hideTools).length > 0) {
+    config.hideTools = hideTools;
+  } else {
+    delete config.hideTools;
+  }
+  fs.writeFileSync(configFile, `${JSON.stringify(config, null, 2)}\n`);
+}
 const targets = [
   ['.mcp.json', {}],
-  ['.agents/mcp_config.json', { cwd: true }],
-  ['.gemini/settings.json', { trust: true }],
+  ['.agents/mcp_config.json', { cwd: true, hideAs: 'disabledTools' }],
+  ['.gemini/settings.json', { trust: true, hideAs: 'excludeTools' }],
 ];
 for (const [name, server] of Object.entries(ext)) {
   const extDir = path.join(workdir, '.ext', name);
@@ -137,11 +151,16 @@ for (const [name, server] of Object.entries(ext)) {
     const target = path.join(workdir, file);
     const config = fs.existsSync(target) ? JSON.parse(fs.readFileSync(target, 'utf8')) : {};
     config.mcpServers = config.mcpServers || {};
-    config.mcpServers[name] = { ...resolved, ...(opts.cwd ? { cwd: extDir } : {}), ...(opts.trust ? { trust: true } : {}) };
+    config.mcpServers[name] = {
+      ...resolved,
+      ...(opts.cwd ? { cwd: extDir } : {}),
+      ...(opts.trust ? { trust: true } : {}),
+      ...(opts.hideAs && hideTools[name]?.length ? { [opts.hideAs]: hideTools[name] } : {}),
+    };
     fs.mkdirSync(path.dirname(target), { recursive: true });
     fs.writeFileSync(target, `${JSON.stringify(config, null, 2)}\n`);
   }
-  console.log(`installed extension MCP ${name}（隔离目录 ${extDir}）`);
+  console.log(`installed extension MCP ${name}（隔离目录 ${extDir}${hideTools[name]?.length ? `，隐藏 ${hideTools[name].length} 个工具` : ''}）`);
 }
 NODE
 fi

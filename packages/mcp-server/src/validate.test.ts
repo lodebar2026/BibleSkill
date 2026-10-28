@@ -92,6 +92,14 @@ test('span 不合法、实词缺 rendering、rendering 不在译文里都被拒'
   assert.match(absent.errors[0].messages.join(), /没有出现在译文里/);
 });
 
+test('格式错误附上出错字段的正确写法', () => {
+  assert.throws(
+    () => checkTranslations([{ clauseId: '1001001a', span: 'καὶ', text: '神', renderings: [{ tokens: `${id(2)},${id(3)}`, zh: '神' }] }], clausesByVerse, verses),
+    (error: Error) => /span 是整数/.test(error.message) && /不连续的几个词分成几条 rendering/.test(error.message),
+  );
+  assert.throws(() => checkClauseAnalysis([{ id: '1001001a', firstWordId: 1 }], verses, []), /firstWordId \/ lastWordId 是/);
+});
+
 test('用词统一：locked 违反为 error，偏离既有译法无 note 为 warning，有 note 放行', () => {
   const glossary = [{ strong: 'H0430G', senseKey: null, lemma: '', zh: '神', level: 'locked' as const, note: '', scope: 'all', version: 0 }];
   const memory: RenderingMemory = new Map([['H0776G|S1', { key: 'H0776G|S1', strong: 'H0776G', lemma: '', glossEn: '', uses: [{ zh: '大地', clauseKey: '1001002a' }] }]]);

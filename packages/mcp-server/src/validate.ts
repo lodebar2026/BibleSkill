@@ -16,6 +16,7 @@ import {
   parseTokenRange,
   resolveAlignment,
   DEFAULT_LITERALNESS,
+  DISPUTE_KINDS,
   LITERALNESS_LEVELS,
   type ClauseEntity,
   type ClauseText,
@@ -52,6 +53,24 @@ export function canonicalClauseId(value: unknown): unknown {
 
 const clauseIdString = z.preprocess(canonicalClauseId, z.string());
 const nullableClauseId = z.preprocess((value) => (value === '' || value === undefined ? null : canonicalClauseId(value)), z.string().nullable());
+
+/** 格式错误时按出错字段附上正确写法，免得模型反复猜。 */
+const FORMAT_HINTS: Record<string, string> = {
+  span: 'span 是整数，不是原文：不合并为 1；合并 N 个连续子句时首句写 N，其后各句写 0、text 为 ""',
+  tokens: 'tokens 是一个字符串：单个词 id（如 o010010010012、n40001001001）或连续范围「首id-末id」；不连续的几个词分成几条 rendering，不要用逗号或数组',
+  zh: 'zh 是这个（些）词在本行译文里的中文，必须原样出现在去掉 [ ] 的 text 中',
+  kind: `kind 只能是 ${DISPUTE_KINDS.join('、')}`,
+  firstWordId: 'firstWordId / lastWordId 是 briefing 里的词 id 字符串，如 o010010010011',
+  lastWordId: 'firstWordId / lastWordId 是 briefing 里的词 id 字符串，如 o010010010011',
+  parentId: 'parentId 是母句的子句 id（bcv+字母，如 1001001a），独立句为 null',
+  status: 'status 只能是 accepted、ambiguous 或 needs-review',
+};
+
+function formatError(label: string, index: number, error: z.ZodError): Error {
+  const keys = new Set(error.issues.map((issue) => [...issue.path].reverse().find((part) => typeof part === 'string')).filter((key) => key !== undefined));
+  const hints = [...new Set([...keys].map((key) => FORMAT_HINTS[key as string]).filter(Boolean))];
+  return new Error(`第 ${index + 1} 条${label}格式不对: ${z.prettifyError(error)}${hints.length ? `\n正确写法：\n- ${hints.join('\n- ')}` : ''}`);
+}
 
 /** 模型提交的子句：必填结构字段，其余可省（取空值）。 */
 export const SubmittedClauseSchema = z.object({
@@ -174,7 +193,7 @@ export function checkClauseAnalysis(
   rawClauses.forEach((raw, index) => {
     const parsed = SubmittedClauseSchema.safeParse(raw);
     if (!parsed.success) {
-      throw new Error(`第 ${index + 1} 条子句格式不对: ${z.prettifyError(parsed.error)}`);
+      throw formatError('子句', index, parsed.error);
     }
     const clause = parsed.data;
     let bcv: number;
@@ -414,7 +433,7 @@ export function checkTranslations(
   raw.forEach((item, index) => {
     const parsed = SubmittedTranslationSchema.safeParse(item);
     if (!parsed.success) {
-      throw new Error(`第 ${index + 1} 条译文格式不对: ${z.prettifyError(parsed.error)}`);
+      throw formatError('译文', index, parsed.error);
     }
     const { bcv } = parseClauseId(parsed.data.clauseId);
     if (!clausesByVerse.has(bcv)) {

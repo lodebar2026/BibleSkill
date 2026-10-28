@@ -59,7 +59,7 @@ import {
   type ConsistencyIssue,
 } from './consistency.js';
 import { checkClauseAnalysis, checkTranslations, type SeedOverride, type VerseError } from './validate.js';
-import { collectDisputes, hasDisputes } from './disputes.js';
+import { collectDisputes } from './disputes.js';
 import { ambiguityHints } from './ambiguity.js';
 import { reviewChapter, verseRanges, type HumanReviewItem, type ReviewIssue } from './review.js';
 import {
@@ -104,10 +104,25 @@ function rangeTokens(deps: Deps, range: ScriptureRange): Map<number, Token[]> {
 
 const STYLE_PRIORITY = '个人风格是偏好：只在原文两种译法都成立时采用；与当前档位的翻译原则、术语表冲突时以原则和术语表为准。';
 
-/** briefing 里的个人风格（工作目录 style.md）；没有时不给。 */
-async function styleBriefing(deps: Deps) {
+/** style.md 里标题含「切分」的 ## 小节：子句分析只用得到这些。 */
+function segmentationSections(text: string): string {
+  return text.split(/^(?=## )/m).filter((section) => /^## .*切分/.test(section)).join('').trim();
+}
+
+/**
+ * briefing 里的个人风格（工作目录 style.md）；没有时不给。
+ * analyze 只给切分偏好；translate 不重复 approach 已给的选项；full（修改历史学习）给全文与选项。
+ */
+async function styleBriefing(deps: Deps, scope: 'analyze' | 'translate' | 'full') {
   const style = await deps.store.readStyle();
-  return style ? { options: style.options, text: style.text || undefined, priority: STYLE_PRIORITY } : undefined;
+  if (!style) {
+    return undefined;
+  }
+  if (scope === 'analyze') {
+    const text = segmentationSections(style.text);
+    return text ? { text, priority: STYLE_PRIORITY } : undefined;
+  }
+  return { options: scope === 'full' ? style.options : undefined, text: style.text || undefined, priority: STYLE_PRIORITY };
 }
 
 /** 当前翻译档位（style.md 的 literalness；没有 style.md 时为 2）。 */
@@ -154,6 +169,11 @@ function tokensTsv(verses: Map<number, Token[]>): string {
   return lines.join('\n');
 }
 
+/** 形态说明去掉「Function=」之类的键名与 hence，如 `Verb; Qal (Simple; Active); Imperfect (...); First; ...`。 */
+function compactMorph(expansion: string): string {
+  return expansion.replace(/\bhence /g, '').replace(/\b\w+=/g, '').replace(/\s*;\s*/g, '; ').replace(/;\s*$/, '').trim();
+}
+
 function morphLegend(deps: Deps, verses: Map<number, Token[]>): Record<string, string> {
   const legend: Record<string, string> = {};
   for (const tokens of verses.values()) {
@@ -162,7 +182,7 @@ function morphLegend(deps: Deps, verses: Map<number, Token[]>): Record<string, s
         if (!(code in legend)) {
           const expansion = deps.db.morphExpansion(code);
           if (expansion) {
-            legend[code] = expansion;
+            legend[code] = compactMorph(expansion);
           }
         }
       }
@@ -309,7 +329,7 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
     existingClauses: existing.length > 0 ? existing : undefined,
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
-    style: await styleBriefing(deps),
+    style: await styleBriefing(deps, 'analyze'),
     submit: 'submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词；id 为 bcv+字母（如 1001001a）。',
   };
 }
@@ -474,7 +494,8 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       note: clause.note || undefined,
       text: tokens.map((token) => token.surface + token.after).join('').trim(),
       contentTokens: tokens.filter((token) => isContentWord(token.morph, token.strong)).map((token) => token.id).join(','),
-      disputes: hasDisputes(disputes.get(clause.id)) ? disputes.get(clause.id) : undefined,
+      // 子句分析的其他读法已在 alternatives 里，这里只给异文
+      disputes: disputes.get(clause.id)?.textual.length ? { textual: disputes.get(clause.id)!.textual } : undefined,
     };
   });
 
@@ -546,8 +567,8 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       : undefined,
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
-    style: await styleBriefing(deps),
-    submit: 'submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering；有 disputes 的子句须给 alternatives 或 note。',
+    style: await styleBriefing(deps, 'translate'),
+    submit: 'submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering；status 为 ambiguous 的子句须给 alternatives 并在 note 写主译理由，有 disputes.textual 的须给 textual alternative 或 note。',
   };
 }
 
@@ -835,7 +856,7 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
       ? { ranges: legacy, note: '这些节的补词还以 [ ] 字符存在译文里（旧格式），请用户在 BibleSkill 目录运行 pnpm migrate:segments --workdir <工作目录> 转成补词段' }
       : undefined,
     approach: await approachBriefing(deps),
-    style: await styleBriefing(deps),
+    style: await styleBriefing(deps, 'translate'),
     next: retranslate.length > 0
       ? 'retranslate 中的范围按 bible-translate 流程整节重提（structure 里提示没有子句分析或子句对不上的，先 analyze）；humanReview 逐条列给用户复核'
       : humanReview.length > 0
@@ -907,7 +928,7 @@ export async function revisionReport(deps: Deps, target: { range?: ScriptureRang
     origins,
     ...report,
     termPreferences: (await deps.store.readTermPreferences()).length,
-    style: await styleBriefing(deps),
+    style: await styleBriefing(deps, 'full'),
     guidance: 'renderingChanges 已按原文义项归并，count 高且方向一致的是术语偏好候选；stillFrom 是当前仍用旧译法的子句。'
       + 'textChanges 只有文本：用 get_passage 看例句所在节的原文，判断改动属于哪个原文词（术语偏好）、哪种形态规律（规则）还是纯中文表达（风格）。'
       + '同一组改动方向不一、或与原文不符的，列为疑似误改，不要写入。',

@@ -42,10 +42,10 @@
 
 ## 争议
 
-`clauses[].disputes` 是系统已知的争议：
+系统已知的争议：
 
-- `analysis`：子句分析标为 ambiguous 的其他读法 → **必须**给 alternatives，并在 note 写主译理由。
-- `textual`：影响翻译的经文异文 → 给 `kind: "textual"` 的 alternative（异文读法的译文），或在 note 说明为何不影响译文。
+- `clauses[].status` 为 `ambiguous`：子句分析的其他读法在该子句的 `alternatives` 里 → **必须**给 alternatives，并在 note 写主译理由。
+- `clauses[].disputes.textual`：影响翻译的经文异文 → 给 `kind: "textual"` 的 alternative（异文读法的译文），或在 note 说明为何不影响译文。
 
 `ambiguityHints`（旧约）是系统按词形与重音找出的歧义线索。子句分析没有处理到的，逐条检验，成立的列 alternatives。
 

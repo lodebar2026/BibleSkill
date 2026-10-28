@@ -42,7 +42,7 @@ function getDeps(): Deps {
 }
 
 function json(payload: unknown) {
-  return { content: [{ type: 'text' as const, text: JSON.stringify(payload, null, 2) }] };
+  return { content: [{ type: 'text' as const, text: JSON.stringify(payload) }] };
 }
 
 function text(value: string) {

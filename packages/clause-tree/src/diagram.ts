@@ -61,7 +61,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 
 .scroller { overflow-x: auto; padding-bottom: 6px; }
 .canvas { position: relative; }
-.forest { display: flex; flex-direction: column; align-items: flex-start; gap: 30px; padding: 4px 0; }
+.forest { display: flex; flex-direction: column; align-items: flex-start; gap: 40px; padding: 4px 0; }
 .forest .box.vstart { margin-top: 14px; }
 .forest .box.vstart:first-child { margin-top: 0; }
 .box { position: relative; z-index: 2; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
@@ -76,18 +76,15 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .box[data-form="wayyiqtol"] { --tc: #F656B8; } .box[data-form="qatal"] { --tc: #FF0000; } .box[data-form="weqatal"] { --tc: #2A7FFF; }
 .box[data-form="yiqtol"] { --tc: #00CC00; } .box[data-form="participle"] { --tc: #9E5329; } .box[data-form="infinitive"] { --tc: #6B6B6B; }
 .box[data-form="imperative"] { --tc: #A449FF; } .box[data-form="nominal"] { --tc: #B8B0A2; }
-.bh .ty { font-size: 12px; font-weight: 700; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-family: ui-monospace, Menlo, monospace; }
+.bh .ty { font-size: 12px; font-weight: 700; color: var(--tc); border: 1.5px solid var(--tc); border-radius: 4px; padding: 0 5px; font-family: ui-monospace, Menlo, monospace; }
 .bh .mk { font-size: 11px; border-radius: 4px; padding: 0 5px; color: var(--ink); background: var(--soft); border: 1px dashed var(--muted); }
 .forest.ot-forms { padding-inline-start: 30px; }
 .hide-forms .box[data-form] { border-color: var(--line); border-width: 1.5px; }
 .hide-forms .box.root[data-form] { border-color: var(--accent); border-width: 2.5px; }
-.hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .dot, .hide-forms #wires .spine { display: none; }
+.hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .spine { display: none; }
 #wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
-#wires .dot { stroke-width: 2; opacity: .7; }
 .forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
 .forms-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; border: 2px solid var(--tc); }
-.forms-legend i.dot { width: 10px; border-radius: 50%; background: var(--muted); border-color: var(--muted); }
-.forms-legend i.dot.o { background: none; }
 .bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 .box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 .box[hidden] { display: none; }
@@ -432,8 +429,26 @@ function diagramClient(D: DiagramData): void {
     const rtl = D.isOT;
     const start = (rect: DOMRect) => (rtl ? rect.right : rect.left) - base.left;
     const allBoxes = $$('.box', canvas);
-    // 指向同一个词的线共用一条横道（汇成主干）；同一母句里指向不同词的，横道上下错开
+    // 已画线段（横、竖），候选位置按与它们的交叉数取最少；同一条主干上的重合不算交叉
+    type Seg = { x1: number; y1: number; x2: number; y2: number };
+    const segs: Seg[] = [];
+    const crosses = (a: Seg, b: Seg) => {
+      const [h, v] = a.y1 === a.y2 ? [a, b] : [b, a];
+      if (h.y1 !== h.y2 || v.x1 !== v.x2) {
+        return false;
+      }
+      const [hx1, hx2] = [Math.min(h.x1, h.x2), Math.max(h.x1, h.x2)];
+      const [vy1, vy2] = [Math.min(v.y1, v.y2), Math.max(v.y1, v.y2)];
+      return v.x1 > hx1 + 1 && v.x1 < hx2 - 1 && h.y1 > vy1 + 1 && h.y1 < vy2 - 1;
+    };
+    const cost = (path: Seg[]) => path.reduce((sum, seg) => sum + segs.filter((other) => crosses(seg, other)).length, 0);
+    const polyline = (points: Array<[number, number]>): Seg[] => points.slice(1).map(([x, y], i) => ({ x1: points[i][0], y1: points[i][1], x2: x, y2: y }));
+    const pathD = (points: Array<[number, number]>) => points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ');
+
+    // ---- 句法：指向同一个词的线共用一条横道（汇成主干）；同一母句里指向不同词的，横道上下错开 ----
     const lanes = new Map<string, Map<string, number>>();
+    type Wire = { gutters: number[]; points: (g: number) => Array<[number, number]>; span: number };
+    const wires: Wire[] = [];
     for (const clause of D.clauses) {
       if (!clause.parentId || !byId.has(clause.parentId)) {
         continue;
@@ -466,40 +481,46 @@ function diagramClient(D: DiagramData): void {
       const yChild = c.top + Math.min(22, c.height / 2) - base.top;
       const target = clause.targetWordId ? $(`[data-id="${clause.targetWordId}"] .g`, parentBox) : null;
       const t = target?.getBoundingClientRect();
-      const xTarget = t ? t.left + t.width / 2 - base.left : gutter;
       const edge = (below ? p.bottom : p.top) - base.top;
-      const yLane = below ? edge + 8 + lane * 6 : edge - 8 - lane * 6;
+      // 横道离母句至少 18px：箭头（9px）前留一段竖线，折点不直接接在箭头上
+      const yLane = below ? edge + 18 + lane * 6 : edge - 18 - lane * 6;
+      const x0 = start(c);
+      wires.push({
+        // 候选沟槽：基准位置，以及往外每 6px 一档
+        gutters: [0, 1, 2, 3, 4, 5].map((k) => gutter + (rtl ? 1 : -1) * k * 6),
+        points: (g) => [[x0, yChild], [g, yChild], [g, yLane], [t ? t.left + t.width / 2 - base.left : g, yLane], [t ? t.left + t.width / 2 - base.left : g, below ? edge + 1 : edge - 1]],
+        span: Math.abs(yChild - yLane),
+      });
+    }
+    // 跨度短的先画（贴近母句），长的后画、在候选沟槽里挑交叉最少的
+    for (const wire of wires.sort((a, b) => a.span - b.span)) {
+      let best = wire.gutters[0];
+      let bestCost = Infinity;
+      for (const g of wire.gutters) {
+        const value = cost(polyline(wire.points(g)));
+        if (value < bestCost) {
+          best = g;
+          bestCost = value;
+        }
+        if (value === 0) {
+          break;
+        }
+      }
+      const points = wire.points(best);
+      segs.push(...polyline(points));
       const path = document.createElementNS(SVG, 'path');
-      // 子句框头 → 沟槽 → 母句旁的空隙 → 横到被修饰的词 → 进母句
-      path.setAttribute('d', `M${start(c)},${yChild} L${gutter},${yChild} L${gutter},${yLane} L${xTarget},${yLane} L${xTarget},${below ? edge + 1 : edge - 1}`);
+      path.setAttribute('d', pathD(points));
       path.setAttribute('marker-end', 'url(#ah)');
       svg.append(path);
     }
-    // 序列：会话（同一母句下的各句）在句法主干上打点，叙事主线（顶层各句）连成最外侧的脊线；点按动词形式着色，离线/前置为空心
-    const dot = (x: number, y: number, clause: (typeof D.clauses)[number], box: HTMLElement) => {
-      const circle = document.createElementNS(SVG, 'circle');
-      const hollow = fronted(clause.type) || offline(clause);
-      circle.setAttribute('class', 'dot');
-      circle.setAttribute('cx', String(x));
-      circle.setAttribute('cy', String(y));
-      circle.setAttribute('r', '6');
-      const color = getComputedStyle(document.body).color;
-      circle.setAttribute('stroke', color);
-      circle.setAttribute('fill', hollow ? getComputedStyle(document.body).backgroundColor : color);
-      svg.append(circle);
-    };
-    const roots: Array<[number, (typeof D.clauses)[number], HTMLElement]> = [];
+
+    // ---- 叙事主线：顶层各句用短横线接到最外侧的脊线（不画圆点，前置/离线看框头标签） ----
+    const roots: Array<[number, HTMLElement]> = [];
     for (const clause of D.clauses) {
       const box = $(`[data-box="${clause.id}"]`);
-      if (!box || !box.dataset.form || box.hidden) {
-        continue;
-      }
-      const r = box.getBoundingClientRect();
-      const y = r.top + Math.min(22, r.height / 2) - base.top;
-      if (clause.parentId && byId.has(clause.parentId)) {
-        dot(start(r) + (rtl ? 16 : -16), y, clause, box);
-      } else {
-        roots.push([y, clause, box]);
+      if (box && box.dataset.form && !box.hidden && !(clause.parentId && byId.has(clause.parentId))) {
+        const r = box.getBoundingClientRect();
+        roots.push([r.top + Math.min(22, r.height / 2) - base.top, box]);
       }
     }
     if (roots.length > 0) {
@@ -509,24 +530,23 @@ function diagramClient(D: DiagramData): void {
       spine.setAttribute('class', 'spine');
       spine.setAttribute('d', `M${x},${roots[0][0]} L${x},${roots.at(-1)![0]}`);
       svg.append(spine);
-      for (const [y, clause, box] of roots) {
+      for (const [y, box] of roots) {
         const tick = document.createElementNS(SVG, 'path');
         tick.setAttribute('class', 'spine');
         tick.setAttribute('d', `M${x},${y} L${start(box.getBoundingClientRect())},${y}`);
         tick.style.strokeWidth = '1.5';
         svg.append(tick);
-        dot(x, y, clause, box);
       }
     }
     if (canvas.classList.contains('hide-logic')) {
       return;
     }
-    // 逻辑关系：虚线走在框的另一侧（尾侧），从本句连到关联子句（一段时连到首句并标出范围）。
-    // 竖线避开这一段所有框的尾侧；与已画的竖线纵向重叠又靠得太近时再往外挪一道；指向同一句的箭头上下错开
+
+    // ---- 逻辑关系：虚线走在框的另一侧（尾侧），从本句连到关联子句（一段时连到首句并标出范围）。
+    // 跨度短的贴近方框、长的往外（嵌套的不相交）；每条在候选车道里挑交叉最少、又不与纵向重叠的竖线贴得太近的；指向同一句的箭头上下错开 ----
     const end = (rect: DOMRect) => (rtl ? rect.left : rect.right) - base.left;
     const outer = (a: number, b: number) => (rtl ? Math.min(a, b) : Math.max(a, b));
-    const placed: Array<{ x: number; top: number; bottom: number }> = [];
-    const incoming = new Map<string, number>();
+    const links: Array<{ clause: (typeof D.clauses)[number]; c: DOMRect; t: DOMRect; top: number; bottom: number; edge: number }> = [];
     for (const clause of D.clauses) {
       const targetId = clause.logic?.targetIds[0];
       const childBox = targetId ? $(`[data-box="${clause.id}"]`) : null;
@@ -545,24 +565,44 @@ function diagramClient(D: DiagramData): void {
           edge = outer(edge, end(r));
         }
       }
-      let x = edge + (rtl ? -18 : 18);
-      while (placed.some((line) => line.top < bottom && line.bottom > top && Math.abs(line.x - x) < 12)) {
-        x += rtl ? -14 : 14;
-      }
-      placed.push({ x, top, bottom });
-      const arrivals = incoming.get(targetId!) ?? 0;
-      incoming.set(targetId!, arrivals + 1);
+      links.push({ clause, c, t, top, bottom, edge });
+    }
+    const verticals: Array<{ x: number; top: number; bottom: number }> = [];
+    const incoming = new Map<string, number>();
+    for (const { clause, c, t, top, bottom, edge } of links.sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top))) {
+      const targetId = clause.logic!.targetIds[0];
+      const arrivals = incoming.get(targetId) ?? 0;
+      incoming.set(targetId, arrivals + 1);
       const y1 = c.top + Math.min(22, c.height / 2) - base.top;
       const y2 = t.top + Math.min(14 + arrivals * 9, t.height - 6) - base.top;
+      const points = (x: number): Array<[number, number]> => [[end(c), y1], [x, y1], [x, y2], [end(t), y2]];
+      let best = 0;
+      let bestCost = Infinity;
+      for (let k = 0; k < 16; k += 1) {
+        const x = edge + (rtl ? -1 : 1) * (18 + k * 12);
+        if (verticals.some((line) => line.top < bottom && line.bottom > top && Math.abs(line.x - x) < 10)) {
+          continue;
+        }
+        const value = cost(polyline(points(x)));
+        if (value < bestCost) {
+          best = x;
+          bestCost = value;
+        }
+        if (value === 0) {
+          break;
+        }
+      }
+      verticals.push({ x: best, top, bottom });
+      segs.push(...polyline(points(best)));
       const path = document.createElementNS(SVG, 'path');
       path.setAttribute('class', 'logic');
-      path.setAttribute('d', `M${end(c)},${y1} L${x},${y1} L${x},${y2} L${end(t)},${y2}`);
+      path.setAttribute('d', pathD(points(best)));
       path.setAttribute('marker-end', 'url(#lh)');
       svg.append(path);
       const label = document.createElement('div');
       label.className = 'll';
-      label.textContent = clause.logic.targetIds.length > 1 ? `${clause.logic.label} → ${clause.logic.targetText}` : clause.logic.label;
-      label.style.left = `${x}px`;
+      label.textContent = clause.logic!.targetIds.length > 1 ? `${clause.logic!.label} → ${clause.logic!.targetText}` : clause.logic!.label;
+      label.style.left = `${best}px`;
       label.style.top = `${(y1 + y2) / 2}px`;
       canvas.append(label);
     }
@@ -702,7 +742,7 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
       <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
       <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
       <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
-      <span>· 最外侧竖线 = 叙事主线，句法主干上的点 = 会话序列 · <i class="dot"></i>实心 = 顺序推进 <i class="dot o"></i>空心 = 前置（X-动词，凸显/对比）或离开 wayyiqtol 主线</span>
+      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「前置」= X-动词语序（凸显/对比），「离线」= 顶层不用 wayyiqtol</span>
     </div>` : ''}
   </section>
 </main>

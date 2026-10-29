@@ -87,7 +87,7 @@ assertUniqueIds(ntTokens);
 log('对齐 Macula Hebrew…');
 const ot = processMacula('OT', path.join(maculaHebrewDir, 'WLC/lowfat'), otTokens, report);
 log('对齐 Macula Greek (SBLGNT)…');
-const nt = processMacula('NT', path.join(maculaGreekDir, 'SBLGNT/lowfat'), ntTokens, report);
+const nt = processMacula('NT', path.join(maculaGreekDir, 'SBLGNT/lowfat'), ntTokens, report, ot.syntaxNodes.length + 1);
 
 log('读取词典…');
 const lexicon = [...readStepLexicon(stepDir, 'TBESH'), ...readStepLexicon(stepDir, 'TBESG'), ...readUbsLexicon(ubsDir)];
@@ -134,6 +134,15 @@ for (const seed of [...ot.seeds, ...nt.seeds]) {
     seed.attributive ? 1 : 0, seed.predicateToken, seed.subjectTokens.length > 0 ? seed.subjectTokens.join(',') : null, seed.tokens.join(','));
 }
 
+const insertNode = db.prepare('insert into syntax_node (id, parent_id, role, rule, class, clause_type) values (?, ?, ?, ?, ?, ?)');
+for (const node of [...ot.syntaxNodes, ...nt.syntaxNodes]) {
+  insertNode.run(node.id, node.parentId, node.role, node.rule, node.cls, node.clauseType);
+}
+const insertTokenSyntax = db.prepare('insert into token_syntax (token_id, node_id, role) values (?, ?, ?)');
+for (const row of [...ot.tokenSyntax, ...nt.tokenSyntax]) {
+  insertTokenSyntax.run(row.tokenId, row.nodeId, row.role);
+}
+
 const insertLexicon = db.prepare('insert into lexicon (strong, source, lemma, translit, pos, gloss, definition) values (?, ?, ?, ?, ?, ?, ?)');
 for (const row of lexicon) {
   insertLexicon.run(row.strong, row.source, row.lemma, row.translit, row.pos, row.gloss, row.definition);
@@ -162,5 +171,6 @@ for (const [kind] of reportRows) {
 log('');
 log(`旧约主干 ${otTokens.length} 语素，映射 Macula ${percent(ot.stats.mappedTokens, ot.stats.baseTokens)}；Macula 词覆盖 ${percent(ot.stats.mappedWords, ot.stats.maculaWords)}；子句种子 ${ot.seeds.length}`);
 log(`新约主干 ${ntTokens.length} 词（含 SBL ${nt.stats.baseTokens}），映射 Macula ${percent(nt.stats.mappedTokens, nt.stats.baseTokens)}；Macula 词覆盖 ${percent(nt.stats.mappedWords, nt.stats.maculaWords)}；子句种子 ${nt.seeds.length}`);
+log(`短语树结点 旧约 ${ot.syntaxNodes.length}、新约 ${nt.syntaxNodes.length}；挂上短语树的主干词 旧约 ${percent(ot.tokenSyntax.length, otTokens.length)}、新约 ${percent(nt.tokenSyntax.length, ntTokens.length)}`);
 log(`异文词 ${variants.length}；词典条目 ${lexicon.length}；词法代码 ${morphCodes.length}`);
 log(`build_report: ${[...kinds].map(([kind, count]) => `${kind}=${count}`).join(', ')}`);

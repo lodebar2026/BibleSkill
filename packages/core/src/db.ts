@@ -55,6 +55,12 @@ export type SeedClause = {
   tokens: string[];
 };
 
+/** Macula 短语树的一个结点（wg）。 */
+export type SyntaxNode = { id: number; role: string | null; rule: string | null; cls: string | null; clauseType: string | null };
+
+/** 一个主干词在短语树上的位置：词本身的 role，与从句子顶层到所在 wg 的祖先链。 */
+export type TokenSyntax = { role: string | null; path: SyntaxNode[] };
+
 export type LexiconEntry = {
   strong: string;
   source: string;
@@ -115,6 +121,29 @@ export class BibleDb {
         from variant_token where bcv between ? and ? order by bcv, pos_id`)
       .all(startBcv, endBcv)
       .map((row) => ({ ...(row as unknown as VariantToken), significant: (row as { significant: number }).significant === 1 }));
+  }
+
+  /** 这些词在短语树上的位置；没挂上树的词（未对齐、NA28 有而 SBL 没有）不在结果里。 */
+  syntaxForTokens(ids: string[]): Map<string, TokenSyntax> {
+    const result = new Map<string, TokenSyntax>();
+    const leaf = this.db.prepare('select node_id as nodeId, role from token_syntax where token_id = ?');
+    const chain = this.db.prepare(`with recursive up(id, parent_id, role, rule, class, clause_type, depth) as (
+        select id, parent_id, role, rule, class, clause_type, 0 from syntax_node where id = ?
+        union all
+        select n.id, n.parent_id, n.role, n.rule, n.class, n.clause_type, up.depth + 1 from syntax_node n join up on n.id = up.parent_id)
+      select id, role, rule, class as cls, clause_type as clauseType from up order by depth desc`);
+    const paths = new Map<number, SyntaxNode[]>();
+    for (const id of ids) {
+      const row = leaf.get(id) as { nodeId: number; role: string | null } | undefined;
+      if (!row) {
+        continue;
+      }
+      if (!paths.has(row.nodeId)) {
+        paths.set(row.nodeId, chain.all(row.nodeId) as unknown as SyntaxNode[]);
+      }
+      result.set(id, { role: row.role, path: paths.get(row.nodeId)! });
+    }
+    return result;
   }
 
   seedsInRange(startBcv: number, endBcv: number): SeedClause[] {

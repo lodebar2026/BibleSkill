@@ -59,6 +59,7 @@ const nullableClauseId = z.preprocess((value) => (value === '' || value === unde
 /** 格式错误时按出错字段附上正确写法，免得模型反复猜。 */
 const FORMAT_HINTS: Record<string, string> = {
   span: 'span 是整数，不是原文：不合并为 1；合并 N 个连续子句时首句写 N，其后各句写 0、text 为 ""',
+  merge: 'merge 是合并理由（只写在 span>1 的首句上）：reorder（中文调换了语序）、constituent（断开会切在一个成分中间，note 写明切在哪两个成分之间）；第 4、5 档另可用 meaning（按意思合并）',
   tokens: 'tokens 是一个字符串：单个词 id（如 o010010010012、n40001001001）或连续范围「首id-末id」；不连续的几个词分成几条 rendering，不要用逗号或数组',
   zh: 'zh 是这个（些）词在本行译文里的中文，必须原样出现在去掉 [ ] 的 text 中',
   kind: `kind 只能是 ${DISPUTE_KINDS.join('、')}`,
@@ -418,6 +419,8 @@ export function checkClauseAnalysis(
 export const SubmittedTranslationSchema = z.object({
   clauseId: clauseIdString,
   span: z.coerce.number().int().nonnegative().default(1),
+  /** span>1 时的合并理由，见 FORMAT_HINTS.merge。 */
+  merge: z.enum(['reorder', 'constituent', 'meaning']).optional(),
   text: z.string().default(''),
   renderings: z.array(RenderingSchema).default([]),
   /** 争议处的其他译法。 */
@@ -435,6 +438,33 @@ export const SubmittedTranslationSchema = z.object({
   /** 这条译文所用的档位。只在编辑器提交（保留原译文的档位）时采用，见 TranslationCheckOptions。 */
   literalness: z.coerce.number().int().min(1).max(5).optional(),
 }).loose();
+
+/**
+ * 合并后的各行是否与所覆盖的子句一一对应、顺序同原文：第 k 行里的译词全来自第 k 个子句。
+ * 行数与子句数不等、或有子句的译词没定位到时无从判断，返回 false。
+ */
+function sameOrder(plain: string, renderings: Array<{ tokens: string; zh: string }>, positions: Array<number | null>, covered: ClauseEntity[], words: Token[]): boolean {
+  const lines = plain.split('\n');
+  if (lines.length !== covered.length) {
+    return false;
+  }
+  const starts = lines.map((_, k) => lines.slice(0, k).reduce((sum, line) => sum + line.length + 1, 0));
+  const lineOf = (at: number) => starts.filter((start) => start <= at).length - 1;
+  const seen = new Set<number>();
+  for (const [index, rendering] of renderings.entries()) {
+    const at = positions[index];
+    const first = tokensOfRendering(rendering, words)[0];
+    if (at === null || at === undefined || !first || rendering.zh === NOT_TRANSLATED) {
+      continue;
+    }
+    const k = covered.findIndex((clause) => first.id >= clause.firstWordId && first.id <= clause.lastWordId);
+    if (k < 0 || lineOf(at) !== k) {
+      return false;
+    }
+    seen.add(k);
+  }
+  return seen.size === covered.length;
+}
 
 /** rendering.zh 取此值表示该原文词有意不译（须带 note）。 */
 export const NOT_TRANSLATED = '∅';
@@ -458,6 +488,7 @@ export type TranslationCheckOptions = { level?: number; itemLevels?: boolean };
 /**
  * 译文结构校验（用词统一检查另在 consistency.ts）：
  * - 每节子句齐全且按序；span：未合并 1，合并时首句 N、其后 N-1 句为 0，不跨节
+ * - 模型提交的合并（span>1）须写 merge 理由；写 reorder 却各行与子句一一对应、顺序同原文的，拒绝（应拆开）
  * - span>0 的子句 text 非空；span=0 的 text 必须为空
  * - text 里的 [ ] 是补词，拆成 styleName=added 的段；第 4、5 档不用补词，第 1 档不合并子句
  * - renderings 的词落在所覆盖子句内，zh 必须出现在去掉 [ ] 的译文里；存盘时补上 at（zh 在译文中的位置）
@@ -604,6 +635,17 @@ export function checkTranslations(
         fail(bcv, clause.id, '给了 alternatives 时须在 note 写明主译的取舍理由');
       }
       const positions = resolveAlignment(plain, item.renderings);
+      // 合并理由：编辑器、审校复查提交的旧译文（itemLevels）不查
+      if (item.span > 1 && level > 1 && !options.itemLevels) {
+        const allowed = isMeaningBased(level) ? ['reorder', 'constituent', 'meaning'] : ['reorder', 'constituent'];
+        if (!item.merge || !allowed.includes(item.merge)) {
+          fail(bcv, clause.id, `span=${item.span} 要写 merge 说明合并理由：${allowed.join('、')}。中文顺序与原文相同、断开处也不在一个成分中间的，不合并，拆开各自 span=1`);
+        } else if (item.merge === 'constituent' && !note) {
+          fail(bcv, clause.id, 'merge=constituent 时在 note 写明断开会切在哪两个成分之间（如动词与宾语从句之间）');
+        } else if (item.merge === 'reorder' && sameOrder(plain, item.renderings, positions, covered, span)) {
+          fail(bcv, clause.id, `声明 merge=reorder，但合并后 ${item.span} 行与 ${covered.map((c) => c.id).join('、')} 一一对应、顺序和原文相同，没有调换语序：拆开各自 span=1；若断开会切在一个成分中间，改为 merge=constituent 并在 note 写明`);
+        }
+      }
       rows.push({
         bcv, sub,
         translationSpan: item.span,

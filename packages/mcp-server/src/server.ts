@@ -111,7 +111,7 @@ server.registerTool('build_translation_briefing', {
 
 server.registerTool('submit_translation', {
   description:
-    '提交译文。translations 为 JSON 数组，每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], supplied?:[{text, note}], paraTitle?}。'
+    '提交译文。translations 为 JSON 数组，每个子句一项 {clauseId, span, merge?, text, renderings:[{tokens, zh, note?}], supplied?:[{text, note}], paraTitle?}；span>1 时 merge 写合并理由 reorder | constituent（第 4、5 档另可 meaning）。'
     + 'text 里补出的词用 [ ] 标出（第 4、5 档不用），supplied 给补词写说明。'
     + '按节校验结构与用词统一；未通过的节在 errors / consistency 返回，需整节重提。',
   inputSchema: loose({ range, translations: z.any().optional() }),

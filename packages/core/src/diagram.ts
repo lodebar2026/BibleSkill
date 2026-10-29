@@ -2,10 +2,11 @@
  * 结构图的数据：子句框（层级、成分块、挂接目标）、逐词信息、词典、自动要点。
  *
  * 结构一律以工作目录里的子句分析为准（clause_entities.json：切分、parentId、modifies、主语、谓语），
- * 不取 Macula。bible-diagram 写入的说明（diagram.json）只补子句功能、连线标签、大意与要点。
+ * 不取 Macula 的子句切分；子句内部的成分（宾语、间接宾语、状语、表语）与块内折行照 Macula 短语树（新、旧约都是）。
+ * bible-diagram 写入的说明（diagram.json）只补子句功能、连线标签、大意与要点。
  * 纯函数 buildDiagram 便于测试；loadDiagram 负责读库与工作文件。
  */
-import type { BibleDb, Token, VariantToken } from './db.js';
+import type { BibleDb, SyntaxNode, Token, TokenSyntax, VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
 import { LOGIC_LABELS } from './logic.js';
@@ -30,13 +31,42 @@ export type DiagramWord = {
   rendering: string | null;
   /** 异文、读型、NA28 双括号等提示。 */
   variant: string | null;
+  /** 新约：名词性词的格；动词的时态、语气（着色用）。 */
+  gcase: GreekCase | null;
+  tense: GreekTense | null;
+  mood: GreekMood | null;
 };
 
+export type GreekCase = 'nom' | 'gen' | 'dat' | 'acc' | 'voc';
+export type GreekTense = 'pres' | 'impf' | 'fut' | 'aor' | 'perf' | 'plpf';
+export type GreekMood = 'ind' | 'subj' | 'opt' | 'impv' | 'inf' | 'ptcp';
+
+const CASES: Record<string, GreekCase> = { N: 'nom', G: 'gen', D: 'dat', A: 'acc', V: 'voc' };
+const TENSES: Record<string, GreekTense> = { P: 'pres', I: 'impf', F: 'fut', A: 'aor', R: 'perf', L: 'plpf' };
+const MOODS: Record<string, GreekMood> = { I: 'ind', S: 'subj', O: 'opt', M: 'impv', N: 'inf', P: 'ptcp' };
+
 /**
- * 成分块：主语、谓语取自分析；句首连接词按词法认出；其余相邻的词合成一块，不标角色。
- * pauses：每个词之后能否换行、停顿多强（页面按实际排版宽度在停顿最强处切行）。
+ * Robinson 词法码里的格、时态、语气：`N-DSF`、`P-1GP`（人称代词先写人称）、`S-1SGSN`（物主代词先写所有者的人称、数）、
+ * `V-2AAP-NSM`（第二不定过去式分词，格在末段）。不变格的词（`A-NUI`）没有格。
  */
-export type DiagramChip = { role: 's' | 'v' | 'conj' | null; wordIds: string[]; pauses?: number[] };
+export function greekMorph(morph: string): { gcase: GreekCase | null; tense: GreekTense | null; mood: GreekMood | null } {
+  const verb = morph.match(/^V-2?([PIFARL])[A-Z]([ISOMNP])(?:-([NGDAV])?)?/);
+  if (verb) {
+    return { gcase: verb[2] === 'P' ? CASES[verb[3] ?? ''] ?? null : null, tense: TENSES[verb[1]], mood: MOODS[verb[2]] };
+  }
+  const nominal = morph.match(/^[NARCDTKIXQFS]-(?:[123][SP](?=[NGDAV][SP]))?(?:[123](?=[NGDAV]))?([NGDAV])[SP][MFN]?(?:-|$)/)
+    ?? morph.match(/^P-(?:[123])?([NGDAV])[SP]/);
+  return { gcase: nominal ? CASES[nominal[1]] : null, tense: null, mood: null };
+}
+
+/**
+ * 成分块：主语、谓语取自分析；句首连接词按词法认出。其余的词按 Macula 短语树分成宾语、间接宾语、状语、表语等，
+ * 每个成分一块；谓语不在短语树上时，相邻的词合成一块，不标角色。
+ * pauses：每个词之后能否换行、停顿多强（页面按实际排版宽度在停顿最强处切行）。
+ * indents：某词起头的一行缩进几级（嵌入的分词短语、关系从句缩进一级），没有缩进时省略。
+ */
+export type ChipRole = 's' | 'v' | 'o' | 'o2' | 'io' | 'adv' | 'p' | 'conj';
+export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[] };
 
 /** 词后不能断（词缀、maqqef 相连）。 */
 export const PAUSE_JOINED = -1;
@@ -85,6 +115,8 @@ export type DiagramClause = {
   status: ClauseEntity['status'];
   /** 旧约句型展示码（WayX、XQtl、NmCl…）；新约为空。 */
   type: string;
+  /** 新约：谓语动词的时态与语气，如 `aor-ind`；没有动词谓语时为 null。 */
+  ntForm: string | null;
   chips: DiagramChip[];
   /** 连线起点（本句首词）与终点（母句中被修饰的词）。 */
   fromWordId: string;
@@ -106,6 +138,8 @@ export type DiagramLexiconEntry = { source: string; lemma: string; gloss: string
 export type DiagramData = {
   title: string;
   isOT: boolean;
+  /** 新约叙事书卷（福音书、使徒行传、启示录）：顶层主句按时态串成主线。 */
+  narrative: boolean;
   /** 译文档位，如「第 3 档「平衡」」；没有译文时为 null。 */
   literalness: string | null;
   verses: DiagramVerse[];
@@ -123,6 +157,9 @@ export type DiagramInput = {
   variants: VariantToken[];
   notes: DiagramNote[];
   morphExpansion: (code: string) => string | null;
+  /** 新约词在 Macula 短语树上的位置（成分分块、块内折行用）；不给时按旧写法分块。 */
+  syntax?: Map<string, TokenSyntax>;
+  narrative?: boolean;
 };
 
 const KIND_ZH: Record<string, string> = { textual: '异文', punctuation: '断句', syntax: '句法', lexical: '词义', other: '其他' };
@@ -175,26 +212,170 @@ function variantOf(token: Token, isOT: boolean): string | null {
   return parts.length > 0 ? parts.join('；') : null;
 }
 
-function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean): DiagramChip[] {
+/** Macula 的成分角色；希伯来文的介词短语角色 pp 按状语显示。 */
+const MACULA_ROLES: Record<string, ChipRole> = { s: 's', v: 'v', vc: 'v', o: 'o', o2: 'o2', io: 'io', adv: 'adv', pp: 'adv', p: 'p' };
+
+/** 连词：新约 CONJ，旧约 HC/Hc（含连续式 וַ）。 */
+const isConjunction = (token: Token, isOT: boolean) => (isOT ? /^[HA][Cc]$/.test(token.morph) : token.morph === 'CONJ');
+
+/** 短语树：每个结点覆盖范围内的哪些词（判断一个短语是否整个落在子句里）。 */
+function nodeWords(syntax: Map<string, TokenSyntax>): Map<number, Set<string>> {
+  const result = new Map<number, Set<string>>();
+  for (const [id, { path }] of syntax) {
+    for (const node of path) {
+      result.set(node.id, (result.get(node.id) ?? new Set()).add(id));
+    }
+  }
+  return result;
+}
+
+/**
+ * 每个词归入哪个成分：谓语所在的子句结点 C（Macula class=cl）下的直属成分各成一组，角色取 Macula 的 role；
+ * 不在 C 之下的词（前置的冠词、悬垂话题）取整个落在本子句里、又不含 C 的最高短语成组。谓语不在树上时返回 null。
+ */
+function constituentsOf(words: Token[], verbId: string | undefined, syntax: Map<string, TokenSyntax>, covered: Map<number, Set<string>>):
+  Array<{ key: string; role: ChipRole | null }> | null {
+  const verbPath = verbId ? syntax.get(verbId)?.path : undefined;
+  const cIndex = verbPath ? verbPath.map((node) => node.cls).lastIndexOf('cl') : -1;
+  if (!verbPath || cIndex < 0) {
+    return null;
+  }
+  const clauseNode = verbPath[cIndex];
+  const aboveClause = new Set(verbPath.slice(0, cIndex + 1).map((node) => node.id));
+  const inClause = new Set(words.map((word) => word.id));
+  const roleOf = (value: string | null) => MACULA_ROLES[value ?? ''] ?? null;
+  const groups = words.map((word): { key: string; role: ChipRole | null } | null => {
+    const own = syntax.get(word.id);
+    if (!own) {
+      return null;
+    }
+    const k = own.path.findIndex((node) => node.id === clauseNode.id);
+    if (k === own.path.length - 1) {
+      return { key: `w${word.id}`, role: roleOf(own.role) };
+    }
+    if (k >= 0) {
+      return { key: `n${own.path[k + 1].id}`, role: roleOf(own.path[k + 1].role) };
+    }
+    const outer = own.path.find((node) => !aboveClause.has(node.id) && [...covered.get(node.id) ?? []].every((id) => inClause.has(id)));
+    return outer ? { key: `n${outer.id}`, role: roleOf(outer.role) } : { key: `w${word.id}`, role: roleOf(own.role) };
+  });
+  // 不在树上的词（NA28 有而 SBL 没有，如 7:43 的 [ὑμῶν]）随前一个成分，句首的随后一个
+  return groups.map((group, index) => group ?? groups.slice(0, index).reverse().find(Boolean) ?? groups.slice(index).find(Boolean)
+    ?? { key: `w${words[index].id}`, role: null });
+}
+
+/** 子句、或带冠词的子句（τοῦ λαλοῦντος…）：块内自成一行、缩进一级。 */
+const isClauseNode = (node: SyntaxNode) => node.cls === 'cl';
+
+/**
+ * 块内按短语树折行：相邻两词的最近共同祖先越浅，停顿越强；块较长（超过 6 词）时，
+ * 嵌入的子句（连同前面的冠词）前后与并列连词 καί 之前必断，嵌入子句那几行缩进一级。
+ */
+function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: boolean): { pauses: number[]; indents: number[] } | null {
+  const paths = chipWords.map((word) => syntax.get(word.id)?.path);
+  paths.forEach((path, i) => {
+    paths[i] = path ?? paths[i - 1] ?? paths.slice(i).find(Boolean);
+  });
+  if (paths.some((path) => !path)) {
+    return null;
+  }
+  const ids = paths.map((path) => path!.map((node) => node.id));
+  const common = ids.slice(0, -1).map((path, i) => {
+    let n = 0;
+    while (n < path.length && n < ids[i + 1].length && path[n] === ids[i + 1][n]) {
+      n += 1;
+    }
+    return n;
+  });
+  const shallowest = Math.min(...common);
+  const pauses = chipWords.map((word, i) => {
+    const punct = pauseAfter(word, isOT);
+    return i < common.length && punct !== PAUSE_JOINED ? Math.max(punct, Math.max(0, 4 - (common[i] - shallowest))) : punct;
+  });
+  const indents = chipWords.map(() => 0);
+  if (chipWords.length > 6) {
+    const blocks = new Map<number, [number, number]>();
+    paths.forEach((path, i) => {
+      for (const node of path!) {
+        if (isClauseNode(node) && !ids[0].includes(node.id)) {
+          const [from, to] = blocks.get(node.id) ?? [i, i];
+          blocks.set(node.id, [Math.min(from, i), Math.max(to, i)]);
+        }
+      }
+    });
+    const seen = new Set<string>();
+    for (let [from, to] of blocks.values()) {
+      // 子句前紧挨着的冠词（DetCL）一起缩进；外层 DetCL 与里面的子句覆盖同一段，只算一级
+      if (!isOT && from > 0 && chipWords[from - 1].morph.startsWith('T-') && ids[from].includes(ids[from - 1].at(-1)!)) {
+        from -= 1;
+      }
+      if (seen.has(`${from}-${to}`)) {
+        continue;
+      }
+      seen.add(`${from}-${to}`);
+      for (let i = from; i <= to; i += 1) {
+        indents[i] += 1;
+      }
+      if (from > 0) {
+        pauses[from - 1] = PAUSE_FORCED;
+      }
+      if (to < chipWords.length - 1) {
+        pauses[to] = PAUSE_FORCED;
+      }
+    }
+    chipWords.forEach((word, i) => {
+      if (i > 0 && isConjunction(word, isOT) && pauses[i - 1] !== PAUSE_JOINED) {
+        pauses[i - 1] = PAUSE_FORCED;
+      }
+    });
+  }
+  return { pauses, indents };
+}
+
+function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: Map<string, TokenSyntax>, covered?: Map<number, Set<string>>): DiagramChip[] {
   const subject = idsInRange(clause.subjectRange, words);
   const verb = idsInRange(clause.verbRange, words);
+  const groups = syntax && covered ? constituentsOf(words, [...verb][0], syntax, covered) : null;
+  // 后置连词（ὁ γὰρ Μωϋσῆς）夹在同一个成分中间时随成分走
+  groups?.forEach((group, index) => {
+    const [before, after] = [groups[index - 1], groups[index + 1]];
+    if (isConjunction(words[index], isOT) && before && after && before.key === after.key) {
+      groups[index] = before;
+    }
+  });
   let leading = true;
-  const chips: DiagramChip[] = [];
+  const chips: Array<DiagramChip & { key?: string }> = [];
   words.forEach((word, index) => {
     const afterPreposition = !isOT && index > 0 && words[index - 1].morph === 'PREP' && word.morph.startsWith('R-');
     leading = leading && (isConnector(word, words[index + 1], isOT) || afterPreposition);
-    const role = subject.has(word.id) ? 's' : verb.has(word.id) ? 'v' : leading ? 'conj' : null;
+    const group = groups?.[index];
+    // 分析给了主语、谓语时以分析为准，Macula 在别处标的主语、谓语不再算
+    const tree = group?.role === 's' && subject.size > 0 ? null : group?.role === 'v' && verb.size > 0 ? null : group?.role ?? null;
+    const lone = groups && isConjunction(word, isOT) && group?.key === `w${word.id}`;
+    const role: ChipRole | null = subject.has(word.id) ? 's' : verb.has(word.id) ? 'v' : leading || lone ? 'conj' : tree;
+    const key = groups && role !== 's' && role !== 'v' && role !== 'conj' ? group!.key : undefined;
     const last = chips.at(-1);
-    if (last && last.role === role) {
+    // 同一成分的词合成一块；不属于任何成分的零散词（אֵת אֲשֶׁר、句首冠词）相邻的也合成一块
+    const loose = (value: string | undefined) => value === undefined || value.startsWith('w');
+    if (last && last.role === role && (last.key === key || (role === null && loose(last.key) && loose(key)))) {
       last.wordIds.push(word.id);
     } else {
-      chips.push({ role, wordIds: [word.id] });
+      chips.push({ role, wordIds: [word.id], key });
     }
   });
   const manual = new Set((clause.br ?? '').split(',').map((id) => id.trim()).filter(Boolean));
   const byId = new Map(words.map((word) => [word.id, word]));
-  for (const chip of chips.filter((item) => item.wordIds.length > 1)) {
-    chip.pauses = chipPauses(chip.wordIds.map((id) => byId.get(id)!), isOT, manual);
+  for (const chip of chips) {
+    delete chip.key;
+    if (chip.wordIds.length < 2) {
+      continue;
+    }
+    const chipWords = chip.wordIds.map((id) => byId.get(id)!);
+    const layout = groups && syntax ? treeLayout(chipWords, syntax, isOT) : null;
+    chip.pauses = layout ? layout.pauses.map((pause, i) => (manual.has(chip.wordIds[i]) ? PAUSE_FORCED : pause)) : chipPauses(chipWords, isOT, manual);
+    if (layout?.indents.some((indent) => indent > 0)) {
+      chip.indents = layout.indents;
+    }
   }
   return chips;
 }
@@ -246,8 +427,10 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       id: token.id, bcv: token.bcv, text: token.surface, after: token.after, lemma: token.lemma, translit: token.translit,
       strong: token.strong, morph: token.morph, morphExp: input.morphExpansion(token.morph), glossEn: token.glossEn,
       glossZh: token.glossZh, sense: token.sense, rendering: renderings.get(token.id) ?? null, variant: variantOf(token, isOT),
+      ...(isOT ? { gcase: null, tense: null, mood: null } : greekMorph(token.morph)),
     };
   }
+  const covered = input.syntax ? nodeWords(input.syntax) : undefined;
 
   const clauseIds = new Set(input.clauses.map((clause) => clause.id));
   const wordsOf = new Map(input.clauses.map((clause) => [
@@ -272,6 +455,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
     const target = targetWordId ? tokenById.get(targetWordId) : undefined;
     const note = noteOf.get(clause.id);
+    const verbWord = words[[...idsInRange(clause.verbRange, own)][0] ?? ''];
 
     const text = textByKey.get(clause.id);
     const segments = text ? parseFormatted(text.formatted) : [];
@@ -315,7 +499,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       gist,
       status: clause.status,
       type: clause.type,
-      chips: chipsOf(clause, own, isOT),
+      ntForm: verbWord?.tense && verbWord.mood ? `${verbWord.tense}-${verbWord.mood}` : null,
+      chips: chipsOf(clause, own, isOT, input.syntax, covered),
       fromWordId: clause.firstWordId,
       targetWordId,
       logic: logicOf(clause, input.clauses),
@@ -341,7 +526,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     ? `第 ${level ?? 2} 档「${LITERALNESS_LEVELS[(level ?? 2) as keyof typeof LITERALNESS_LEVELS].name}」`
     : null;
 
-  return { title: input.title, isOT, literalness, verses, words, clauses };
+  return { title: input.title, isOT, narrative: !isOT && input.narrative === true, literalness, verses, words, clauses };
 }
 
 /** 经文范围的简写：`7`、`7:17`、`7:17-18`、`7:17-8:3`。 */
@@ -358,6 +543,9 @@ export function rangeLabel(range: ScriptureRange): string {
   }
   return `${startChapter}:${startVerse}-${endChapter}:${endVerse}`;
 }
+
+/** 新约叙事书卷：马太福音至使徒行传、启示录。书信的主线另作处理。 */
+const NARRATIVE_BOOKS = new Set([40, 41, 42, 43, 44, 66]);
 
 /** 词典释义很长时截断，单个页面不至于过大。 */
 const DEFINITION_LIMIT = 3000;
@@ -376,6 +564,8 @@ export async function loadDiagram(db: BibleDb, store: WorkFileStore, range: Scri
   }
   const tokens = db.tokensInRange(range.startBcv, range.endBcv);
   const data = buildDiagram({
+    syntax: db.syntaxForTokens(tokens.map((token) => token.id)),
+    narrative: NARRATIVE_BOOKS.has(range.bookId),
     title: `${range.bookName} ${rangeLabel(range)}`,
     isOT: range.isOT,
     clauses,

@@ -66,7 +66,7 @@ const allRendered = [{ tokens: id(2), zh: '创造' }, { tokens: id(3), zh: '神'
 
 test('合并两句：首句 span=2、次句 span=0 通过', () => {
   const result = checkTranslations([
-    { clauseId: '1001001a', span: 2, text: '神创造了大地', renderings: allRendered },
+    { clauseId: '1001001a', span: 2, merge: 'reorder', text: '神创造了大地', renderings: allRendered },
     { clauseId: '1001001b', span: 0, text: '' },
   ], clausesByVerse, verses);
   assert.deepEqual(result.errors, []);
@@ -186,9 +186,27 @@ test('补词：[ ] 拆成补词段，renderings 按去掉括号的译文定位�
   assert.match(unpaired.errors[0].messages.join(), /不成对/);
 });
 
+test('合并理由：span>1 须写 merge；reorder 却各行顺序同原文的拒绝；constituent 须写 note；编辑器提交不查', () => {
+  const submit = (first: Record<string, unknown>, options = {}) => checkTranslations([
+    { clauseId: '1001001a', span: 2, renderings: allRendered, ...first },
+    { clauseId: '1001001b', span: 0, text: '' },
+  ], clausesByVerse, verses, new Map(), options).errors.flatMap((error) => error.messages).join();
+  // 两行与 a、b 一一对应，顺序同原文
+  const inOrder = { text: '创造了，\n神和大地' };
+  assert.match(submit(inOrder), /要写 merge/);
+  assert.match(submit({ ...inOrder, merge: 'reorder' }), /没有调换语序/);
+  assert.match(submit({ ...inOrder, merge: 'constituent' }), /note 写明/);
+  assert.equal(submit({ ...inOrder, merge: 'constituent', note: '切在动词与宾语之间' }), '');
+  // b 的词挪到了第一行：确实调换了语序
+  assert.equal(submit({ text: '神创造了\n大地', merge: 'reorder' }), '');
+  assert.match(submit({ ...inOrder, merge: 'meaning' }), /要写 merge/);
+  assert.equal(submit({ ...inOrder, merge: 'meaning' }, { level: 4 }), '');
+  assert.equal(submit(inOrder, { itemLevels: true }), '');
+});
+
 test('档位：第 1 档不合并子句；第 4 档不用 [ ]、∅ 可不写 note；〚 〛 各档都可用', () => {
   const merged = [
-    { clauseId: '1001001a', span: 2, text: '神创造了大地', renderings: allRendered },
+    { clauseId: '1001001a', span: 2, merge: 'reorder', text: '神创造了大地', renderings: allRendered },
     { clauseId: '1001001b', span: 0, text: '' },
   ];
   assert.match(checkTranslations(merged, clausesByVerse, verses, new Map(), { level: 1 }).errors[0].messages.join(), /第 1 档/);

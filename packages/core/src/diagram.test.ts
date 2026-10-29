@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { Token } from './db.js';
-import { PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, rangeLabel } from './diagram.js';
+import type { SyntaxNode, Token, TokenSyntax } from './db.js';
+import { PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, greekMorph, rangeLabel } from './diagram.js';
 import { parseScriptureRange } from './ref.js';
 import type { ClauseEntity, ClauseText, DiagramNote } from './schemas.js';
 
@@ -110,4 +110,88 @@ test('逻辑关系：结构图给出关系名与关联子句，一段时列出�
   const data = buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: [CLAUSES[0], { ...CLAUSES[1], logic }], texts: TEXTS, tokens: TOKENS, variants: [], notes: [], morphExpansion: () => null });
   assert.deepEqual(data.clauses[1].logic, { relation: 'cause', label: '原因', targetIds: ['44007018a'], targetText: '18a', note: '理由' });
   assert.equal(data.clauses[0].logic, null);
+});
+
+test('Robinson 词法：格、时态、语气', () => {
+  assert.deepEqual(greekMorph('N-DSF'), { gcase: 'dat', tense: null, mood: null });
+  assert.deepEqual(greekMorph('P-1GP'), { gcase: 'gen', tense: null, mood: null });
+  assert.deepEqual(greekMorph('S-1SGSN'), { gcase: 'gen', tense: null, mood: null });
+  assert.deepEqual(greekMorph('N-NSM-P'), { gcase: 'nom', tense: null, mood: null });
+  assert.deepEqual(greekMorph('A-NUI'), { gcase: null, tense: null, mood: null });
+  assert.deepEqual(greekMorph('V-2AAP-NSM'), { gcase: 'nom', tense: 'aor', mood: 'ptcp' });
+  assert.deepEqual(greekMorph('V-2AAI-3S'), { gcase: null, tense: 'aor', mood: 'ind' });
+  assert.deepEqual(greekMorph('V-2LAI-3S'), { gcase: null, tense: 'plpf', mood: 'ind' });
+  assert.deepEqual(greekMorph('V-AAM-2S'), { gcase: null, tense: 'aor', mood: 'impv' });
+  assert.deepEqual(greekMorph('V-PAN'), { gcase: null, tense: 'pres', mood: 'inf' });
+});
+
+/** 手写的短语树：nodes 按从根到叶给出，词挂在最后一个结点下。 */
+function syntaxOf(entries: Array<[number, string | null, SyntaxNode[]]>): Map<string, TokenSyntax> {
+  return new Map(entries.map(([word, role, path]) => [`n44007018${String(word).padStart(3, '0')}`, { role, path }]));
+}
+const node = (id: number, cls: string | null, role: string | null = null, rule: string | null = null): SyntaxNode => ({ id, cls, role, rule, clauseType: null });
+
+test('成分分块：新约按 Macula 短语树分出间接宾语、宾语，主语谓语仍以分析为准', () => {
+  // 徒 7:40 ποίησον ἡμῖν θεοὺς
+  const tokens = [token(1, 'ποίησον', 'V-AAM-2S'), token(2, 'ἡμῖν', 'P-1DP'), token(3, 'θεοὺς', 'N-APM', { after: '. ' })];
+  const c = node(1, 'cl', null, 'V-IO-O');
+  const syntax = syntaxOf([[1, 'v', [c]], [2, 'io', [c]], [3, null, [c, node(2, 'np', 'o')]]]);
+  const data = buildDiagram({ title: '', isOT: false, clauses: [clause('44007018a', 1, 3, { verbRange: 'n44007018001' })], texts: [], tokens,
+    variants: [], notes: [], morphExpansion: () => null, syntax, narrative: true });
+  assert.deepEqual(data.clauses[0].chips.map((chip) => chip.role), ['v', 'io', 'o']);
+  assert.equal(data.clauses[0].ntForm, 'aor-impv');
+  assert.equal(data.narrative, true);
+  assert.equal(data.words.n44007018003.gcase, 'acc');
+});
+
+test('块内按短语树折行：嵌入的分词短语连同冠词自成一行并缩进，并列的 καί 另起一行', () => {
+  // 徒 7:38 γενόμενος μετὰ τοῦ ἀγγέλου τοῦ λαλοῦντος αὐτῷ καὶ τῶν πατέρων
+  const words = ['γενόμενος', 'μετὰ', 'τοῦ', 'ἀγγέλου', 'τοῦ', 'λαλοῦντος', 'αὐτῷ', 'καὶ', 'τῶν', 'πατέρων'];
+  const morphs = ['V-2ADP-NSM', 'PREP', 'T-GSM', 'N-GSM', 'T-GSM', 'V-PAP-GSM', 'P-DSM', 'CONJ', 'T-GPM', 'N-GPM'];
+  const tokens = words.map((surface, i) => token(i + 1, surface, morphs[i]));
+  const c = node(1, 'cl');
+  const pp = node(2, 'pp', 'p', 'PrepNp');
+  const both = node(3, 'np', null, 'NpaNp');
+  const appos = node(4, 'np', null, 'Np-Appos');
+  const angel = node(5, 'np', null, 'DetNP');
+  const detcl = node(6, 'np', null, 'DetCL');
+  const speaking = node(7, 'cl', null, 'V-IO');
+  const coord = node(8, null);
+  const fathers = node(9, 'np', null, 'DetNP');
+  const syntax = syntaxOf([
+    [1, 'vc', [c]], [2, null, [c, pp]], [3, null, [c, pp, both, appos, angel]], [4, null, [c, pp, both, appos, angel]],
+    [5, null, [c, pp, both, appos, detcl]], [6, 'v', [c, pp, both, appos, detcl, speaking]], [7, 'io', [c, pp, both, appos, detcl, speaking]],
+    [8, null, [c, pp, both, coord]], [9, null, [c, pp, both, coord, fathers]], [10, null, [c, pp, both, coord, fathers]],
+  ]);
+  const data = buildDiagram({ title: '', isOT: false, clauses: [clause('44007018a', 1, 10, { verbRange: 'n44007018001' })], texts: [], tokens,
+    variants: [], notes: [], morphExpansion: () => null, syntax });
+  const [verb, predicate] = data.clauses[0].chips;
+  assert.equal(verb.role, 'v');
+  assert.equal(predicate.role, 'p');
+  // 必断处（断在这些词之后）：嵌入短语之前、之后（也就是 καί 之前）
+  const cuts = predicate.pauses!.flatMap((pause, i) => (pause === PAUSE_FORCED ? [words[i + 1]] : []));
+  assert.deepEqual(cuts, ['ἀγγέλου', 'αὐτῷ']);
+  assert.deepEqual(predicate.indents, [0, 0, 0, 1, 1, 1, 0, 0, 0]);
+});
+
+test('旧约也按短语树分成分块：介词短语按状语，并列的 וְ 在长块里另起一行', () => {
+  // 创 30:32 הָסֵר מִשָּׁם כָּל־שֶׂה נָקֹד וְטָלוּא וְכָל־שֶׂה חוּם（简化）
+  const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
+    ...token(word, surface, morph), id: `o01030032${String(word).padStart(3, '0')}1`, bcv: 1030032, after,
+  });
+  const words = [ot(1, 'הָסֵר', 'HVhaa'), ot(2, 'מִ', 'HR', ''), ot(3, 'שָּׁם', 'HD'), ot(4, 'כָּל', 'HNcmsc', '־'), ot(5, 'שֶׂה', 'HNcbsa'),
+    ot(6, 'נָקֹד', 'HAamsa'), ot(7, 'וְ', 'HC', ''), ot(8, 'טָלוּא', 'HVqsmsa'), ot(9, 'וְ', 'HC', ''), ot(10, 'כָל', 'HNcmsc', '־'), ot(11, 'שֶׂה', 'HNcbsa'), ot(12, 'חוּם', 'HAamsa')];
+  const c = node(1, 'cl');
+  const pp = node(2, 'pp', 'pp');
+  const obj = node(3, 'np', 'o');
+  const spotted = node(4, 'np');
+  const brown = node(5, 'np');
+  const paths: SyntaxNode[][] = [[c], [c, pp], [c, pp], [c, obj, spotted], [c, obj, spotted], [c, obj, spotted], [c, obj, spotted], [c, obj, spotted], [c, obj], [c, obj, brown], [c, obj, brown], [c, obj, brown]];
+  const syntax = new Map(words.map((word, i) => [word.id, { role: i === 0 ? 'v' : null, path: paths[i] }]));
+  const entity = { ...clause('1030032b', 1, 12), firstWordId: words[0].id, lastWordId: words.at(-1)!.id, verbRange: words[0].id };
+  const data = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], notes: [], morphExpansion: () => null, syntax });
+  const [verb, place, object] = data.clauses[0].chips;
+  assert.deepEqual([verb.role, place.role, object.role], ['v', 'adv', 'o']);
+  assert.equal(object.pauses![object.wordIds.indexOf(words[7].id)], PAUSE_FORCED);
+  assert.equal(object.pauses![object.wordIds.indexOf(words[8].id)], PAUSE_JOINED);
 });

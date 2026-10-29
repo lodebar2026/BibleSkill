@@ -5,6 +5,7 @@
  * - 新约 macula-greek/SBLGNT/lowfat：每卷一个文件，只与 editions 含 SBL 的主干词对齐
  *
  * Macula 的词 id 在这里就地换算成主干词 id，之后只在 token_macula 表里保留原编号。
+ * 短语树（wg）按出现顺序编号成 syntax_node，主干词挂到所在的最低一级 wg 上（token_syntax）。
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -27,9 +28,22 @@ export type SeedClauseRow = {
   tokens: string[];
 };
 
+export type SyntaxNodeRow = {
+  id: number;
+  parentId: number | null;
+  role: string | null;
+  rule: string | null;
+  cls: string | null;
+  clauseType: string | null;
+};
+
+export type TokenSyntaxRow = { tokenId: string; nodeId: number; role: string | null };
+
 export type MaculaResult = {
   links: Array<[string, string]>;
   seeds: SeedClauseRow[];
+  syntaxNodes: SyntaxNodeRow[];
+  tokenSyntax: TokenSyntaxRow[];
   stats: { maculaWords: number; mappedWords: number; baseTokens: number; mappedTokens: number };
 };
 
@@ -95,6 +109,7 @@ export function processMacula(
   lowfatDir: string,
   tokens: TokenRow[],
   report: Report,
+  firstNodeId = 1,
 ): MaculaResult {
   const eligible = testament === 'NT'
     ? tokens.filter((token) => token.editions?.split('+').includes('SBL'))
@@ -108,6 +123,10 @@ export function processMacula(
 
   const links: Array<[string, string]> = [];
   const seeds: SeedClauseRow[] = [];
+  const syntaxNodes: SyntaxNodeRow[] = [];
+  const tokenSyntax: TokenSyntaxRow[] = [];
+  const syntaxOfToken = new Set<string>();
+  let nextNodeId = firstNodeId;
   const stats = { maculaWords: 0, mappedWords: 0, baseTokens: eligible.length, mappedTokens: 0 };
   const same = sameWord(testament);
   const files = listFiles(lowfatDir, testament === 'OT' ? /-lowfat\.xml$/ : /^\d{2}-.*\.xml$/);
@@ -163,6 +182,28 @@ export function processMacula(
       }
     }
 
+    const lower = (value: string | undefined) => value?.toLowerCase() || null;
+    const walk = (node: Node, parentId: number | null): void => {
+      if (node.tag === 'w') {
+        const token = tokenOfWord.get(node);
+        if (token && parentId !== null && !syntaxOfToken.has(token.id)) {
+          syntaxOfToken.add(token.id);
+          tokenSyntax.push({ tokenId: token.id, nodeId: parentId, role: lower(attr(node, 'role')) });
+        }
+        return;
+      }
+      let id = parentId;
+      if (node.tag === 'wg') {
+        id = nextNodeId++;
+        syntaxNodes.push({
+          id, parentId, role: lower(attr(node, 'role')), rule: attr(node, 'rule') || null,
+          cls: lower(attr(node, 'class')), clauseType: attr(node, 'clauseType') || null,
+        });
+      }
+      node.children.forEach((child) => walk(child, id));
+    };
+    root.children.forEach((sentence) => walk(sentence, null));
+
     const emitted = new Map<GroupNode, string>();
     let counter = 0;
     const fileKey = path.basename(file).replace(/(-lowfat)?\.xml$/, '');
@@ -200,5 +241,5 @@ export function processMacula(
       }
     }
   }
-  return { links, seeds, stats };
+  return { links, seeds, syntaxNodes, tokenSyntax, stats };
 }

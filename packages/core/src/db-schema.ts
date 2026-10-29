@@ -2,7 +2,7 @@
  * data/bible.sqlite 的表结构。构建端（data-build）建表写入，读取端（core/db.ts）只读打开。
  * 改表结构要同时改 SCHEMA_VERSION，读取端会拒绝打开版本不符的库。
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const SCHEMA_SQL = `
 create table meta (key text primary key, value text not null);
@@ -67,6 +67,23 @@ create table seed_clause (
   tokens text not null          -- 本子句自身（不含嵌套子句）的主干词 id，逗号分隔、有序
 );
 create index seed_clause_bcv on seed_clause(bcv_first, bcv_last);
+
+-- Macula lowfat 短语树（结构图按它分成分框、折行）：每个 wg 一行，只存结构，不存 Macula 编号
+create table syntax_node (
+  id integer primary key,
+  parent_id integer,            -- 句子顶层的 wg 为 null
+  role text,                    -- s / v / vc / o / o2 / io / adv / p / aux …（小写），无则 null
+  rule text,                    -- PrepNp、DetCL、S-V-O …
+  class text,                   -- cl / np / pp / adjp …（小写）
+  clause_type text              -- nominalized 等
+);
+
+-- 主干词所在的最低一级 wg 与词本身的 role（一个主干词对上多个 Macula 词时取第一个）
+create table token_syntax (
+  token_id text primary key,
+  node_id integer not null,
+  role text
+);
 
 create table lexicon (
   strong text not null,         -- TBESH/TBESG 用扩展 Strong；UBS 用基础号（H0430/A0002/G0976）

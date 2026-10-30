@@ -37,6 +37,27 @@ test('漏词、重叠、跳字母都按节报错', () => {
   assert.match(checkClauseAnalysis([clause('a', 1, 2), clause('c', 3, 4, { type: 'nominal', verbRange: null })], verses, []).errors[0].messages.join(), /应为 1001001b/);
 });
 
+test('嵌入：子句可以整个落在另一子句中间；交叉、挂到别处、字段落在嵌入子句的词上都被拒', () => {
+  const embedded = (extra: Record<string, unknown> = {}) => clause('b', 3, 3, { type: 'nominal', verbRange: null, parentId: '1001001a', modifies: id(2), ...extra });
+  assert.deepEqual(checkClauseAnalysis([clause('a', 1, 4), embedded()], verses, []).errors, []);
+  assert.match(checkClauseAnalysis([clause('a', 1, 4), embedded({ parentId: null, modifies: null })], verses, []).errors[0].messages.join(), /嵌在 1001001a 中间/);
+  assert.match(checkClauseAnalysis([clause('a', 1, 3), clause('b', 2, 4, { type: 'nominal', verbRange: null })], verses, []).errors[0].messages.join(), /重叠交叉/);
+  assert.match(checkClauseAnalysis([clause('a', 1, 4, { verbRange: id(3) }), embedded()], verses, []).errors[0].messages.join(), /verbRange .* 不在本子句范围内/);
+  assert.match(checkClauseAnalysis([clause('a', 1, 4), embedded({ modifies: id(3) })], verses, []).errors[0].messages.join(), /不在父句/);
+});
+
+test('嵌入：与容器合译时 rendering 范围到覆盖子句里最靠后的词', () => {
+  const nested: ClauseEntity[] = [
+    { ...entities[0], lastWordId: id(4) },
+    { ...entities[1], firstWordId: id(3), lastWordId: id(3), parentId: '1001001a', modifies: id(2) },
+  ];
+  const result = checkTranslations([
+    { clauseId: '1001001a', span: 2, merge: 'constituent', note: '关系从句嵌在宾语中间', text: '神创造了大地', renderings: allRendered },
+    { clauseId: '1001001b', span: 0, text: '' },
+  ], new Map([[BCV, nested]]), verses);
+  assert.deepEqual(result.errors, []);
+});
+
 test('parentId 找不到、modifies 不在父句内、成环都被拒', () => {
   const missing = checkClauseAnalysis([clause('a', 1, 4, { parentId: '1001001z' })], verses, []);
   assert.match(missing.errors[0].messages.join(), /找不到/);
@@ -50,6 +71,19 @@ test('parentId 找不到、modifies 不在父句内、成环都被拒', () => {
     verses, [],
   );
   assert.match(cycle.errors[0].messages.join(), /成环/);
+});
+
+test('挂接不交叉：越过不在父句之下的子句被拒；中间的子句也挂在父句下时通过；写 seedDiff 放行并标 needs-review', () => {
+  const nominal = { type: 'nominal', verbRange: null };
+  const crossing = [clause('a', 1, 2), clause('b', 3, 3, nominal), clause('c', 4, 4, { ...nominal, parentId: '1001001a', modifies: id(2) })];
+  assert.match(checkClauseAnalysis(crossing, verses, []).errors[0].messages.join(), /越过了 1001001b.*连线会交叉/);
+  const nested = [clause('a', 1, 2), clause('b', 3, 3, { ...nominal, parentId: '1001001a', modifies: id(2) }), clause('c', 4, 4, { ...nominal, parentId: '1001001a', modifies: id(2) })];
+  assert.deepEqual(checkClauseAnalysis(nested, verses, []).errors, []);
+  const argued = crossing.map((item, i) => (i === 2 ? { ...item, seedDiff: '后置成分，句法上仍属 a' } : item));
+  const result = checkClauseAnalysis(argued, verses, []);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.accepted[2].status, 'needs-review');
+  assert.match(result.overrides[0].overridden.join(), /越过了 1001001b/);
 });
 
 test('ambiguous 必须带 alternatives；句型错约别被拒', () => {

@@ -11,4 +11,5 @@ export * from './clause-type.js';
 export * from './view-data.js';
 export * from './align.js';
 export * from './segments.js';
+export * from './clause-words.js';
 export * from './diagram.js';

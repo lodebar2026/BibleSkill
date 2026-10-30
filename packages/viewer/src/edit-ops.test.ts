@@ -158,3 +158,19 @@ test('词级对齐：找译文行、设定 / 修改 / 删除对照', () => {
   assert.deepEqual(cleared[0].renderings[1], { tokens: w(1, 5), zh: '天' });
   assert.equal(updateRendering(texts, `${V1}a`, w(1, 5), null)[0].renderings.length, 1);
 });
+
+test('嵌入：拆分母句时嵌入子句跟着所在的一半；合并时下一句嵌在本句中就并进来', () => {
+  // 1:1a = w1-w6，其中 w3-w4 是嵌入的 1:1b
+  const nested = [
+    clause(V1, 'a', w(1, 1), w(1, 6), { verbRange: w(1, 1) }),
+    clause(V1, 'b', w(1, 3), w(1, 4), { type: 'NmCl', parentId: `${V1}a`, modifies: w(1, 2) }),
+  ];
+  const cutAfter = splitClause(nested, w(1, 5), words);
+  assert.deepEqual(cutAfter.map((item) => [item.id, item.firstWordId.slice(-4), item.lastWordId.slice(-4), item.parentId]), [
+    ['1001001a', '0011', '0021', null], ['1001001b', '0031', '0041', '1001001a'], ['1001001c', '0051', '0061', null],
+  ]);
+  assert.equal(textRowOfWord([], nested, w(1, 3)), null);
+  const merged = mergeWithNext(nested, `${V1}a`);
+  assert.deepEqual(merged.map((item) => [item.id, item.lastWordId.slice(-4)]), [['1001001a', '0061']]);
+});
+

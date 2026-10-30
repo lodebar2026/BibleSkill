@@ -280,7 +280,11 @@ export function renderChapter(chapter: Chapter, panel: HTMLElement, hooks: Rende
       const div = el('div', 'orig-line');
       const raw = tree.prefixes[index];
       div.append(el('span', 'tree-prefix', orient(lineIndex === 0 ? raw : continuationPrefix(raw))));
-      for (const { word, shadow } of line.words) {
+      for (const { word, shadow, slot } of line.words) {
+        if (slot) {
+          div.append(el('span', 'slot', word.text), document.createTextNode(word.after));
+          continue;
+        }
         const full = wordById.get(word.id);
         const span = el('span', ['word', shadow ? 'shadow' : '', full?.naBracket ? 'na-bracket' : ''].filter(Boolean).join(' '), word.text);
         span.dataset.id = word.id;

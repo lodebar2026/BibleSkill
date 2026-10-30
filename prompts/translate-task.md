@@ -124,6 +124,7 @@ alternatives 的译文用同一档位来写；不需要为 alternatives 提供 r
 - 合并 N 个连续子句时，首句 `span: N`，其后 N-1 句 `span: 0`、`text: ""`、不给 renderings（renderings 都写在首句上）。
 - 首句写 `merge` 说明理由：`reorder`（中文调换了语序）或 `constituent`（断开会切在一个成分中间，note 写明切在哪两个成分之间）；第 4、5 档另可写 `meaning`（按意思合并）。系统会核对 `reorder`：各行与子句一一对应、顺序和原文相同的，会被打回。
 - 合并后的 `text` 用 `\n` 分行，行数与覆盖的子句数一致，**行序按中文语序**。
+- 嵌入子句（briefing 里外层子句的原文在嵌入处写作 `⟨子句id⟩`）译成前置定语、嵌进外层那一行时，与外层合并（`merge: constituent`，note 写明嵌在哪两个成分之间），不单占一行；行数相应少一行。
 - 合并不跨节。
 
 ## 连词

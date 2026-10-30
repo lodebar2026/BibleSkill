@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SyntaxNode, Token, TokenSyntax } from './db.js';
-import { PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, greekMorph, rangeLabel } from './diagram.js';
+import { PAUSE_COORD, PAUSE_EMBED, PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, greekMorph, rangeLabel } from './diagram.js';
 import { parseScriptureRange } from './ref.js';
 import type { ClauseEntity, ClauseText, DiagramNote } from './schemas.js';
 
@@ -95,12 +95,17 @@ test('范围简写', () => {
   assert.equal(rangeLabel(parseScriptureRange('徒 7:17')), '7:17');
 });
 
-test('切行停顿：旧约按停顿重音分强弱，词缀相连处不能断，br 必断；新约按标点', () => {
+test('切行停顿：旧约按停顿重音分强弱（远分强于近分），词缀相连处不能断，br 必断；新约按标点', () => {
   const hw = (n: number, surface: string, after = ' ') => ({ id: `o0100103200${n}1`, surface, after });
   // 创 30:32b：כָּל־ 与下词相连；טָל֗וּא 带 revia，בַּכְּשָׂבִ֔ים 带 zaqef，בָּעִזִּ֑ים 带 atnach
   const words = [hw(1, 'כָּל־', ''), hw(2, 'שֶׂ֣ה'), hw(3, 'טָל֗וּא'), hw(4, 'בַּכְּשָׂבִ֔ים'), hw(5, 'בָּעִזִּ֑ים')];
-  assert.deepEqual(chipPauses(words, true), [PAUSE_JOINED, 0, 2, 3, 4]);
-  assert.deepEqual(chipPauses(words, true, new Set([words[1].id])), [PAUSE_JOINED, PAUSE_FORCED, 2, 3, 4]);
+  assert.deepEqual(chipPauses(words, true), [PAUSE_JOINED, 0, 2.5, 3.5, 4]);
+  assert.deepEqual(chipPauses(words, true, new Set([words[1].id])), [PAUSE_JOINED, PAUSE_FORCED, 2.5, 3.5, 4]);
+  // tipcha（atnach 前的近分）低于 zaqef，pashta（zaqef 前的近分）低于 revia
+  assert.deepEqual(chipPauses([hw(1, 'ח֖וּם'), hw(2, 'הָעִזִּים֙'), hw(3, 'x')], true), [3, 2, 0]);
+  // 重音按整个单位算：בּ֔ + וֹ 的 zaqef 记在 וֹ 后；maqqef 后不断
+  assert.deepEqual(chipPauses([hw(1, 'בּ֔', ''), hw(2, 'וֹ'), hw(3, 'וְ', ''), hw(4, 'כָל', '־'), hw(5, 'ח֖וּם'), hw(6, 'x')], true),
+    [PAUSE_JOINED, 3.5, PAUSE_JOINED, PAUSE_JOINED, 3, 0]);
   const gw = (n: number, after = ' ') => ({ id: `n4400701800${n}`, surface: `w${n}`, after });
   assert.deepEqual(chipPauses([gw(1), gw(2, ', '), gw(3, '. ')], false), [0, 5, 6]);
 });
@@ -168,13 +173,14 @@ test('块内按短语树折行：嵌入的分词短语连同冠词自成一行�
   const [verb, predicate] = data.clauses[0].chips;
   assert.equal(verb.role, 'v');
   assert.equal(predicate.role, 'p');
-  // 必断处（断在这些词之后）：嵌入短语之前、之后（也就是 καί 之前）
-  const cuts = predicate.pauses!.flatMap((pause, i) => (pause === PAUSE_FORCED ? [words[i + 1]] : []));
-  assert.deepEqual(cuts, ['ἀγγέλου', 'αὐτῷ']);
+  // 优先断点（断在这些词之后）：嵌入短语之前（PAUSE_EMBED）、之后也就是 καί 之前（PAUSE_COORD）；没有必断处
+  const cuts = predicate.pauses!.flatMap((pause, i) => (pause >= PAUSE_EMBED ? [`${words[i + 1]}:${pause}`] : []));
+  assert.deepEqual(cuts, [`ἀγγέλου:${PAUSE_EMBED}`, `αὐτῷ:${PAUSE_COORD}`]);
+  assert.ok(predicate.pauses!.every((pause) => pause < PAUSE_FORCED));
   assert.deepEqual(predicate.indents, [0, 0, 0, 1, 1, 1, 0, 0, 0]);
 });
 
-test('旧约也按短语树分成分块：介词短语按状语，并列的 וְ 在长块里另起一行', () => {
+test('旧约也按短语树分成分块（介词短语按状语），但块内折行只看停顿重音、不缩进', () => {
   // 创 30:32 הָסֵר מִשָּׁם כָּל־שֶׂה נָקֹד וְטָלוּא וְכָל־שֶׂה חוּם（简化）
   const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
     ...token(word, surface, morph), id: `o01030032${String(word).padStart(3, '0')}1`, bcv: 1030032, after,
@@ -192,6 +198,26 @@ test('旧约也按短语树分成分块：介词短语按状语，并列的 וְ
   const data = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], notes: [], morphExpansion: () => null, syntax });
   const [verb, place, object] = data.clauses[0].chips;
   assert.deepEqual([verb.role, place.role, object.role], ['v', 'adv', 'o']);
-  assert.equal(object.pauses![object.wordIds.indexOf(words[7].id)], PAUSE_FORCED);
-  assert.equal(object.pauses![object.wordIds.indexOf(words[8].id)], PAUSE_JOINED);
+  // 并列的 וְ 前不另加强度：与只按重音算的结果相同
+  assert.deepEqual(object.pauses, chipPauses(object.wordIds.map((wordId) => words.find((word) => word.id === wordId)!), true));
+  assert.equal(object.indents, undefined);
+});
+
+test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就放在块内，否则随被修饰词），连线指向占位符', () => {
+  const nested = (subjectRange: string) => buildDiagram({
+    title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], notes: [], morphExpansion: () => null,
+    clauses: [
+      clause('44007018a', 1, 12, { verbRange: 'n44007018003', subjectRange }),
+      clause('44007018b', 8, 10, { parentId: '44007018a', modifies: 'n44007018004', verbRange: 'n44007018010' }),
+    ],
+  });
+  const show = (chips: ReturnType<typeof nested>['clauses'][number]['chips']) => chips.map((chip) =>
+    `${chip.role ?? '-'}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}${(chip.slots ?? []).map((slot) => `[${slot.at}:${slot.clauseIds}]`).join('')}`);
+  const loose = nested('n44007018004');
+  assert.deepEqual(show(loose.clauses[0].chips), ['conj:1,2', 'v:3', 's:4', '-:5,6,7,11,12[3:44007018b]']);
+  assert.equal(loose.clauses[1].targetSlot, '44007018a@7');
+  assert.equal(loose.clauses[1].targetWordId, 'n44007018004');
+  const split = nested('n44007018004-n44007018007');
+  assert.deepEqual(show(split.clauses[0].chips), ['conj:1,2', 'v:3', 's:4,5,6,7[4:44007018b]', '-:11,12']);
+  assert.equal(split.clauses[0].chips[2].pauses?.at(-1), PAUSE_JOINED);
 });

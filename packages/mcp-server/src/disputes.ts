@@ -2,7 +2,7 @@
  * 争议线索：数据能直接给出的只有经文异文（STEPBible 以大写标出影响翻译者）。
  * 断句、句法、词义争议由模型在 analyze（status=ambiguous）与 translate（alternatives）中标出。
  */
-import type { ClauseEntity, Token, VariantToken } from '@bs/core';
+import { clauseOfWord, type ClauseEntity, type Token, type VariantToken } from '@bs/core';
 
 export type ClauseDisputes = {
   /** 子句分析标为 ambiguous 时的其他读法。 */
@@ -48,7 +48,7 @@ export function collectDisputes(
   const bracketed = new Set<string>();
   for (const token of tokens) {
     if (token.naBracket) {
-      const clause = (byVerse.get(token.bcv) ?? []).find((item) => token.id >= item.firstWordId && token.id <= item.lastWordId);
+      const clause = clauseOfWord(token.id, byVerse.get(token.bcv) ?? []);
       if (clause && !bracketed.has(clause.id)) {
         bracketed.add(clause.id);
         result.get(clause.id)!.textual.push('本句在 NA28/UBS5 的双括号 [[ ]] 内：编者判为后加的经文，但印在正文中');
@@ -57,14 +57,14 @@ export function collectDisputes(
     if (!token.significant) {
       continue;
     }
-    const clause = (byVerse.get(token.bcv) ?? []).find((item) => token.id >= item.firstWordId && token.id <= item.lastWordId);
+    const clause = clauseOfWord(token.id, byVerse.get(token.bcv) ?? []);
     if (clause) {
       result.get(clause.id)!.textual.push(`${token.surface}（${token.textType}）：${truncate(token.variantNote ?? '其他抄本此处不同')}`);
     }
   }
   for (const group of groupVariants(variants.filter((variant) => variant.significant))) {
     const verseClauses = byVerse.get(group[0].bcv) ?? [];
-    const clause = verseClauses.find((item) => group[0].posId <= item.lastWordId) ?? verseClauses.at(-1);
+    const clause = clauseOfWord(group[0].posId, verseClauses) ?? verseClauses.find((item) => group[0].posId <= item.lastWordId) ?? verseClauses.at(-1);
     if (clause) {
       const words = group.map((variant) => variant.surface).join(' ');
       const gloss = group.map((variant) => variant.glossEn).join(' ');

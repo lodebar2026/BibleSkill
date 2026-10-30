@@ -6,6 +6,7 @@
  * bible-diagram 写入的说明（diagram.json）只补子句功能、连线标签、大意与要点。
  * 纯函数 buildDiagram 便于测试；loadDiagram 负责读库与工作文件。
  */
+import { clauseOfWord, clauseWords, containerOf, embedSlots } from './clause-words.js';
 import type { BibleDb, SyntaxNode, Token, TokenSyntax, VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
@@ -64,23 +65,34 @@ export function greekMorph(morph: string): { gcase: GreekCase | null; tense: Gre
  * 每个成分一块；谓语不在短语树上时，相邻的词合成一块，不标角色。
  * pauses：每个词之后能否换行、停顿多强（页面按实际排版宽度在停顿最强处切行）。
  * indents：某词起头的一行缩进几级（嵌入的分词短语、关系从句缩进一级），没有缩进时省略。
+ * slots：嵌在本句中间的子句的占位符，插在 wordIds[at] 之前（at = wordIds.length 时在块末）；
+ * id 供连线定位，pause 是占位符之后的停顿（占位符前面的词与它相连，不断开）。
  */
 export type ChipRole = 's' | 'v' | 'o' | 'o2' | 'io' | 'adv' | 'p' | 'conj';
-export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[] };
+export type DiagramSlot = { id: string; at: number; clauseIds: string[]; pause?: number };
+export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[]; slots?: DiagramSlot[] };
 
 /** 词后不能断（词缀、maqqef 相连）。 */
 export const PAUSE_JOINED = -1;
 /** 子句分析 br 指定的换行：必断。 */
 export const PAUSE_FORCED = 9;
+/** 长块里并列连词之前：块排不下时最先在这里断，排得下就不断。 */
+export const PAUSE_COORD = 8;
+/** 长块里嵌入子句（分词短语、关系从句）的前后：仅次于并列连词；断在这里时，嵌入子句那几行缩进。 */
+export const PAUSE_EMBED = 7;
 
 /**
- * 希伯来文停顿重音的强弱（越大停顿越强）：atnach；segolta、shalshelet、zaqef、tipcha；
- * revia、zarqa、pashta、yetiv、tevir；geresh、gershayim、pazer、telisha gedola、legarmeh（paseq）。
+ * 希伯来文停顿重音的强弱（越大停顿越强）。同一级里把“远分”排在“近分”之前：
+ * tipcha 只给 atnach / silluq 前的最后一段再分，低于 zaqef；pashta、zarqa、yetiv、tevir 是 zaqef、segolta 前的近分，低于 revia。
+ * atnach 4；segolta、shalshelet、zaqef 3.5；tipcha 3；revia 2.5；zarqa、pashta、yetiv、tevir 2；
+ * geresh、gershayim、pazer、telisha gedola、legarmeh（paseq）1。
  */
 const HEBREW_PAUSE: Array<[RegExp, number]> = [
   [/\u0591/, 4],
-  [/[\u0592\u0593\u0594\u0595\u0596]/, 3],
-  [/[\u0597\u0598\u05AE\u0599\u059A\u059B]/, 2],
+  [/[\u0592\u0593\u0594\u0595]/, 3.5],
+  [/\u0596/, 3],
+  [/\u0597/, 2.5],
+  [/[\u0598\u05AE\u0599\u059A\u059B]/, 2],
   [/[\u059C\u059D\u059E\u059F\u05A0\u05A1\u05C0]/, 1],
 ];
 
@@ -98,9 +110,22 @@ function pauseAfter(word: Pick<Token, 'surface' | 'after'>, isOT: boolean): numb
   return isOT ? (HEBREW_PAUSE.find(([pattern]) => pattern.test(word.surface))?.[1] ?? 0) : 0;
 }
 
-/** 块内每个词之后的停顿强度；br 指定的词为 PAUSE_FORCED。 */
+/**
+ * 块内每个词之后的停顿强度；br 指定的词为 PAUSE_FORCED。
+ * 旧约一个词常拆成几个语素（בּ֔ + וֹ），maqqef 又把几个词连成一个重音单位（וְכָל־ח֖וּם）：
+ * 重音按整个单位算，停顿记在单位的最后一个语素后；单位内部（语素之间、maqqef 后）不断。
+ */
 export function chipPauses(words: Array<Pick<Token, 'id' | 'surface' | 'after'>>, isOT: boolean, manual: Set<string> = new Set()): number[] {
-  return words.map((word) => (manual.has(word.id) ? PAUSE_FORCED : pauseAfter(word, isOT)));
+  let unit = '';
+  return words.map((word) => {
+    unit += word.surface;
+    const inside = word.after === '' || (isOT && word.after === '־');
+    const pause = manual.has(word.id) ? PAUSE_FORCED : inside ? PAUSE_JOINED : pauseAfter({ surface: unit, after: word.after }, isOT);
+    if (!inside) {
+      unit = '';
+    }
+    return pause;
+  });
 }
 
 export type DiagramRecord = { tag: string; text: string };
@@ -121,6 +146,8 @@ export type DiagramClause = {
   /** 连线起点（本句首词）与终点（母句中被修饰的词）。 */
   fromWordId: string;
   targetWordId: string | null;
+  /** 嵌在母句中间时，连线指向母句里的占位符（DiagramSlot.id）。 */
+  targetSlot: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
   logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
   /** 是否有 bible-diagram 写的说明（没有时功能、连线、大意用默认值）。 */
@@ -268,8 +295,9 @@ function constituentsOf(words: Token[], verbId: string | undefined, syntax: Map<
 const isClauseNode = (node: SyntaxNode) => node.cls === 'cl';
 
 /**
- * 块内按短语树折行：相邻两词的最近共同祖先越浅，停顿越强；块较长（超过 6 词）时，
- * 嵌入的子句（连同前面的冠词）前后与并列连词 καί 之前必断，嵌入子句那几行缩进一级。
+ * 新约块内按短语树折行（旧约只看停顿重音，不走这里）：相邻两词的最近共同祖先越浅，停顿越强；块较长（超过 6 词）时，
+ * 并列连词 καί 之前是首选断点（PAUSE_COORD），其次是嵌入的子句（连同前面的冠词）前后（PAUSE_EMBED），
+ * 嵌入子句的几行缩进一级。这些都只是优先断点：块排得下时不断，不把短块切成又窄又高的一列。
  */
 function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: boolean): { pauses: number[]; indents: number[] } | null {
   const paths = chipWords.map((word) => syntax.get(word.id)?.path);
@@ -293,6 +321,7 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
     return i < common.length && punct !== PAUSE_JOINED ? Math.max(punct, Math.max(0, 4 - (common[i] - shallowest))) : punct;
   });
   const indents = chipWords.map(() => 0);
+  const boost = (at: number, level: number) => Math.max(pauses[at], level);
   if (chipWords.length > 6) {
     const blocks = new Map<number, [number, number]>();
     paths.forEach((path, i) => {
@@ -316,16 +345,15 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
       for (let i = from; i <= to; i += 1) {
         indents[i] += 1;
       }
-      if (from > 0) {
-        pauses[from - 1] = PAUSE_FORCED;
-      }
-      if (to < chipWords.length - 1) {
-        pauses[to] = PAUSE_FORCED;
+      for (const at of [from - 1, to]) {
+        if (at >= 0 && at < chipWords.length - 1 && pauses[at] !== PAUSE_JOINED) {
+          pauses[at] = boost(at, PAUSE_EMBED);
+        }
       }
     }
     chipWords.forEach((word, i) => {
       if (i > 0 && isConjunction(word, isOT) && pauses[i - 1] !== PAUSE_JOINED) {
-        pauses[i - 1] = PAUSE_FORCED;
+        pauses[i - 1] = boost(i - 1, PAUSE_COORD);
       }
     });
   }
@@ -371,13 +399,51 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
       continue;
     }
     const chipWords = chip.wordIds.map((id) => byId.get(id)!);
-    const layout = groups && syntax ? treeLayout(chipWords, syntax, isOT) : null;
-    chip.pauses = layout ? layout.pauses.map((pause, i) => (manual.has(chip.wordIds[i]) ? PAUSE_FORCED : pause)) : chipPauses(chipWords, isOT, manual);
+    // 旧约块内折行只看停顿重音（chipPauses）；新约按短语树
+    const layout = groups && syntax && !isOT ? treeLayout(chipWords, syntax, isOT) : null;
+    // 旧约只看停顿重音：分析里的 br（给缩进视图用的换行）不用
+    chip.pauses = layout ? layout.pauses.map((pause, i) => (manual.has(chip.wordIds[i]) ? PAUSE_FORCED : pause)) : chipPauses(chipWords, isOT, isOT ? new Set() : manual);
     if (layout?.indents.some((indent) => indent > 0)) {
       chip.indents = layout.indents;
     }
   }
   return chips;
+}
+
+/**
+ * 把嵌入子句的占位符放进成分块：空洞两侧是同一块就放在块内；否则放进含被修饰词的那一块（前一块的末尾或后一块的开头）；
+ * 都不是就在两块之间单独成一块。
+ */
+function placeSlots(chips: DiagramChip[], own: Token[], slots: Array<{ at: number; clauseIds: string[] }>, containerId: string,
+  modifiesOf: (clauseId: string) => string | null): DiagramChip[] {
+  const result = [...chips];
+  for (const { at, clauseIds } of slots) {
+    const [before, after] = [own[at - 1]?.id, own[at]?.id];
+    const prev = result.findIndex((chip) => before !== undefined && chip.wordIds.includes(before));
+    const next = result.findIndex((chip) => after !== undefined && chip.wordIds.includes(after));
+    const targets = clauseIds.map(modifiesOf).filter(Boolean);
+    const holds = (index: number) => index >= 0 && result[index].wordIds.some((id) => targets.includes(id));
+    const slot: DiagramSlot = { id: `${containerId}@${at}`, at: 0, clauseIds };
+    let chip: DiagramChip;
+    if (prev >= 0 && prev === next) {
+      chip = result[prev];
+      slot.at = chip.wordIds.indexOf(after!);
+    } else if (holds(prev)) {
+      chip = result[prev];
+      slot.at = chip.wordIds.length;
+    } else if (holds(next)) {
+      chip = result[next];
+    } else {
+      chip = { role: null, wordIds: [] };
+      result.splice(prev >= 0 ? prev + 1 : Math.max(next, 0), 0, chip);
+    }
+    if (chip.pauses && slot.at > 0) {
+      slot.pause = chip.pauses[slot.at - 1];
+      chip.pauses[slot.at - 1] = PAUSE_JOINED;
+    }
+    chip.slots = [...chip.slots ?? [], slot];
+  }
+  return result;
 }
 
 /** 逻辑关联：target 是单个子句或「首-末」一段，取范围内落在其间的子句。 */
@@ -433,10 +499,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
   const covered = input.syntax ? nodeWords(input.syntax) : undefined;
 
   const clauseIds = new Set(input.clauses.map((clause) => clause.id));
-  const wordsOf = new Map(input.clauses.map((clause) => [
-    clause.id,
-    tokens.filter((token) => token.id >= clause.firstWordId && token.id <= clause.lastWordId),
-  ]));
+  const wordsOf = clauseWords(input.clauses, tokens);
+  const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])]));
+  const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
   // 子句重新切分后，首末词对不上的说明作废
   const noteOf = new Map(input.notes
     .filter((note) => input.clauses.some((clause) => clause.id === note.clauseId && clause.firstWordId === note.firstWordId && clause.lastWordId === note.lastWordId))
@@ -454,6 +519,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
         : [...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId;
     }
     const target = targetWordId ? tokenById.get(targetWordId) : undefined;
+    // 嵌在母句中间：连线指向母句里的占位符
+    const container = parent ? containerOf(clause, input.clauses) : undefined;
+    const slot = container && container.id === parent!.id ? slotsOf.get(container.id)?.find((item) => item.clauseIds.includes(clause.id)) : undefined;
     const note = noteOf.get(clause.id);
     const verbWord = words[[...idsInRange(clause.verbRange, own)][0] ?? ''];
 
@@ -485,7 +553,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       }
     }
     for (const variant of input.variants) {
-      if (variant.posId >= clause.firstWordId && variant.posId <= clause.lastWordId) {
+      if (clauseOfWord(variant.posId, input.clauses)?.id === clause.id) {
         records.push({ tag: '异文', text: `${variant.surface}（${variant.editions ?? variant.textType}，${variant.glossEn}）` });
       }
     }
@@ -500,9 +568,11 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       status: clause.status,
       type: clause.type,
       ntForm: verbWord?.tense && verbWord.mood ? `${verbWord.tense}-${verbWord.mood}` : null,
-      chips: chipsOf(clause, own, isOT, input.syntax, covered),
+      chips: placeSlots(chipsOf(clause, own, isOT, input.syntax, covered), own, slotsOf.get(clause.id) ?? [], clause.id,
+        (id) => modifiesOf.get(id) ?? null),
       fromWordId: clause.firstWordId,
       targetWordId,
+      targetSlot: slot ? `${container!.id}@${slot.at}` : null,
       logic: logicOf(clause, input.clauses),
       annotated: note !== undefined,
       points: note?.notes ?? [],

@@ -5,6 +5,7 @@
  * 拆分 / 合并后按词序把本节子句重排为 a、b、c…，并按改名表重写全章的 parentId。
  */
 import type { ClauseEntity, ClauseText, Rendering } from '@bs/core';
+import { clauseOfWord, containerOf, embeds } from '@bs/core/clause-words';
 import { ADDED_STYLE, clauseNote, markupToSegments, parseFormatted, plainText, suppliedNotes, type Segment } from '@bs/core/segments';
 
 type Word = { id: string };
@@ -77,14 +78,16 @@ function sortClauses(entities: ClauseEntity[]): ClauseEntity[] {
   return [...entities].sort((a, b) => (verseOf(a.id) - verseOf(b.id)) || byWordOrder(a, b));
 }
 
-/** 在 wordId 前把所在子句切成两句。后一句作为前一句的兄弟句（沿用 parentId / modifies）。 */
+/**
+ * 在 wordId 前把所在子句（含这个词的最内层子句）切成两句。后一句作为前一句的兄弟句（沿用 parentId / modifies）。
+ * 前一句截到切点前最后一个自身的词；正好夹在切点前的嵌入子句落在两句之间，不再嵌入。
+ */
 export function splitClause(entities: ClauseEntity[], wordId: string, words: Word[]): ClauseEntity[] {
-  const clause = entities.find((item) => item.firstWordId < wordId && wordId <= item.lastWordId);
-  if (!clause) {
+  const clause = clauseOfWord(wordId, entities);
+  if (!clause || clause.firstWordId === wordId) {
     throw new Error('要在子句中间的词上拆分（子句的首词前不能拆）');
   }
-  const index = words.findIndex((word) => word.id === wordId);
-  const previous = words[index - 1].id;
+  const previous = words.filter((word) => word.id < wordId && clauseOfWord(word.id, entities) === clause).at(-1)!.id;
   const tempId = `${verseOf(clause.id)}~`;
   const verbInLeft = clause.verbRange !== null && rangeStart(clause.verbRange) < wordId;
   const verbInRight = clause.verbRange !== null && !verbInLeft;
@@ -121,8 +124,8 @@ export function splitClause(entities: ClauseEntity[], wordId: string, words: Wor
     if (item === clause) {
       return [left, right];
     }
-    // 挂在被切走那段词上的子句改挂后一句
-    if (item.parentId === clause.id && item.modifies !== null && item.modifies >= wordId) {
+    // 挂在被切走那段词上的、嵌在后一句中间的子句改挂后一句
+    if (item.parentId === clause.id && ((item.modifies !== null && item.modifies >= wordId) || item.firstWordId > wordId)) {
       return [{ ...item, parentId: tempId }];
     }
     return [item];
@@ -140,10 +143,14 @@ export function mergeWithNext(entities: ClauseEntity[], clauseId: string): Claus
   if (!first || !second) {
     throw new Error('本节没有下一句可合并');
   }
+  // 下一句嵌在本句中间时并进本句；否则两句要在同一层（嵌入子句不能与容器之外的句子合并）
+  if (!embeds(first, second) && containerOf(first, verse)?.id !== containerOf(second, verse)?.id) {
+    throw new Error('嵌在句中的子句只能与同一层的下一句合并');
+  }
   const brIds = [first.br, second.br].filter(Boolean).join(',');
   const merged: ClauseEntity = {
     ...first,
-    lastWordId: second.lastWordId,
+    lastWordId: second.lastWordId > first.lastWordId ? second.lastWordId : first.lastWordId,
     type: first.verbRange || !second.verbRange ? first.type : second.type,
     verbRange: first.verbRange ?? second.verbRange,
     verbPerson: first.verbRange ? first.verbPerson : second.verbPerson,
@@ -186,7 +193,7 @@ export function setParent(entities: ClauseEntity[], clauseId: string, parentId: 
 
 /** 在 wordId 之后换行 / 取消换行。 */
 export function toggleBr(entities: ClauseEntity[], wordId: string): ClauseEntity[] {
-  const clause = entities.find((item) => item.firstWordId <= wordId && wordId <= item.lastWordId);
+  const clause = clauseOfWord(wordId, entities);
   if (!clause) {
     throw new Error('这个词不在任何子句里');
   }
@@ -404,7 +411,7 @@ export function splitTranslation(texts: ClauseText[], entities: ClauseEntity[], 
 
 /** 词所在子句的译文行（合并时是首句）的 key；该节还没有译文为 null。 */
 export function textRowOfWord(texts: ClauseText[], entities: ClauseEntity[], wordId: string): string | null {
-  const clause = entities.find((item) => item.firstWordId <= wordId && wordId <= item.lastWordId);
+  const clause = clauseOfWord(wordId, entities);
   if (!clause) {
     return null;
   }

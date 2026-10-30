@@ -59,6 +59,7 @@ td.zh { font-size: 16px; line-height: 1.6; white-space: pre-line; min-width: 14e
 #details .renderings input { width: 100%; font: inherit; font-size: 12px; }
 #details .renderings button { font-size: 12px; padding: 0 4px; }
 .word.na-bracket { color: var(--muted); font-style: italic; }
+.slot { font: 700 12px ui-monospace, Menlo, monospace; color: var(--muted); border: 1px dashed var(--muted); border-radius: 4px; padding: 0 4px; direction: ltr; unicode-bidi: isolate; }
 .word.shadow { color: var(--shadow); text-decoration: underline dotted; text-underline-offset: 6px; }
 tr.para-title td { font-weight: 600; color: var(--accent); padding-top: 14px; border-bottom: none; }
 tr.clause { cursor: pointer; }

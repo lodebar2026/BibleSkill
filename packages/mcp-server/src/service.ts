@@ -18,7 +18,9 @@ import {
   basicClauseType,
   bookById,
   chapterFromBcv,
+  clauseWords,
   DEFAULT_LITERALNESS,
+  embedSlots,
   LITERALNESS_LEVELS,
   effectiveClauseOrder,
   formattedMarkup,
@@ -330,7 +332,7 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
     style: await styleBriefing(deps, 'analyze'),
-    submit: 'submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词；id 为 bcv+字母（如 1001001a）。',
+    submit: 'submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词，夹在句中的从句可嵌入（范围落在外层之内）；id 为 bcv+字母（如 1001001a）。',
   };
 }
 
@@ -487,8 +489,14 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   const allTokens = [...verses.values()].flat();
   const disputes = collectDisputes(clauses, allTokens, deps.db.variantsInRange(range.startBcv, range.endBcv));
   const readings = readingGroups(clauses);
+  const ownWords = clauseWords(clauses, allTokens);
   const clauseLines = clauses.map((clause) => {
-    const tokens = allTokens.filter((token) => token.id >= clause.firstWordId && token.id <= clause.lastWordId);
+    // 自身的词；嵌在中间的子句写成「⟨1030038b⟩」
+    const tokens = ownWords.get(clause.id) ?? [];
+    const pieces = tokens.map((token) => token.surface + token.after);
+    for (const { at, clauseIds } of embedSlots(clause, clauses, tokens).reverse()) {
+      pieces.splice(at, 0, `⟨${clauseIds.join(' ')}⟩ `);
+    }
     return {
       id: clause.id,
       parentId: clause.parentId,
@@ -497,7 +505,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       alternatives: clause.alternatives.length > 0 ? clause.alternatives : undefined,
       note: clause.note || undefined,
       logic: clause.logic ?? undefined,
-      text: tokens.map((token) => token.surface + token.after).join('').trim(),
+      text: pieces.join('').trim(),
       contentTokens: tokens.filter((token) => isContentWord(token.morph, token.strong)).map((token) => token.id).join(','),
       // 子句分析的其他读法已在 alternatives 里，这里只给异文
       disputes: disputes.get(clause.id)?.textual.length ? { textual: disputes.get(clause.id)!.textual } : undefined,

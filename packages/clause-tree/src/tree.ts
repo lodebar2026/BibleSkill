@@ -1,3 +1,5 @@
+import { clauseWords, embedSlots } from '@bs/core/clause-words';
+
 /**
  * 子句树：按 parentId 建树、按 modifies 定分支位置、生成 `┐ ┤ ┘ │` 前缀。
  *
@@ -29,6 +31,8 @@ export interface OrigWord {
   word: TreeWord;
   /** 是否落在 subjectRange 内（显示为阴影）。 */
   shadow: boolean;
+  /** 嵌在本句中间的子句的占位符（word.text 为「⟨38b⟩」），值为这些子句的 id。 */
+  slot?: string[];
 }
 
 export class OrigLine {
@@ -146,9 +150,18 @@ export class ClauseNode {
   }
 }
 
-function buildLines(clause: TreeClause, words: TreeWord[]): OrigLine[] {
+/** 子句编号的短写：1030038b → 38b。 */
+const shortId = (id: string) => id.replace(/^\d+?(\d{3})([a-z]+)$/, (_, verse: string, sub: string) => `${Number(verse)}${sub}`);
+
+/** 子句自身的词；嵌在中间的子句换成占位符。 */
+function buildLines(clause: TreeClause, words: TreeWord[], clauses: TreeClause[], own: Map<string, TreeWord[]>): OrigLine[] {
   const [subjectStart = '', subjectEnd = ''] = clause.subjectRange ? clause.subjectRange.split('-') : [];
-  const all = OrigLine.getWords(words, clause.firstWordId, clause.lastWordId, subjectStart, subjectEnd || subjectStart);
+  const ownIds = new Set((own.get(clause.id) ?? []).map((word) => word.id));
+  const all = OrigLine.getWords(words, clause.firstWordId, clause.lastWordId, subjectStart, subjectEnd || subjectStart)
+    .filter(({ word }) => ownIds.has(word.id));
+  for (const { at, clauseIds } of embedSlots(clause, clauses, all.map(({ word }) => word)).reverse()) {
+    all.splice(at, 0, { word: { id: `slot:${clauseIds.join(',')}`, text: `⟨${clauseIds.map(shortId).join(' ')}⟩`, after: ' ' }, shadow: false, slot: clauseIds });
+  }
   if (!clause.br) {
     const line = new OrigLine();
     line.words = all;
@@ -244,9 +257,10 @@ export function buildChapterTree(
 ): ChapterTree {
   const nodes: ClauseNode[] = [];
   const byName = new Map<string, ClauseNode>();
+  const own = clauseWords(clauses, words);
   for (const clause of clauses) {
     const node = new ClauseNode(clause.id);
-    node.lines = buildLines(clause, words);
+    node.lines = buildLines(clause, words, clauses, own);
     node.row = nodes.length;
     node.type = clause.type;
     node.alone = clause.alone;

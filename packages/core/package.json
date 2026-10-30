@@ -25,6 +25,10 @@
     "./segments": {
       "types": "./dist/segments.d.ts",
       "import": "./dist/segments.js"
+    },
+    "./clause-words": {
+      "types": "./dist/clause-words.d.ts",
+      "import": "./dist/clause-words.js"
     }
   },
   "scripts": {

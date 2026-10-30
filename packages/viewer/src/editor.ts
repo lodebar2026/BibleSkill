@@ -515,7 +515,7 @@ export function startEditor(chapters: Chapter[], token: string, root: HTMLElemen
     action('清除 modifies', () => edit((clauses) => setParent(clauses, clause.id, clause.parentId, null)), clause.modifies !== null);
     action('清除主语', () => edit((clauses) => setRange(clauses, clause.id, 'subjectRange', null)), clause.subjectRange !== null);
     action('清除谓词', () => edit((clauses) => setRange(clauses, clause.id, 'verbRange', null)), clause.verbRange !== null);
-    const hasNext = work.clauses.some((item) => verseOf(item.id) === verseOf(clause.id) && item.firstWordId > clause.lastWordId);
+    const hasNext = work.clauses.some((item) => verseOf(item.id) === verseOf(clause.id) && item.firstWordId > clause.firstWordId);
     action('与下一句合并', () => edit((clauses) => mergeWithNext(clauses, clause.id)), hasNext);
     panel.append(actions);
 

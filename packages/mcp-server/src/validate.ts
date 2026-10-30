@@ -5,6 +5,8 @@ import {
   ClauseAlternativeSchema,
   ClauseLogicSchema,
   LOGIC_RELATIONS,
+  clauseOfWord,
+  containerOf,
   displayClauseType,
   validateBasicType,
   verbInfoFromMorph,
@@ -107,6 +109,33 @@ function compareClauseIds(a: string, b: string): number {
   return x.bcv - y.bcv || subOrdinal(x.sub) - subOrdinal(y.sub);
 }
 
+/** ancestor 是否在 clause 的 parentId 链上（clause 自己不算）。 */
+function hasAncestor(clause: ClauseEntity, ancestor: string, all: Map<string, ClauseEntity>): boolean {
+  const seen = new Set<string>();
+  for (let parent = clause.parentId; parent && !seen.has(parent); parent = all.get(parent)?.parentId ?? null) {
+    if (parent === ancestor) {
+      return true;
+    }
+    seen.add(parent);
+  }
+  return false;
+}
+
+/**
+ * 交叉挂接（非投射）：本句与父句之间（按原文顺序）夹着的子句都应在父句之下；
+ * 有一句不在（挂在别处或是顶层），连线就会交叉。返回第一个被越过的子句。
+ */
+function skippedOver(clause: ClauseEntity, all: Map<string, ClauseEntity>): ClauseEntity | undefined {
+  const parent = clause.parentId;
+  if (!parent || !all.has(parent)) {
+    return undefined;
+  }
+  const [from, to] = compareClauseIds(parent, clause.id) < 0 ? [parent, clause.id] : [clause.id, parent];
+  return [...all.values()].filter((item) => compareClauseIds(item.id, from) > 0 && compareClauseIds(item.id, to) < 0)
+    .sort((a, b) => compareClauseIds(a.id, b.id))
+    .find((item) => !hasAncestor(item, parent, all));
+}
+
 function formsCycle(clause: ClauseEntity, all: Map<string, ClauseEntity>): boolean {
   const seen = new Set<string>();
   let current: ClauseEntity | undefined = clause;
@@ -148,13 +177,14 @@ function inSpan(id: string, first: string, last: string): boolean {
   return id >= first && id <= last;
 }
 
-function checkRangeField(value: string | null, label: string, first: string, last: string, messages: string[]): void {
+/** 区间字段的首末词都要是本句自身的词（中间可以跨过嵌入的子句，如主语名词短语里嵌着关系从句）。 */
+function checkRangeField(value: string | null, label: string, owns: (id: string) => boolean, messages: string[]): void {
   if (value === null) {
     return;
   }
   try {
     const [start, end] = parseTokenRange(value);
-    if (!inSpan(start, first, last) || !inSpan(end, first, last) || start > end) {
+    if (!owns(start) || !owns(end) || start > end) {
       messages.push(`${label} ${value} 不在本子句范围内`);
     }
   } catch (error) {
@@ -164,10 +194,12 @@ function checkRangeField(value: string | null, label: string, first: string, las
 
 /**
  * 子句切分校验：
- * - 子句 id 的 bcv 必须在提交范围内，sub 按 a,b,c… 连续
- * - 每节的子句首尾相接、恰好覆盖该节全部主干词（不重叠、不遗漏）
- * - parentId 指向本章子句且不成环；modifies 落在父句范围内
- * - subjectRange / verbRange / br 落在本句内；ambiguous 必须给 alternatives
+ * - 子句 id 的 bcv 必须在提交范围内，sub 按 a,b,c… 连续（按首词先后）
+ * - 每节的子句首尾相接、恰好覆盖该节全部主干词（不重叠、不遗漏）；子句可以嵌在另一子句中间（范围严格落在其内），不能交叉
+ * - 嵌入子句的 parentId 链要经过包含它的子句
+ * - parentId 指向本章子句且不成环；modifies 是父句自身的词
+ * - 挂接不交叉：本句与父句之间夹着的子句都要在父句之下（写了 seedDiff 的放行并标 needs-review）
+ * - subjectRange / verbRange / br 落在本句自身的词上；ambiguous 必须给 alternatives
  */
 /**
  * 主语检查：以 Macula 种子为证据（谓词落在本句内、且标出了主语的种子）。
@@ -176,11 +208,12 @@ function checkRangeField(value: string | null, label: string, first: string, las
  * - subjectRange 与 Macula 主语完全不重叠 → 主语可能标错（如把表语当主语）
  * 不同意 Macula 时可在 seedDiff 写明理由放行，但该句会被标为 needs-review 交人工复核（理由好坏机器判断不了）。
  */
-function checkSubject(clause: ClauseEntity, seeds: SeedClause[], surfaceOf: (id: string) => string): string[] {
+function checkSubject(clause: ClauseEntity, seeds: SeedClause[], surfaceOf: (id: string) => string, owns: (id: string) => boolean): string[] {
+  // 谓词要是本句自身的词；主语可以跨过嵌在中间的子句（主语里嵌着关系从句），只看是否在本句范围内
   const inClause = (id: string) => inSpan(id, clause.firstWordId, clause.lastWordId);
   const messages: string[] = [];
   for (const seed of seeds) {
-    if (!seed.predicateToken || !inClause(seed.predicateToken) || seed.subjectTokens.length === 0) {
+    if (!seed.predicateToken || !owns(seed.predicateToken) || seed.subjectTokens.length === 0) {
       continue;
     }
     const subject = `${seed.subjectTokens[0]}-${seed.subjectTokens[seed.subjectTokens.length - 1]}（${seed.subjectTokens.map(surfaceOf).join(' ')}）`;
@@ -274,6 +307,9 @@ export function checkClauseAnalysis(
     });
     const ids = tokens.map((token) => token.id);
     let cursor = 0;
+    // 嵌套中的子句（外层在前）；新子句起点落在栈顶范围内就是嵌在它中间
+    const open: Array<{ clause: ClauseEntity; start: number; end: number }> = [];
+    let previousStart = -1;
     for (const clause of clauses) {
       if (!isTokenId(clause.firstWordId) || !isTokenId(clause.lastWordId)) {
         fail(bcv, clause.id, `firstWordId/lastWordId 不是合法词 id`);
@@ -285,21 +321,34 @@ export function checkClauseAnalysis(
         fail(bcv, clause.id, `首末词不是本节主干词（${clause.firstWordId}-${clause.lastWordId}）`);
         continue;
       }
-      if (start !== cursor) {
-        fail(bcv, clause.id, start > cursor
-          ? `与前一子句之间漏了词 ${ids.slice(cursor, start).join(',')}`
-          : `与前一子句重叠（从 ${clause.firstWordId} 起）`);
-      }
       if (end < start) {
         fail(bcv, clause.id, '首词在末词之后');
         continue;
       }
-      cursor = end + 1;
+      while (open.length > 0 && open.at(-1)!.end < start) {
+        open.pop();
+      }
+      const outer = open.at(-1);
+      if (start <= previousStart) {
+        fail(bcv, clause.id, `与前一子句重叠（从 ${clause.firstWordId} 起）；子句字母按首词先后排`);
+      } else if (outer) {
+        if (end >= outer.end) {
+          fail(bcv, clause.id, `与 ${outer.clause.id} 重叠交叉：嵌在句中的子句要整个落在它中间（首末词都不贴边），否则与它首尾相接`);
+        }
+      } else if (start !== cursor) {
+        fail(bcv, clause.id, start > cursor
+          ? `与前一子句之间漏了词 ${ids.slice(cursor, start).join(',')}`
+          : `与前一子句重叠（从 ${clause.firstWordId} 起）`);
+      }
+      previousStart = start;
+      open.push({ clause, start, end });
+      cursor = Math.max(cursor, end + 1);
+      const owns = (id: string) => clauseOfWord(id, clauses)?.id === clause.id;
       const messages: string[] = [];
-      checkRangeField(clause.subjectRange, 'subjectRange', clause.firstWordId, clause.lastWordId, messages);
-      checkRangeField(clause.verbRange, 'verbRange', clause.firstWordId, clause.lastWordId, messages);
+      checkRangeField(clause.subjectRange, 'subjectRange', owns, messages);
+      checkRangeField(clause.verbRange, 'verbRange', owns, messages);
       for (const brId of clause.br ? clause.br.split(',') : []) {
-        if (!inSpan(brId.trim(), clause.firstWordId, clause.lastWordId)) {
+        if (!owns(brId.trim())) {
           messages.push(`br 中的 ${brId} 不在本子句内`);
         }
       }
@@ -315,7 +364,7 @@ export function checkClauseAnalysis(
         }
       }
       if (messages.length === 0) {
-        const subjectIssues = checkSubject(clause, seeds, surfaceOf);
+        const subjectIssues = checkSubject(clause, seeds, surfaceOf, owns);
         if (subjectIssues.length > 0 && clause.seedDiff) {
           overrides.push({ clauseId: clause.id, seedDiff: clause.seedDiff, overridden: subjectIssues });
           // 人工改过的子句本身就是复核结论，不再降级
@@ -354,6 +403,28 @@ export function checkClauseAnalysis(
   for (const clauses of byVerse.values()) {
     for (const clause of clauses) {
       all.set(clause.id, clause);
+    }
+  }
+  const ownsWord = (clause: ClauseEntity, wordId: string) => {
+    const bcv = parseClauseId(clause.id).bcv;
+    return clauseOfWord(wordId, [...all.values()].filter((item) => parseClauseId(item.id).bcv === bcv))?.id === clause.id;
+  };
+  // 嵌在句中的子句：parentId 链要经过包含它的子句（夹在句中却挂到别处，说明切分或挂接有误）
+  for (const [bcv, clauses] of byVerse) {
+    for (const clause of clauses) {
+      const container = containerOf(clause, clauses);
+      if (!container) {
+        continue;
+      }
+      const seen = new Set<string>();
+      let parent = clause.parentId;
+      while (parent && parent !== container.id && !seen.has(parent)) {
+        seen.add(parent);
+        parent = all.get(parent)?.parentId ?? null;
+      }
+      if (parent !== container.id) {
+        fail(bcv, clause.id, `本句嵌在 ${container.id} 中间，parentId 应为 ${container.id}（或嵌在其中的子句）`);
+      }
     }
   }
   // logic.target 要在本章找得到，范围首尾有序，不能指向自己
@@ -395,12 +466,29 @@ export function checkClauseAnalysis(
           fail(bcv, clause.id, `parentId ${clause.parentId} 在本章找不到`);
         } else if (errors.has(parentBcv) && byVerse.has(parentBcv)) {
           fail(bcv, clause.id, `parentId ${clause.parentId} 所在节未通过校验，需一起重提`);
-        } else if (clause.modifies !== null && !inSpan(clause.modifies, parent.firstWordId, parent.lastWordId)) {
-          fail(bcv, clause.id, `modifies ${clause.modifies} 不在父句 ${parent.id} 范围内`);
+        } else if (clause.modifies !== null && !ownsWord(parent, clause.modifies)) {
+          fail(bcv, clause.id, `modifies ${clause.modifies} 不在父句 ${parent.id} 范围内（或落在嵌在父句中间的子句里）`);
         } else if (formsCycle(clause, all)) {
           fail(bcv, clause.id, 'parentId 成环');
         } else {
-          continue;
+          const skipped = skippedOver(clause, all);
+          const issue = skipped && `parentId ${clause.parentId} 越过了 ${skipped.id}（它挂在 ${skipped.parentId ?? '顶层'}，不在 ${clause.parentId} 之下），`
+            + `连线会交叉：句法上通常应挂 ${skipped.id}，或与它同挂 ${skipped.parentId ?? '顶层（parentId 为 null）'}；`
+            + '只是逻辑上针对较远的子句时，写在 logic 里；若确属提前或后置成分，在 seedDiff 写明句法理由（该句会标为 needs-review 交人工复核）';
+          if (!issue) {
+            continue;
+          }
+          if (!clause.seedDiff) {
+            fail(bcv, clause.id, issue);
+          } else {
+            if (!overrides.some((item) => item.clauseId === clause.id && item.overridden.includes(issue))) {
+              overrides.push({ clauseId: clause.id, seedDiff: clause.seedDiff, overridden: [issue] });
+            }
+            if (clause.status === 'accepted' && !clause.sources.includes('human')) {
+              clause.status = 'needs-review';
+            }
+            continue;
+          }
         }
         changed = true;
       }
@@ -457,7 +545,8 @@ function sameOrder(plain: string, renderings: Array<{ tokens: string; zh: string
     if (at === null || at === undefined || !first || rendering.zh === NOT_TRANSLATED) {
       continue;
     }
-    const k = covered.findIndex((clause) => first.id >= clause.firstWordId && first.id <= clause.lastWordId);
+    const owner = clauseOfWord(first.id, covered);
+    const k = owner ? covered.indexOf(owner) : -1;
     if (k < 0 || lineOf(at) !== k) {
       return false;
     }
@@ -592,8 +681,9 @@ export function checkTranslations(
         fail(bcv, clause.id, `第 ${level} 档（${LITERALNESS_LEVELS[level as 4 | 5].name}）不用 [ ] 标补词：去掉括号，把补出的词直接写进译文`);
       }
       const plain = segments.map((segment) => segment.text).join('');
+      // 末句可能嵌在首句中间，末词取覆盖子句里最靠后的
       const first = covered[0].firstWordId;
-      const last = covered[covered.length - 1].lastWordId;
+      const last = covered.map((c) => c.lastWordId).sort().at(-1)!;
       const span = tokens.filter((token) => token.id >= first && token.id <= last);
       const renderedIds = new Set<string>();
       for (const rendering of item.renderings) {

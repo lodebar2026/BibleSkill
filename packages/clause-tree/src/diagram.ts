@@ -122,7 +122,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
 .chip { display: flex; flex-direction: column; border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 6px; padding: 0 2px 2px; background: color-mix(in srgb, var(--c) 6%, var(--panel)); --c: var(--r-none); }
 .chip > .rl { font-size: 11px; color: var(--c); font-weight: 600; padding: 1px 4px 0; min-height: 1.4em; direction: ltr; }
-.hide-roles .chip > .rl { display: none; }
+.hide-roles .chip > .rl:not(:has(.sb)), .hide-roles.hide-focus .chip > .rl, .hide-roles .chip > .rl .rn { display: none; }
 /* 隐藏成分名后块宽只剩字宽：给个最小宽度、内容居中，单个字母（וַ）的块不显得局促 */
 .hide-roles .chip { padding-top: 2px; min-width: 30px; align-items: center; }
 .chip > .ws { display: flex; flex-wrap: wrap; }
@@ -157,18 +157,17 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent); border: 1.5px dashed var(--accent); border-radius: 5px; padding: 0 6px; direction: ltr; }
 .ot .w.slot .g { font-size: 13px; }
 .box.flash { box-shadow: 0 0 0 3px var(--hl); }
-/* 旧约词干：非 qal 的动词按词干类着色，词后小标签；主动实心、被动空心 */
-.w[data-stem="qal"] { --st: var(--st-qal); } .w[data-stem="niphal"] { --st: var(--st-niphal); } .w[data-stem="piel"] { --st: var(--st-piel); }
-.w[data-stem="hiphil"] { --st: var(--st-hiphil); } .w[data-stem="hithpael"] { --st: var(--st-hithpael); }
+/* 旧约词干：非 qal 的动词按词干类着色，标签放在成分名那一行；主动实心、被动空心 */
+[data-stem="qal"] { --st: var(--st-qal); } [data-stem="niphal"] { --st: var(--st-niphal); } [data-stem="piel"] { --st: var(--st-piel); }
+[data-stem="hiphil"] { --st: var(--st-hiphil); } [data-stem="hithpael"] { --st: var(--st-hithpael); }
 .canvas:not(.hide-focus) .w[data-stem] .g { color: var(--st); }
-.sb { font-size: 10px; font-weight: 700; color: var(--panel); background: var(--st); border: 1px solid var(--st); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
-.w[data-passive] .sb { color: var(--st); background: transparent; }
+.sb { font-size: 10px; font-weight: 700; color: var(--panel); background: var(--st); border: 1px solid var(--st); border-radius: 3px; padding: 0 3px; margin-inline-start: 4px; font-family: sans-serif; }
+.sb.pass { color: var(--st); background: transparent; }
 .hide-focus .sb { display: none; }
 /* 旧约：谓语前的实词成分（前置），多为焦点、对比或话题 */
 .canvas:not(.hide-focus) .chip.front { border: 2px solid var(--focus); border-top: 4px solid var(--c); background: color-mix(in srgb, var(--focus) 14%, var(--panel)); }
 .chip > .rl .fr { color: var(--focus); }
 .hide-focus .chip > .rl .fr, .hide-focus .bh .mk.front { display: none; }
-.forms-legend .sb { vertical-align: baseline; }
 /* 同根不定式独立形强调动词：不定式与动词都加焦点色框 */
 .canvas:not(.hide-focus) .w.cog .g, .forms-legend .cog-key { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 4px; background: color-mix(in srgb, var(--focus) 14%, transparent); }
 .forms-legend .cog-key { padding: 0 4px; color: var(--ink); }
@@ -345,7 +344,10 @@ function diagramClient(D: DiagramData): void {
       const el = document.createElement('div');
       el.className = `chip${chip.role ? ` r-${chip.role}` : ''}${chip.fronted ? ' front' : ''}`;
       const frontLabel = chip.fronted ? `<span class="fr">${chip.role ? ' · ' : ''}前置</span>` : '';
-      el.innerHTML = `<span class="rl">${chip.role ? ROLE_ZH[chip.role] : ''}${frontLabel}</span><span class="ws"></span>`;
+      // 词干标签与成分名同一行，不另占行
+      const stems = [...new Map(chip.wordIds.map((id) => words[id].stem).filter((stem) => stem !== null).map((stem) => [stem.name, stem])).values()];
+      const stemTags = stems.map((stem) => `<span class="sb${stem.passive ? ' pass' : ''}" data-stem="${stem.family}" title="${esc(stem.name)}">${esc(STEM_TAG[stem.name] ?? stem.name.slice(0, 3))}</span>`).join('');
+      el.innerHTML = `<span class="rl"><span class="rn">${chip.role ? ROLE_ZH[chip.role] : ''}${frontLabel}</span>${stemTags}</span><span class="ws"></span>`;
       const ws = $('.ws', el);
       for (const [index, id] of chip.wordIds.entries()) {
         const word = words[id];
@@ -361,15 +363,11 @@ function diagramClient(D: DiagramData): void {
         }
         if (word.stem) {
           w.dataset.stem = word.stem.family;
-          if (word.stem.passive) {
-            w.dataset.passive = '';
-          }
         }
         if (chip.indents) {
           w.dataset.indent = String(chip.indents[chip.wordIds.indexOf(id)]);
         }
-        w.innerHTML = `<span class="g o">${esc(word.text)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}`
-          + `${word.stem ? `<span class="sb" title="${esc(word.stem.name)}">${esc(STEM_TAG[word.stem.name] ?? word.stem.name.slice(0, 3))}</span>` : ''}</span>`
+        w.innerHTML = `<span class="g o">${esc(word.text)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
           + `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`;
         if (chip.pauses) {
           w.dataset.pause = String(chip.pauses[chip.wordIds.indexOf(id)]);
@@ -1078,11 +1076,11 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
       <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
     </div>
     <div class="forms-legend">
-      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" style="--st:var(--st-niphal)">Ni</span></span>
-      <span class="o" style="color:var(--st-piel)">piel <span class="sb" style="--st:var(--st-piel)">Pi</span></span>
-      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" style="--st:var(--st-hiphil)">Hi</span></span>
-      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" style="--st:var(--st-hithpael)">Ht</span></span>
-      <span>（qal 不着色；被动如 pual <span class="sb" style="--st:var(--st-piel);color:var(--st-piel);background:transparent">Pu</span>、hophal 用空心标签）</span>
+      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" data-stem="niphal">Ni</span></span>
+      <span class="o" style="color:var(--st-piel)">piel <span class="sb" data-stem="piel">Pi</span></span>
+      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" data-stem="hiphil">Hi</span></span>
+      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" data-stem="hithpael">Ht</span></span>
+      <span>（qal 不着色；被动如 pual <span class="sb pass" data-stem="piel">Pu</span>、hophal 用空心标签）</span>
       <span>· <span class="front-key">前置</span> = 动词前的实词成分（X-动词语序），多为焦点、对比或话题；框头「前置」同义</span>
       <span>· <span class="cog-key">同根强调</span> = 不定式独立形 + 同根动词（מוֹת תָּמוּת），强调动作本身</span>
     </div>` : `

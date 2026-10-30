@@ -81,7 +81,7 @@ export function basicClauseType(testament: 'OT' | 'NT', type: string): string | 
   return ot[type] ?? null;
 }
 
-const HEBREW_STEMS: Record<string, string> = {
+export const HEBREW_STEMS: Record<string, string> = {
   q: 'qal', N: 'niphal', p: 'piel', P: 'pual', h: 'hiphil', H: 'hophal', t: 'hithpael',
   o: 'polel', O: 'polal', r: 'hithpolel', m: 'poel', M: 'poal', k: 'palel', K: 'pulal',
   Q: 'qal passive', l: 'pilpel', L: 'polpal', f: 'hithpalpel', D: 'nithpael', j: 'pealal',

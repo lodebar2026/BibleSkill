@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SyntaxNode, Token, TokenSyntax } from './db.js';
-import { PAUSE_COORD, PAUSE_EMBED, PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, greekMorph, rangeLabel } from './diagram.js';
+import { PAUSE_COORD, PAUSE_EMBED, PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, cognateInfinitive, greekMorph, hebrewStem, rangeLabel } from './diagram.js';
 import { parseScriptureRange } from './ref.js';
 import type { ClauseEntity, ClauseText, DiagramNote } from './schemas.js';
 
@@ -220,4 +220,51 @@ test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就�
   const split = nested('n44007018004-n44007018007');
   assert.deepEqual(show(split.clauses[0].chips), ['conj:1,2', 'v:3', 's:4,5,6,7[4:44007018b]', '-:11,12']);
   assert.equal(split.clauses[0].chips[2].pauses?.at(-1), PAUSE_JOINED);
+});
+
+test('旧约词干：qal 主动不标，其余按词干类归并，被动另记', () => {
+  assert.equal(hebrewStem('HVqp3ms'), null);
+  assert.deepEqual(hebrewStem('HVpp3ms'), { name: 'piel', family: 'piel', passive: false });
+  assert.deepEqual(hebrewStem('HVPp3ms'), { name: 'pual', family: 'piel', passive: true });
+  assert.deepEqual(hebrewStem('HVhi3ms'), { name: 'hiphil', family: 'hiphil', passive: false });
+  assert.deepEqual(hebrewStem('HVHp3ms'), { name: 'hophal', family: 'hiphil', passive: true });
+  assert.deepEqual(hebrewStem('HVNp3ms'), { name: 'niphal', family: 'niphal', passive: false });
+  assert.deepEqual(hebrewStem('HVtp3ms'), { name: 'hithpael', family: 'hithpael', passive: false });
+  assert.deepEqual(hebrewStem('AVpp3ms'), { name: 'piel', family: 'piel', passive: false });
+  assert.equal(hebrewStem('HNcmsa'), null);
+  assert.equal(hebrewStem('V-AAI-3S'), null);
+});
+
+test('旧约前置：限定动词句里谓语前含名词性词的成分块标出；连接词、否定词、疑问代词、分词句不算；新约不标', () => {
+  const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
+    ...token(word, surface, morph), id: `o01001001${String(word).padStart(3, '0')}1`, bcv: 1001001, after,
+  });
+  const id = (n: number) => `o01001001${String(n).padStart(3, '0')}1`;
+  // וְ אֶת־הָאָרֶץ לֹא נָתַן אֱלֹהִים
+  const words = [ot(1, 'וְ', 'HC', ''), ot(2, 'אֶת', 'HTo', '־'), ot(3, 'הָ', 'HTd', ''), ot(4, 'אָרֶץ', 'HNcbsa'), ot(5, 'לֹא', 'HTn'),
+    ot(6, 'נָתַן', 'HVqp3ms'), ot(7, 'אֱלֹהִים', 'HNcmpa')];
+  const base = { ...clause('1001001a', 1, 7), firstWordId: id(1), lastWordId: id(7), verbRange: id(6), subjectRange: id(7) };
+  const run = (entity: ClauseEntity, isOT = true) => buildDiagram({ title: '', isOT, clauses: [entity], texts: [], tokens: words, variants: [], notes: [], morphExpansion: () => null })
+    .clauses[0].chips.map((chip) => `${chip.role ?? '-'}:${chip.wordIds.map((wordId) => Number(wordId.slice(-4, -1))).join(',')}${chip.fronted ? '!' : ''}`);
+  assert.deepEqual(run({ ...base, type: 'QtlX' }), ['conj:1', '-:2,3,4,5!', 'v:6', 's:7']);
+  // 否定词单独成块时不算前置
+  assert.deepEqual(run({ ...base, firstWordId: id(5), type: 'QtlX' }).slice(0, 1), ['-:5']);
+  // 分词句：成分在前是常序
+  assert.ok(run({ ...base, type: 'Ptcp' }).every((chip) => !chip.endsWith('!')));
+  // 疑问代词居首不算
+  const what = [ot(1, 'וְ', 'HC', ''), ot(2, 'מָה', 'HPi'), ot(3, 'נָתַן', 'HVqp3ms'), ot(4, 'אֱלֹהִים', 'HNcmpa')];
+  const asked = buildDiagram({ title: '', isOT: true, clauses: [{ ...base, type: 'QtlX', firstWordId: id(1), lastWordId: id(4), verbRange: id(3), subjectRange: id(4) }],
+    texts: [], tokens: what, variants: [], notes: [], morphExpansion: () => null });
+  assert.ok(asked.clauses[0].chips.every((chip) => !chip.fronted));
+  assert.ok(run({ ...base, type: '' }, false).every((chip) => !chip.endsWith('!')));
+});
+
+test('旧约同根不定式强调：不定式独立形与同根限定动词，前后都算；不定式附属形、不同词根不算', () => {
+  const w = (id: string, strong: string, morph: string) => ({ id, strong, morph });
+  // 创 2:17 מ֥וֹת תָּמֽוּת
+  assert.deepEqual(cognateInfinitive([w('a', 'H4191', 'HVqaa'), w('b', 'H4191', 'HVqi2ms')]), ['a', 'b']);
+  // 撒上 1:10 וַתִּבְכֶּה בָכֹה：wayyiqtol 在前
+  assert.deepEqual(cognateInfinitive([w('a', 'H9001', 'HC'), w('b', 'H1058', 'HVqw3fs'), w('c', 'H1058', 'HVqaa')]), ['b', 'c']);
+  assert.deepEqual(cognateInfinitive([w('a', 'H0398', 'HVqcc'), w('b', 'H0398', 'HVqi2ms')]), []);
+  assert.deepEqual(cognateInfinitive([w('a', 'H4191', 'HVqaa'), w('b', 'H1058', 'HVqi3fs')]), []);
 });

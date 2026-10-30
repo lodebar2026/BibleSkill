@@ -4,7 +4,7 @@
  * 每个子句一行，按原文先后自上而下排（叙事链、话语内容的序列一句接一句往下读），缩进表示从属；
  * 框头标子句编号。框里每个句子成分一块（新约照 Macula 分出宾语、间接宾语、状语、表语）。
  * 连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框；箭头伸进母句框，指到那个词。
- * 新约词按格着色、动词按时态加框、按语气加底色。
+ * 新约词按格着色、动词按时态加框、按语气加底色。旧约非 qal 的动词按词干着色，谓语前的实词成分（前置）加框标出。
  * 点「详情」展开词义与要点，点「收起分支」隐藏下属子句，点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
  */
 import type { DiagramData } from '@bs/core';
@@ -27,6 +27,7 @@ const STYLE = `
   --c-acc: rgb(42, 127, 255); --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: rgb(255, 102, 0);
   --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #ff0000;
   --m-ind: #f5f5dc; --m-impv: #ffc0c0; --m-subj: #ffe0ff; --m-opt: #e0ffe0;
+  --focus: #d97706; --st-qal: #6b665d; --st-niphal: #0369a1; --st-piel: #c2410c; --st-hiphil: #7e22ce; --st-hithpael: #15803d;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -37,6 +38,7 @@ const STYLE = `
     --c-acc: #6aa8ff; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
     --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
     --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a;
+    --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
   }
 }
 :root[data-theme="dark"] {
@@ -47,6 +49,7 @@ const STYLE = `
   --c-acc: #6aa8ff; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
   --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
   --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a;
+  --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, "PingFang SC", "Noto Sans SC", sans-serif; }
@@ -154,6 +157,22 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent); border: 1.5px dashed var(--accent); border-radius: 5px; padding: 0 6px; direction: ltr; }
 .ot .w.slot .g { font-size: 13px; }
 .box.flash { box-shadow: 0 0 0 3px var(--hl); }
+/* 旧约词干：非 qal 的动词按词干类着色，词后小标签；主动实心、被动空心 */
+.w[data-stem="qal"] { --st: var(--st-qal); } .w[data-stem="niphal"] { --st: var(--st-niphal); } .w[data-stem="piel"] { --st: var(--st-piel); }
+.w[data-stem="hiphil"] { --st: var(--st-hiphil); } .w[data-stem="hithpael"] { --st: var(--st-hithpael); }
+.canvas:not(.hide-focus) .w[data-stem] .g { color: var(--st); }
+.sb { font-size: 10px; font-weight: 700; color: var(--panel); background: var(--st); border: 1px solid var(--st); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
+.w[data-passive] .sb { color: var(--st); background: transparent; }
+.hide-focus .sb { display: none; }
+/* 旧约：谓语前的实词成分（前置），多为焦点、对比或话题 */
+.canvas:not(.hide-focus) .chip.front { border: 2px solid var(--focus); border-top: 4px solid var(--c); background: color-mix(in srgb, var(--focus) 14%, var(--panel)); }
+.chip > .rl .fr { color: var(--focus); }
+.hide-focus .chip > .rl .fr, .hide-focus .bh .mk.front { display: none; }
+.forms-legend .sb { vertical-align: baseline; }
+/* 同根不定式独立形强调动词：不定式与动词都加焦点色框 */
+.canvas:not(.hide-focus) .w.cog .g, .forms-legend .cog-key { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 4px; background: color-mix(in srgb, var(--focus) 14%, transparent); }
+.forms-legend .cog-key { padding: 0 4px; color: var(--ink); }
+.forms-legend .front-key { border: 2px solid var(--focus); border-radius: 4px; padding: 0 5px; background: color-mix(in srgb, var(--focus) 14%, var(--panel)); color: var(--ink); }
 .vb { font-size: 10px; color: var(--panel); background: var(--accent); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
 .box:not(.open) .w .m, .box:not(.open) .w .z, .box:not(.open) .w .e { display: none; }
 .hide-m .w .m, .hide-z .w .z, .hide-e .w .e { display: none !important; }
@@ -278,7 +297,10 @@ function diagramClient(D: DiagramData): void {
     return null;
   };
   const FORM_ZH: Record<string, string> = { wayyiqtol: 'wayyiqtol', qatal: 'qatal', weqatal: 'weqatal', yiqtol: 'yiqtol', participle: '分词', infinitive: '不定式', imperative: '祈使', nominal: '名词句' };
-  const fronted = (type: string) => /^X(Qtl|Yqt)/.test(type);
+  const STEM_TAG: Record<string, string> = {
+    qal: 'Q', 'qal passive': 'Qp', niphal: 'Ni', piel: 'Pi', pual: 'Pu', hiphil: 'Hi', hophal: 'Ho', hithpael: 'Ht', polel: 'Po', polal: 'Pol',
+    poel: 'Po', poal: 'Poa', pilpel: 'Pil', polpal: 'Ppl', hithpolel: 'Htp', hishtaphel: 'Hsht',
+  };
   // 叙事主线：旧约顶层子句里 wayyiqtol 是主线，新约叙事书卷里是不定过去式直说语气；其余形式离开主线（背景、评述、凸显）
   const mainline = D.isOT || D.narrative;
   const offline = (clause: (typeof D.clauses)[number]) => mainline && !clause.parentId && formOf(clause) !== null
@@ -304,8 +326,10 @@ function diagramClient(D: DiagramData): void {
     if (form) {
       box.dataset[D.isOT ? 'form' : 'ntForm'] = form;
     }
-    const marks = [D.isOT && fronted(clause.type) ? '<span class="mk" title="动词前有成分前置（X-动词语序），常用来凸显、对比或转入背景">前置</span>' : '',
-      offline(clause) ? `<span class="mk" title="${OFFLINE_TITLE}">离线</span>` : ''].join('');
+    const front = clause.chips.filter((chip) => chip.fronted).map((chip) => (chip.role ? ROLE_ZH[chip.role] : '成分'));
+    const marks = [front.length > 0 ? `<span class="mk front" title="动词前有${esc(front.join('、'))}前置（X-动词语序），常用来凸显焦点、对比或转入背景">前置</span>` : '',
+      offline(clause) ? `<span class="mk" title="${OFFLINE_TITLE}">离线</span>` : '',
+      clause.cognate.length > 0 ? '<span class="mk front" title="同根的不定式独立形强调动词本身（必定、痛……），如 מוֹת תָּמוּת、וַתִּבְכֶּה בָכֹה">同根强调</span>' : ''].join('');
     const ntBadge = () => {
       const [tense, mood] = clause.ntForm!.split('-');
       return mood === 'inf' || mood === 'ptcp' ? `${TENSE_ZH[tense]}${MOOD_ZH[mood]}` : `${TENSE_ZH[tense]}·${MOOD_ZH[mood]}`;
@@ -319,25 +343,33 @@ function diagramClient(D: DiagramData): void {
     chips.className = 'chips';
     for (const chip of clause.chips) {
       const el = document.createElement('div');
-      el.className = `chip${chip.role ? ` r-${chip.role}` : ''}`;
-      el.innerHTML = `<span class="rl">${chip.role ? ROLE_ZH[chip.role] : ''}</span><span class="ws"></span>`;
+      el.className = `chip${chip.role ? ` r-${chip.role}` : ''}${chip.fronted ? ' front' : ''}`;
+      const frontLabel = chip.fronted ? `<span class="fr">${chip.role ? ' · ' : ''}前置</span>` : '';
+      el.innerHTML = `<span class="rl">${chip.role ? ROLE_ZH[chip.role] : ''}${frontLabel}</span><span class="ws"></span>`;
       const ws = $('.ws', el);
       for (const [index, id] of chip.wordIds.entries()) {
         const word = words[id];
         const w = document.createElement('span');
         // 与下一个语素相连（同一词、maqqef）且下一个在同一块里时才去掉间距；跨块的（וַ 是连接词、动词在下一块）照常留边
         const joined = (word.after === '' || word.after === '־') && index < chip.wordIds.length - 1;
-        w.className = `w${targets.has(id) ? ' target' : ''}${joined ? ' join' : ''}`;
+        w.className = `w${targets.has(id) ? ' target' : ''}${joined ? ' join' : ''}${clause.cognate.includes(id) ? ' cog' : ''}`;
         w.dataset.id = id;
         for (const key of ['gcase', 'tense', 'mood'] as const) {
           if (word[key]) {
             w.dataset[key === 'gcase' ? 'case' : key] = word[key]!;
           }
         }
+        if (word.stem) {
+          w.dataset.stem = word.stem.family;
+          if (word.stem.passive) {
+            w.dataset.passive = '';
+          }
+        }
         if (chip.indents) {
           w.dataset.indent = String(chip.indents[chip.wordIds.indexOf(id)]);
         }
-        w.innerHTML = `<span class="g o">${esc(word.text)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
+        w.innerHTML = `<span class="g o">${esc(word.text)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}`
+          + `${word.stem ? `<span class="sb" title="${esc(word.stem.name)}">${esc(STEM_TAG[word.stem.name] ?? word.stem.name.slice(0, 3))}</span>` : ''}</span>`
           + `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`;
         if (chip.pauses) {
           w.dataset.pause = String(chip.pauses[chip.wordIds.indexOf(id)]);
@@ -1021,7 +1053,7 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
         <button type="button" data-toggle="m" aria-pressed="false">词法</button>
         <button type="button" data-toggle="e" aria-pressed="false">英文</button>
         <button type="button" data-toggle="roles" aria-pressed="true" title="成分块顶上的名称（主语、谓语、宾语……）；关掉后只留顶边色条">成分名</button>
-        <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>${ot ? '\n        <button type="button" data-toggle="forms" aria-pressed="true">句型与主线</button>' : `
+        <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>${ot ? '\n        <button type="button" data-toggle="forms" aria-pressed="true">句型与主线</button>\n        <button type="button" data-toggle="focus" aria-pressed="true" title="非 qal 词干的动词着色、动词前的实词成分（前置）加框">词干与前置</button>' : `
         <button type="button" data-toggle="case" aria-pressed="true">格与时态</button>
         <button type="button" data-toggle="forms" aria-pressed="true">${data.narrative ? '时态与主线' : '时态标签'}</button>`}
       </span>
@@ -1043,7 +1075,16 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
       <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
       <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
       <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
-      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「前置」= X-动词语序（凸显/对比），「离线」= 顶层不用 wayyiqtol，不接主线</span>
+      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
+    </div>
+    <div class="forms-legend">
+      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" style="--st:var(--st-niphal)">Ni</span></span>
+      <span class="o" style="color:var(--st-piel)">piel <span class="sb" style="--st:var(--st-piel)">Pi</span></span>
+      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" style="--st:var(--st-hiphil)">Hi</span></span>
+      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" style="--st:var(--st-hithpael)">Ht</span></span>
+      <span>（qal 不着色；被动如 pual <span class="sb" style="--st:var(--st-piel);color:var(--st-piel);background:transparent">Pu</span>、hophal 用空心标签）</span>
+      <span>· <span class="front-key">前置</span> = 动词前的实词成分（X-动词语序），多为焦点、对比或话题；框头「前置」同义</span>
+      <span>· <span class="cog-key">同根强调</span> = 不定式独立形 + 同根动词（מוֹת תָּמוּת），强调动作本身</span>
     </div>` : `
 ${data.narrative ? `
     <div class="forms-legend">

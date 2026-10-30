@@ -6,6 +6,7 @@
  * bible-diagram 写入的说明（diagram.json）只补子句功能、连线标签、大意与要点。
  * 纯函数 buildDiagram 便于测试；loadDiagram 负责读库与工作文件。
  */
+import { HEBREW_STEMS } from './clause-type.js';
 import { clauseOfWord, clauseWords, containerOf, embedSlots } from './clause-words.js';
 import type { BibleDb, SyntaxNode, Token, TokenSyntax, VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
@@ -36,7 +37,29 @@ export type DiagramWord = {
   gcase: GreekCase | null;
   tense: GreekTense | null;
   mood: GreekMood | null;
+  /** 旧约动词的词干（qal 主动为 null，不着色；新约一律 null）。 */
+  stem: HebrewStem | null;
 };
+
+export type StemFamily = 'qal' | 'niphal' | 'piel' | 'hiphil' | 'hithpael';
+export type HebrewStem = { name: string; family: StemFamily; passive: boolean };
+
+const STEM_FAMILIES: Record<StemFamily, string[]> = {
+  qal: ['qal passive'],
+  niphal: ['niphal'],
+  piel: ['piel', 'pual', 'polel', 'polal', 'poel', 'poal', 'pilpel', 'polpal', 'pilel', 'palel', 'pulal', 'pealal'],
+  hiphil: ['hiphil', 'hophal', 'tiphil'],
+  hithpael: ['hithpael', 'hithpolel', 'hithpalpel', 'hithpoel', 'nithpael', 'nithpalel', 'nithpoel', 'hothpaal', 'hishtaphel'],
+};
+const PASSIVE_STEMS = new Set(['qal passive', 'pual', 'polal', 'poal', 'polpal', 'pulal', 'hophal', 'hothpaal']);
+
+/** 希伯来、亚兰动词的词干：`HVpp3ms` → piel。qal 主动与非动词返回 null。 */
+export function hebrewStem(morph: string): HebrewStem | null {
+  const code = morph.match(/^[HA]V(\w)/)?.[1];
+  const name = code ? HEBREW_STEMS[code] : undefined;
+  const family = name ? (Object.keys(STEM_FAMILIES) as StemFamily[]).find((key) => STEM_FAMILIES[key].includes(name)) : undefined;
+  return name && family ? { name, family, passive: PASSIVE_STEMS.has(name) } : null;
+}
 
 export type GreekCase = 'nom' | 'gen' | 'dat' | 'acc' | 'voc';
 export type GreekTense = 'pres' | 'impf' | 'fut' | 'aor' | 'perf' | 'plpf';
@@ -70,7 +93,8 @@ export function greekMorph(morph: string): { gcase: GreekCase | null; tense: Gre
  */
 export type ChipRole = 's' | 'v' | 'o' | 'o2' | 'io' | 'adv' | 'p' | 'conj';
 export type DiagramSlot = { id: string; at: number; clauseIds: string[]; pause?: number };
-export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[]; slots?: DiagramSlot[] };
+/** fronted：旧约里排在谓语之前的实词成分（宾语、状语、主语前置），多为焦点、对比或话题。 */
+export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[]; slots?: DiagramSlot[]; fronted?: true };
 
 /** 词后不能断（词缀、maqqef 相连）。 */
 export const PAUSE_JOINED = -1;
@@ -150,6 +174,8 @@ export type DiagramClause = {
   targetSlot: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
   logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
+  /** 旧约：同根不定式独立形强调动词（מוֹת תָּמוּת、וַתִּבְכֶּה בָכֹה）时，不定式与限定动词的词 id；没有时为空。 */
+  cognate: string[];
   /** 是否有 bible-diagram 写的说明（没有时功能、连线、大意用默认值）。 */
   annotated: boolean;
   /** bible-diagram 写的要点。 */
@@ -407,7 +433,47 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
       chip.indents = layout.indents;
     }
   }
+  markFronted(clause, chips, byId, isOT);
   return chips;
+}
+
+/**
+ * 旧约：子句里有不定式独立形（`HVqaa`），又有同词根的限定动词（qatal、yiqtol、wayyiqtol、weqatal、祈使、jussive、cohortative），
+ * 不论前后，都是强调动词本身（“必定”“痛…”）。返回这几个词的 id。
+ */
+export function cognateInfinitive(words: Array<Pick<Token, 'id' | 'strong' | 'morph'>>): string[] {
+  const root = (strong: string) => strong.replace(/[A-Za-z]+$/, '');
+  const absolutes = words.filter((word) => /^[HA]V\wa/.test(word.morph));
+  const finite = words.filter((word) => /^[HA]V\w[pqiwhjv]/.test(word.morph));
+  const pairs = absolutes.flatMap((inf) => {
+    const verbs = finite.filter((verb) => root(verb.strong) === root(inf.strong));
+    return verbs.length > 0 ? [inf.id, ...verbs.map((verb) => verb.id)] : [];
+  });
+  return words.map((word) => word.id).filter((id) => pairs.includes(id));
+}
+
+/** 旧约限定动词句（qatal、yiqtol、祈使）：动词前的成分才算前置；分词句、名词句、不定式另有常序，不标。 */
+const FINITE_OT = /^(XQtl|QtlX|Qtl0|XYqt|YqtX|Yqt0|Impv|qatal|yiqtol|imperative)$/;
+
+/**
+ * 旧约限定动词句：谓语块之前、含名词性词（名词、形容词、代词、介词后缀）的成分块记为前置。
+ * 疑问代词（מָה、מִי）本就居首，挂在否定词、小品词上的后缀（אֵינֶנּוּ）也不算；连接词不含名词性词，自然不算。新约暂不标。
+ */
+function markFronted(clause: ClauseEntity, chips: DiagramChip[], byId: Map<string, Token>, isOT: boolean): void {
+  const verbAt = chips.findIndex((chip) => chip.role === 'v');
+  if (!isOT || verbAt < 0 || !FINITE_OT.test(clause.type)) {
+    return;
+  }
+  const weighty = (ids: string[]) => ids.some((id, i) => {
+    const { morph } = byId.get(id)!;
+    const host = i > 0 ? byId.get(ids[i - 1]) : undefined;
+    return isNominal(byId.get(id)!, true) && !/^[HA]Pi/.test(morph) && !(/^[HA]S/.test(morph) && host?.after === '' && /^[HA]T/.test(host.morph));
+  });
+  for (const chip of chips.slice(0, verbAt)) {
+    if (chip.role !== 'conj' && weighty(chip.wordIds)) {
+      chip.fronted = true;
+    }
+  }
 }
 
 /**
@@ -494,6 +560,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       strong: token.strong, morph: token.morph, morphExp: input.morphExpansion(token.morph), glossEn: token.glossEn,
       glossZh: token.glossZh, sense: token.sense, rendering: renderings.get(token.id) ?? null, variant: variantOf(token, isOT),
       ...(isOT ? { gcase: null, tense: null, mood: null } : greekMorph(token.morph)),
+      stem: isOT ? hebrewStem(token.morph) : null,
     };
   }
   const covered = input.syntax ? nodeWords(input.syntax) : undefined;
@@ -574,6 +641,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       targetWordId,
       targetSlot: slot ? `${container!.id}@${slot.at}` : null,
       logic: logicOf(clause, input.clauses),
+      cognate: isOT ? cognateInfinitive(own) : [],
       annotated: note !== undefined,
       points: note?.notes ?? [],
       records,

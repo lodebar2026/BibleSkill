@@ -4,7 +4,7 @@
 
 ## 流程
 
-1. 调 `build_analysis_briefing(range)` 一次。范围较大（如超过 15 节）时按自然段分批进行。
+1. 调 `build_analysis_briefing(range)` 一次。范围较大（如超过 15 节）时按自然段分批进行。如果有能对比各英文译本分段的扩展工具，分批前先取一次全范围的分段对比，批次边界放在多数译本和原文共同认可的段首。
 2. 读 `tokens`（逐词 TSV，`# 章:节` 分节）、`maculaSeeds` 与 `ambiguityHints`（旧约）。
 3. 逐节确定子句，组成 `clauses` 数组提交。
 4. 若返回 `errors`，只修正并重提出错的节；已写入的节不要重提。

@@ -343,6 +343,10 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
   });
   const shallowest = Math.min(...common);
   const pauses = chipWords.map((word, i) => {
+    // 冠词与它带的名词、分词子句（τοὺς | προκαταγγείλαντας…）不断开，虽然两者的共同祖先最浅
+    if (word.morph.startsWith('T-') && i < chipWords.length - 1) {
+      return PAUSE_JOINED;
+    }
     const punct = pauseAfter(word, isOT);
     return i < common.length && punct !== PAUSE_JOINED ? Math.max(punct, Math.max(0, 4 - (common[i] - shallowest))) : punct;
   });

@@ -178,6 +178,8 @@ test('块内按短语树折行：嵌入的分词短语连同冠词自成一行�
   assert.deepEqual(cuts, [`ἀγγέλου:${PAUSE_EMBED}`, `αὐτῷ:${PAUSE_COORD}`]);
   assert.ok(predicate.pauses!.every((pause) => pause < PAUSE_FORCED));
   assert.deepEqual(predicate.indents, [0, 0, 0, 1, 1, 1, 0, 0, 0]);
+  // 冠词之后不断
+  assert.deepEqual([1, 3, 7].map((i) => predicate.pauses![i]), [PAUSE_JOINED, PAUSE_JOINED, PAUSE_JOINED]);
 });
 
 test('旧约也按短语树分成分块（介词短语按状语），但块内折行只看停顿重音、不缩进', () => {

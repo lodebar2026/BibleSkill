@@ -663,8 +663,7 @@ function diagramClient(D: DiagramData): void {
     // 每条线有几种走法（从子句顶边/底边直接出、起始侧沟槽、尾侧沟槽），排除穿过其他方框的，
     // 按「交叉数 → 折点数 → 长度」取最好的；跨度短的先定
     // into：箭头伸进母句框、指到被修饰词的那一段（画在方框上层）；没有目标词时为 null，箭头停在框边
-    type Wire = { candidates: Array<Array<[number, number]>>; penalties: number[]; span: number; group: string; into: number | null };
-    // 尾侧是逻辑虚线走的地方：显示逻辑关系时，句法连线走尾侧、竖线旁又有带逻辑关系的框，要多付代价（逻辑线进出那些框的横线会穿过它）
+    type Wire = { candidates: Array<Array<[number, number]>>; span: number; group: string; into: number | null };
     const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
     // 画逻辑虚线的方框（起点与关联的子句）
@@ -674,6 +673,25 @@ function diagramClient(D: DiagramData): void {
       return { box, left: r.left - base.left, right: r.right - base.left, top: r.top - base.top, bottom: r.bottom - base.top };
     });
     const endOf = (rect: DOMRect) => (rtl ? rect.left : rect.right) - base.left;
+    // 逻辑虚线后画，先估出它们的位置：从两框尾边中点横出，到两句之间所有方框尾侧之外的竖道。句法连线挑走法时与它们的交叉照样计数
+    const logicSegs: Seg[] = [];
+    for (const clause of showLogic ? D.clauses : []) {
+      const from = $(`[data-box="${clause.id}"]`);
+      const to = clause.logic && clause.logic.targetIds.length > 0 ? $(`[data-box="${clause.logic.targetIds[0]}"]`) : null;
+      if (!from || !to || from.hidden || to.hidden) {
+        continue;
+      }
+      const [ra, rb] = [from.getBoundingClientRect(), to.getBoundingClientRect()];
+      const [ya, yb] = [ra.top + ra.height / 2 - base.top, rb.top + rb.height / 2 - base.top];
+      let lane = rtl ? Math.min(endOf(ra), endOf(rb)) : Math.max(endOf(ra), endOf(rb));
+      for (const item of visible) {
+        if (item.top < Math.max(ya, yb) && item.bottom > Math.min(ya, yb)) {
+          lane = rtl ? Math.min(lane, item.left) : Math.max(lane, item.right);
+        }
+      }
+      lane += rtl ? -18 : 18;
+      logicSegs.push(...polyline([[endOf(ra), ya], [lane, ya], [lane, yb], [endOf(rb), yb]]));
+    }
     /** 竖线 x 从 y1 到 y2 是否穿过 skip 以外的方框。 */
     const blockedV = (x: number, y1: number, y2: number, skip: HTMLElement[]) => visible.some((item) => !skip.includes(item.box)
       && x > item.left - 3 && x < item.right + 3 && Math.max(y1, y2) > item.top && Math.min(y1, y2) < item.bottom);
@@ -774,16 +792,11 @@ function diagramClient(D: DiagramData): void {
           far = rtl ? Math.min(far, item.left) : Math.max(far, item.right);
         }
       }
-      const penalties: number[] = candidates.map(() => 0);
-      // 尾侧竖线从 y1 到 y2 旁边有带逻辑关系的框时多付的代价
-      const farCost = (y1: number, y2: number) => (showLogic && visible.some((item) => !skip.includes(item.box) && logicBoxes.has(item.box.dataset.box!)
-        && item.top < Math.max(y1, y2) && item.bottom > Math.min(y1, y2)) ? 1500 : 0);
       // 子句自己带逻辑关系时，逻辑虚线接在尾边中点，句法线改从尾边上部出
       const yFar = showLogic && logicBoxes.has(clause.id) ? Math.round(c.top - base.top + Math.min(c.height * 0.3, 40)) : yChild;
       for (let k = 0; k < 4; k += 1) {
         const g = far + (rtl ? -1 : 1) * (10 + k * 6);
         candidates.push([[endOf(c), yFar], [g, yFar], [g, yLane], [xT, yLane], [xT, tip]]);
-        penalties.push(farCost(yFar, yLane));
       }
       // 4) 经中间方框之间的空隙绕过去：从子句朝母句的边（或起始侧沟槽）进空隙，横走到尾侧沟槽或正对目标词处，再往母句去。
       // 挡在中间的从句与母句的连线（如嵌入子句的竖线）这样就不必横穿
@@ -805,28 +818,65 @@ function diagramClient(D: DiagramData): void {
           ...[...new Set(exits)].filter((x) => !blockedV(x, childEdge, yG, skip)).map((x): Array<[number, number]> => [[x, childEdge], [x, yG]]),
           [[start(c), yChild], [gutter, yChild], [gutter, yG]],
         ];
+        // 尾侧竖道只需绕开空隙到母句之间的方框：同一处空隙出来的线落在同一条竖道上，能汇成主干
+        let farAbove = rtl ? Infinity : -Infinity;
+        for (const item of inRange) {
+          if (item.top < Math.max(yG, edge) && item.bottom > Math.min(yG, edge)) {
+            farAbove = rtl ? Math.min(farAbove, item.left) : Math.max(farAbove, item.right);
+          }
+        }
         for (const entry of entries) {
-          const g = far + (rtl ? -1 : 1) * 10;
+          const g = (Number.isFinite(farAbove) ? farAbove : far) + (rtl ? -1 : 1) * 10;
           candidates.push([...entry, [g, yG], [g, yLane], [xT, yLane], [xT, tip]]);
-          penalties.push(farCost(yG, yLane));
           if (!blockedV(xT, yG, tip, skip)) {
             candidates.push([...entry, [xT, yG], [xT, tip]]);
-            penalties.push(0);
           }
         }
       }
-      wires.push({ candidates, penalties, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into });
+      wires.push({ candidates, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into });
     }
     const verticals: Array<{ x: number; top: number; bottom: number }> = [];
     const length = (points: Array<[number, number]>) => points.slice(1).reduce((sum, [x, y], i) => sum + Math.abs(x - points[i][0]) + Math.abs(y - points[i][1]), 0);
+    // 指向同一个词的线汇成主干：汇合处最多三个方向（┬ ┴ ├ ┤），四个方向就成了十字，看着像交叉而过
+    const groupSegs = new Map<string, Seg[]>();
+    const directions = (x: number, y: number, seg: Seg) => {
+      const on = (a: number, b: number, v: number) => v >= Math.min(a, b) - 0.5 && v <= Math.max(a, b) + 0.5;
+      if (!on(seg.x1, seg.x2, x) || !on(seg.y1, seg.y2, y) || (seg.x1 === seg.x2 && Math.abs(seg.x1 - x) > 0.5) || (seg.y1 === seg.y2 && Math.abs(seg.y1 - y) > 0.5)) {
+        return [];
+      }
+      const ends = [[seg.x1, seg.y1], [seg.x2, seg.y2]].filter(([ex, ey]) => Math.abs(ex - x) > 0.5 || Math.abs(ey - y) > 0.5);
+      return ends.map(([ex, ey]) => (ex > x ? 'r' : ex < x ? 'l' : ey > y ? 'd' : 'u'));
+    };
+    const crossJoints = (path: Seg[], others: Seg[]) => {
+      const points = path.flatMap((seg) => [[seg.x1, seg.y1], [seg.x2, seg.y2]])
+        .concat(others.flatMap((seg) => [[seg.x1, seg.y1], [seg.x2, seg.y2]]));
+      const seen = new Set<string>();
+      let count = 0;
+      for (const [x, y] of points) {
+        const key = `${Math.round(x)},${Math.round(y)}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        const mine = new Set(path.flatMap((seg) => directions(x, y, seg)));
+        if (mine.size > 0 && new Set([...mine, ...others.flatMap((seg) => directions(x, y, seg))]).size === 4) {
+          count += 1;
+        }
+      }
+      return count;
+    };
     const score = (wire: Wire, index: number) => {
       const points = wire.candidates[index];
-      return cost(polyline(points)) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + wire.penalties[index];
+      const path = polyline(points);
+      const logicCrossings = path.reduce((sum, seg) => sum + logicSegs.filter((other) => crosses(seg, other)).length, 0);
+      const joints = crossJoints(path, groupSegs.get(wire.group) ?? []);
+      return (cost(path) + logicCrossings + joints) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05;
     };
     const commit = (wire: Wire, best: Array<[number, number]>) => {
       // 与先画的线交叉处，后画的这条跨过去
       const hops = crossings(best);
       segs.push(...polyline(best));
+      groupSegs.set(wire.group, [...(groupSegs.get(wire.group) ?? []), ...polyline(best)]);
       // 句法竖线也记下，逻辑虚线不贴着它们走
       for (const seg of polyline(best).filter((item) => item.x1 === item.x2)) {
         verticals.push({ x: seg.x1, top: Math.min(seg.y1, seg.y2), bottom: Math.max(seg.y1, seg.y2) });
@@ -874,8 +924,9 @@ function diagramClient(D: DiagramData): void {
         for (const [i, single] of singles[depth].entries()) {
           pick[depth] = i;
           const mine = polyline(group[depth].candidates[i]);
-          const mutual = pick.slice(0, depth).reduce((n, j, d) => n + polyline(group[d].candidates[j])
-            .reduce((m, seg) => m + mine.filter((other) => crosses(seg, other)).length, 0), 0);
+          const picked = pick.slice(0, depth).flatMap((j, d) => polyline(group[d].candidates[j]));
+          const mutual = picked.reduce((m, seg) => m + mine.filter((other) => crosses(seg, other)).length, 0)
+            + crossJoints(mine, [...(groupSegs.get(group[0].group) ?? []), ...picked]);
           walk(depth + 1, sum + single + mutual * 1000);
         }
       };

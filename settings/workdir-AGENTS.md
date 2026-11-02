@@ -22,6 +22,7 @@
 - 不要运行 shell 命令，也不要列目录、读工作文件：需要的数据都由工具提供。
 - 词 id 只用工具返回的 id。
 - 不照搬其他中外译本的措辞（说明争议依据时可以提到哪些译本采某读法）。
+- 异文与解经争议默认不处理；用户要求时才做（工具参数 `disputes: true`，规则见 skill 的 references/disputes.md）。
 - 如果环境里还有其他 MCP 工具提供学术词典、注释书、交叉引用等能力，可以用来辅助判断，在 `sources` 中记为 `ext:<能力>`，只写结论，不写入受版权保护的原文。
 
 ## 工作文件
@@ -30,7 +31,7 @@
 config.json                 数据库路径、各任务的模型（models）
 glossary.json               术语表（用词统一）
 rules.json                  积累的分析/翻译规则（可手工维护）
-style.md                    翻译档位 literalness 与个人风格（可手工维护）
+style.md                    翻译档位 literalness、争议开关 disputes 与个人风格（可手工维护）
 terms.yaml                  术语偏好（偏好级，可手工维护，可写注释）
 <书名>/chNN/history.jsonl          译文修改历史（自动记录）
 <书名>/chNN/clause_entities.json   子句分析

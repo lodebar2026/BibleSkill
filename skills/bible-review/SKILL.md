@@ -7,20 +7,22 @@ description: 圣经译文的审校。当用户要求「审校」「复查」「�
 
 开始前先读 [references/principles.md](references/principles.md)。
 
+异文与解经争议默认不处理。用户在请求里要求标出异文或争议（如“带争议”“看异文”“标出不同读法”）时，给本流程的 briefing、提交与审校报告都传 `disputes: true`，并读 [references/disputes.md](references/disputes.md)。不开启时报告里没有 `dispute` 和 ambiguous。
+
 执行顺序：
 
-1. `review_report(range)` 取报告。
+1. `review_report(range)` 取报告（开启争议时加 `disputes: true`）。
 2. 向用户汇报：
    - **需要改译的范围**（`retranslate`），并按 `verses` 里的问题类别说明原因：
      - `structure`：子句分析在翻译之后改过，译文对不上（缺译子句、子句 id 变了、rendering 越界、实词缺 rendering 等）
-     - `dispute`：子句后来标成了 ambiguous，或有影响翻译的异文，但译文还没有处理
+     - `dispute`（开启争议时）：子句后来标成了 ambiguous，或有影响翻译的异文，但译文还没有处理
      - `glossary`：违反当前术语表
-   - **需要人工复核的子句**（`humanReview`）：needs-review 写明推翻 Macula 的理由，ambiguous 列出各种读法。这些由用户判断，不要替用户定。用户可以在终端运行 `pnpm view <范围> --serve --workdir <工作目录>` 打开可编辑视图，自己改切分、挂接、主语和状态；改完再回来跑审校。
+   - **需要人工复核的子句**（`humanReview`）：needs-review 写明推翻 Macula 的理由，ambiguous（开启争议时）列出各种读法。这些由用户判断，不要替用户定。用户可以在终端运行 `pnpm view <范围> --serve --workdir <工作目录>` 打开可编辑视图，自己改切分、挂接、主语和状态；改完再回来跑审校。
    - `untranslated` 只是进度信息，简单提一句即可。
    - `otherLevel`：这些节是按别的翻译档位译的（工作目录后来改了 `literalness`）。它们按原来的档位复查，不算问题；告诉用户，用户想统一成当前档位时，再把这些范围交给 bible-translate 重译。
    - `legacy`：这些节的补词还以 `[ ]` 字符存在正文里（旧格式）。请用户在 BibleSkill 目录运行 `pnpm migrate:segments --workdir <工作目录>` 转换；不要为此重译。
    - 报告带 `style`（个人风格）时，可以另列几处明显不合风格的译文作为**可选建议**；不要因此把节放进需要改译的范围。
-3. 用户同意后，按 `retranslate` 逐个范围走 bible-translate 的流程（`build_translation_briefing` → `submit_translation`）整节重提。`structure` 问题提示“没有子句分析”的，先按 bible-analyze 完成分析再翻译。
+3. 用户同意后，按 `retranslate` 逐个范围走 bible-translate 的流程（`build_translation_briefing` → `submit_translation`，开启争议时都传 `disputes: true`）整节重提。`structure` 问题提示“没有子句分析”的，先按 bible-analyze 完成分析再翻译。
 4. 全部重提后再调一次 `review_report(range)`，确认 `retranslate` 已清空，然后向用户汇报改了哪些节、还剩哪些需要人工复核。
 
 约束：

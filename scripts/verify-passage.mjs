@@ -137,8 +137,10 @@ try {
       status: 'ambiguous', alternatives: [{ summary: '1:1 作 1:2 的时间状语从句', basis: '测试' }] }],
   });
   check('重新分析已译的节时提示 review_report', /review_report/.test(reanalyzed.translatedVerses ?? ''), reanalyzed.translatedVerses);
-  const afterAnalysis = await call('review_report', { range: '创 1:1-2' });
-  check('子句改为 ambiguous 后报未处理的争议并列入人工复核',
+  const quiet = await call('review_report', { range: '创 1:1-2' });
+  check('默认不处理争议：ambiguous 不报 dispute、不列人工复核', !quiet.counts.dispute && !quiet.humanReview?.length, JSON.stringify(quiet.counts));
+  const afterAnalysis = await call('review_report', { range: '创 1:1-2', disputes: true });
+  check('开启争议：子句改为 ambiguous 后报未处理的争议并列入人工复核',
     afterAnalysis.retranslate.join() === '创世记 1:1-2' && afterAnalysis.counts.dispute > 0 && afterAnalysis.humanReview?.[0]?.clauseId === '1001001a',
     JSON.stringify(afterAnalysis.counts));
 
@@ -173,7 +175,9 @@ try {
     range: '约一 5:7',
     clauses: [{ id: '62005007a', firstWordId: 'n62005007001', lastWordId: 'n62005007005', verbRange: 'n62005007003', subjectRange: 'n62005007004-n62005007005', seedDiff: '测试' }],
   });
-  const comma = await call('build_translation_briefing', { range: '约一 5:7' });
+  const plain = await call('build_translation_briefing', { range: '约一 5:7' });
+  check('默认不处理争议：briefing 不带 disputes 线索', !plain.clauses[0].disputes && plain.disputes?.enabled === false, JSON.stringify(plain.disputes));
+  const comma = await call('build_translation_briefing', { range: '约一 5:7', disputes: true });
   check('约一 5:7 的 TR 异文列入 disputes', JSON.stringify(comma.clauses[0].disputes ?? {}).includes('TR'), JSON.stringify(comma.clauses[0].disputes ?? {}).slice(0, 90));
 
   const nt = await call('get_passage', { range: 'John 1:1' });

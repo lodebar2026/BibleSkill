@@ -189,6 +189,7 @@ export type Rule = z.infer<typeof RuleSchema>;
 
 /** 个人风格的结构化选项（style.md 的 frontmatter）。 */
 export const CLAUSE_ORDERS = ['fluent', 'source'] as const;
+export const DISPUTE_MODES = ['off', 'on'] as const;
 
 /** 翻译档位：1 最贴近原文形式，5 最偏意义。详细规则见 prompts/literalness.md。 */
 export const LITERALNESS_LEVELS = {
@@ -209,6 +210,8 @@ export const StyleOptionsSchema = z.object({
   clauseOrder: z.enum(CLAUSE_ORDERS).default('fluent'),
   /** 翻译档位 1–5，见 LITERALNESS_LEVELS。 */
   literalness: z.coerce.number().int().min(1).max(5).default(DEFAULT_LITERALNESS).transform((value) => value as Literalness),
+  /** 异文与解经争议：off = 不处理（默认，省 token）；on = 标出 ambiguous、给 alternatives、处理异文。单次请求可用工具参数 disputes 临时打开。 */
+  disputes: z.enum(DISPUTE_MODES).default('off'),
 });
 
 export type StyleOptions = z.infer<typeof StyleOptionsSchema>;

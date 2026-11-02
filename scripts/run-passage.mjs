@@ -13,6 +13,7 @@
  *   --step analyze|translate|all   只跑一步（默认 all）
  *   --analyze <spec> / --translate <spec>   本次临时换模型
  *   --no-skip-permissions          agy 不加 --dangerously-skip-permissions（需已在 agy 设置里放行 bibleskill 工具）
+ *   --disputes                     本次标出异文与解经争议（默认按 style.md，一般不处理）
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -27,7 +28,7 @@ function usage(message) {
   if (message) {
     console.error(message);
   }
-  console.error(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(2, 15).map((line) => line.replace(/^ \* ?/, '')).join('\n'));
+  console.error(readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(2, 16).map((line) => line.replace(/^ \* ?/, '')).join('\n'));
   process.exit(1);
 }
 
@@ -41,6 +42,7 @@ for (let index = 0; index < argv.length; index += 1) {
   else if (arg === '--analyze') options.analyze = argv[++index];
   else if (arg === '--translate') options.translate = argv[++index];
   else if (arg === '--no-skip-permissions') options.skipPermissions = false;
+  else if (arg === '--disputes') options.disputes = true;
   else if (arg.startsWith('--')) usage(`未知选项 ${arg}`);
   else words.push(arg);
 }
@@ -54,9 +56,10 @@ if (!existsSync(configPath)) usage(`${workdir} 下没有 config.json：先运行
 const config = JSON.parse(readFileSync(configPath, 'utf8'));
 const models = { ...DEFAULT_MODELS, ...(config.models ?? {}) };
 
+const disputesAsk = options.disputes ? '，并标出异文与解经争议（briefing 与提交都传 disputes: true）' : '';
 const prompts = {
-  analyze: `切分 ${range}。完成后用一段话总结切分结果与标为 ambiguous 的地方。`,
-  translate: `翻译 ${range}。完成后用一段话总结译文、争议与取舍。`,
+  analyze: `切分 ${range}${disputesAsk}。完成后用一段话总结切分结果${options.disputes ? '与标为 ambiguous 的地方' : ''}。`,
+  translate: `翻译 ${range}${disputesAsk}。完成后用一段话总结译文${options.disputes ? '、争议' : ''}与取舍。`,
 };
 
 const skills = { analyze: 'bible-analyze', translate: 'bible-translate' };

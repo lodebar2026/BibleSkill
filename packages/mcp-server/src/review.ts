@@ -67,10 +67,11 @@ function translationMessages(
   clauses: ClauseEntity[],
   tokens: Token[],
   disputes: ReturnType<typeof collectDisputes> | undefined,
+  checkDisputes: boolean,
 ): string[] {
   const bcv = texts[0].bcv;
   try {
-    return checkTranslations(texts.map(toSubmission), new Map([[bcv, clauses]]), new Map([[bcv, tokens]]), disputes, { itemLevels: true })
+    return checkTranslations(texts.map(toSubmission), new Map([[bcv, clauses]]), new Map([[bcv, tokens]]), disputes, { itemLevels: true, disputes: checkDisputes })
       .errors.flatMap((error) => error.messages);
   } catch (error) {
     return [(error as Error).message];
@@ -86,9 +87,12 @@ export function reviewChapter(input: {
   glossary: GlossaryEntry[];
   /** 当前档位。 */
   level?: number;
+  /** 是否复查争议（未处理的 ambiguous / 异文，人工复核列 ambiguous）；默认复查。 */
+  disputes?: boolean;
 }): ChapterReview {
   const { bookName, entities, texts, tokensByVerse, variants, glossary } = input;
   const level = input.level ?? DEFAULT_LITERALNESS;
+  const checkDisputes = input.disputes ?? true;
   const clausesByVerse = new Map<number, ClauseEntity[]>();
   for (const clause of entities) {
     const { bcv } = parseClauseId(clause.id);
@@ -108,11 +112,13 @@ export function reviewChapter(input: {
     }
     const tokens = tokensByVerse.get(bcv) ?? [];
     // 不带争议跑一遍得出结构问题；带争议多出来的就是未处理的争议
-    const structural = translationMessages(verseTexts, clauses, tokens, undefined);
-    const withDisputes = translationMessages(verseTexts, clauses, tokens, collectDisputes(clauses, tokens, variants.filter((variant) => variant.bcv === bcv)));
-    const seen = new Set(structural);
+    const structural = translationMessages(verseTexts, clauses, tokens, undefined, checkDisputes);
     structural.forEach((message) => issues.push({ kind: 'structure', bcv, message }));
-    withDisputes.filter((message) => !seen.has(message)).forEach((message) => issues.push({ kind: 'dispute', bcv, message }));
+    if (checkDisputes) {
+      const seen = new Set(structural);
+      const withDisputes = translationMessages(verseTexts, clauses, tokens, collectDisputes(clauses, tokens, variants.filter((variant) => variant.bcv === bcv)), true);
+      withDisputes.filter((message) => !seen.has(message)).forEach((message) => issues.push({ kind: 'dispute', bcv, message }));
+    }
     for (const text of verseTexts) {
       const meaningBased = isMeaningBased(text.literalness ?? DEFAULT_LITERALNESS);
       for (const issue of checkRenderings(text, tokens, bookName, glossary, new Map())) {
@@ -128,7 +134,7 @@ export function reviewChapter(input: {
   for (const clause of entities) {
     if (clause.status === 'needs-review') {
       humanReview.push({ clauseId: clause.id, status: clause.status, detail: clause.seedDiff ?? clause.note });
-    } else if (clause.status === 'ambiguous') {
+    } else if (clause.status === 'ambiguous' && checkDisputes) {
       humanReview.push({ clauseId: clause.id, status: clause.status, detail: clause.alternatives.map((alt) => alt.summary).join('；') });
     }
   }

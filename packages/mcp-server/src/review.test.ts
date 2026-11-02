@@ -38,8 +38,8 @@ const cleanTexts = [
   text('b', '神大地', [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }]),
 ];
 
-function review(entities: ClauseEntity[], texts: ClauseText[], glossary: GlossaryEntry[] = [], level?: number) {
-  return reviewChapter({ bookName: '创世记', entities, texts, tokensByVerse: new Map([[BCV, tokens]]), variants: [], glossary, level });
+function review(entities: ClauseEntity[], texts: ClauseText[], glossary: GlossaryEntry[] = [], level?: number, disputes?: boolean) {
+  return reviewChapter({ bookName: '创世记', entities, texts, tokensByVerse: new Map([[BCV, tokens]]), variants: [], glossary, level, disputes });
 }
 
 test('与当前分析、术语表一致时没有问题', () => {
@@ -73,6 +73,10 @@ test('子句后来改成 ambiguous、译文没给 alternatives → dispute，并
   assert.ok(result.issues.length > 0);
   assert.ok(result.issues.every((issue) => issue.kind === 'dispute'));
   assert.deepEqual(result.humanReview, [{ clauseId: '1001001a', status: 'ambiguous', detail: '另一断句' }]);
+  // 关闭争议时既不报 dispute，也不列 ambiguous
+  const off = review(ambiguous, cleanTexts, [], undefined, false);
+  assert.deepEqual(off.issues, []);
+  assert.deepEqual(off.humanReview, []);
 });
 
 test('needs-review 子句列入人工复核；已处理的争议不报', () => {

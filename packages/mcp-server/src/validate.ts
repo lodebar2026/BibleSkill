@@ -572,7 +572,8 @@ export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[]; r
  * level：当前翻译档位（style.md 的 literalness）。
  * itemLevels：每条按它自带的 literalness 校验（编辑器改旧译文、审校复查时用，旧数据没有就按 2）。
  */
-export type TranslationCheckOptions = { level?: number; itemLevels?: boolean };
+/** disputes：是否检查争议（ambiguous、关联读法、异文是否处理），默认检查；工作目录关闭争议时传 false。 */
+export type TranslationCheckOptions = { level?: number; itemLevels?: boolean; disputes?: boolean };
 
 /**
  * 译文结构校验（用词统一检查另在 consistency.ts）：
@@ -583,7 +584,8 @@ export type TranslationCheckOptions = { level?: number; itemLevels?: boolean };
  * - renderings 的词落在所覆盖子句内，zh 必须出现在去掉 [ ] 的译文里；存盘时补上 at（zh 在译文中的位置）
  * - 覆盖子句内每个实词都要有 rendering；∅（不译）在第 1–3 档须写 note
  * - 争议：子句分析为 ambiguous → 必须给 alternatives 并在 note 写主译理由；
- *   有影响翻译的经文异文 → 给 kind=textual 的 alternative，或在 note 说明为何不影响译文
+ *   有影响翻译的经文异文 → 给 kind=textual 的 alternative，或在 note 说明为何不影响译文；
+ *   options.disputes=false 时不查这几项
  */
 export function checkTranslations(
   raw: unknown[],
@@ -616,7 +618,11 @@ export function checkTranslations(
     submitted.set(bcv, verse);
   });
 
-  const analysisGroups = readingGroups([...clausesByVerse.values()].flat());
+  const checkDisputes = options.disputes ?? true;
+  if (!checkDisputes) {
+    disputes = new Map();
+  }
+  const analysisGroups = checkDisputes ? readingGroups([...clausesByVerse.values()].flat()) : new Map<string, string[]>();
   const accepted: ClauseText[] = [];
   for (const [bcv, verse] of submitted) {
     const clauses = clausesByVerse.get(bcv) ?? [];
@@ -713,7 +719,7 @@ export function checkTranslations(
           fail(bcv, clause.id, '有争议时须在 note 写明主译采用哪种读法、依据是什么');
         }
       }
-      const labels = [...new Set(covered.flatMap((c) => c.alternatives.map((alt) => alt.reading).filter((label): label is string => Boolean(label))))];
+      const labels = !checkDisputes ? [] : [...new Set(covered.flatMap((c) => c.alternatives.map((alt) => alt.reading).filter((label): label is string => Boolean(label))))];
       for (const label of labels.filter((label) => !item.alternatives.some((alt) => alt.reading === label))) {
         fail(bcv, clause.id, `子句分析的关联读法 ${label} 涉及 ${(analysisGroups.get(label) ?? []).join('、')}：按这组读法连起来译出本句的另一种译法，放进 alternatives 并标 reading: "${label}"，同组各句的这条译法要能连读`);
       }

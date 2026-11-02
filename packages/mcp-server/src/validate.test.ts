@@ -194,6 +194,8 @@ test('争议：ambiguous 子句须给 alternatives 与 note；异文须给 textu
   assert.deepEqual(handled.errors, []);
   assert.equal(handled.accepted[0].alternatives.length, 1);
   assert.match(handled.accepted[0].formatted, /取 a 读法/);
+  // 工作目录关闭争议：不查 ambiguous 与异文
+  assert.deepEqual(checkTranslations(base, clausesByVerse, verses, ambiguous, { disputes: false }).errors, []);
 });
 
 test('子句 id 的前导零在提交时去掉', () => {

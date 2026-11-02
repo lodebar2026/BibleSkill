@@ -73,6 +73,24 @@ export function optionalString(input: Record<string, unknown>, names: string[]):
   return undefined;
 }
 
+/** 布尔参数：接受 true/false 与字符串 "true"/"on"/"false"/"off"；没给时 undefined。 */
+export function optionalBoolean(input: Record<string, unknown>, name: string): boolean | undefined {
+  const raw = input[name];
+  if (typeof raw === 'boolean') {
+    return raw;
+  }
+  if (typeof raw === 'string') {
+    const value = raw.trim().toLowerCase();
+    if (['true', 'on', 'yes', '1'].includes(value)) {
+      return true;
+    }
+    if (['false', 'off', 'no', '0'].includes(value)) {
+      return false;
+    }
+  }
+  return undefined;
+}
+
 /** 一章的 bcv 范围（含第 0 节诗篇标题）。 */
 export function chapterRange(bookId: number, chapter: number): { startBcv: number; endBcv: number } {
   return { startBcv: toBcv(bookId, chapter, 0), endBcv: toBcv(bookId, chapter, 999) };

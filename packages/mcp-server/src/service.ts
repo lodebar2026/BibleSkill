@@ -132,9 +132,21 @@ async function currentLevel(deps: Deps): Promise<Literalness> {
   return (await deps.store.readStyle())?.options.literalness ?? DEFAULT_LITERALNESS;
 }
 
+/** 是否处理异文与解经争议：工具参数 disputes 优先，否则看 style.md（默认不处理）。 */
+async function disputesEnabled(deps: Deps, override?: boolean): Promise<boolean> {
+  return override ?? (await deps.store.readStyle())?.options.disputes === 'on';
+}
+
+/** briefing 里的争议开关：告诉模型本次做不做。 */
+function disputesBriefing(enabled: boolean) {
+  return enabled
+    ? { enabled, note: '本次处理异文与解经争议：读 references/disputes.md，按其中规则标出。' }
+    : { enabled, note: '本次不处理异文与解经争议：不标 ambiguous、不列争议读法、不为争议查资料。用户要求时再开（工具参数 disputes: true 或 style.md 的 disputes: on）。' };
+}
+
 /** briefing 里的翻译档位：总是给出。 */
 async function approachBriefing(deps: Deps) {
-  const options = (await deps.store.readStyle())?.options ?? { clauseOrder: 'fluent' as const, literalness: DEFAULT_LITERALNESS };
+  const options = (await deps.store.readStyle())?.options ?? { clauseOrder: 'fluent' as const, literalness: DEFAULT_LITERALNESS, disputes: 'off' as const };
   const { name, summary } = LITERALNESS_LEVELS[options.literalness];
   return { literalness: options.literalness, name, summary, clauseOrder: effectiveClauseOrder(options), rules: 'references/literalness.md' };
 }
@@ -288,15 +300,17 @@ export function lookupLexicon(deps: Deps, input: { strong?: string; tokenId?: st
  * 新约 briefing 的底本提示：放在工具输出里，比只写在 prompts 里更不容易被忽略。
  * 工作目录配置了校勘本工具（私有扩展）时点名让模型调用；没有时给通用做法。
  */
-function na28Check(criticalText: CriticalTextTool | undefined): string {
-  const usage = '主切分/主译必须按 NA28 断句（THGNT、SBLGNT、Macula 的不同断句只作其他读法；跨节时 parentId 可指向下一节的子句），校勘符号（⸀ ⸂⸃ ⸋⸌ ˸ 等）标出的异文与标点异文作为争议线索，sources 记 ext:critical-text。tokens 中的标点来自 THGNT，不是 NA28。';
+function na28Check(criticalText: CriticalTextTool | undefined, disputes: boolean): string {
+  const usage = disputes
+    ? '主切分/主译必须按 NA28 断句（THGNT、SBLGNT、Macula 的不同断句只作其他读法；跨节时 parentId 可指向下一节的子句），校勘符号（⸀ ⸂⸃ ⸋⸌ ˸ 等）标出的异文与标点异文作为争议线索，sources 记 ext:critical-text。tokens 中的标点来自 THGNT，不是 NA28。'
+    : '主切分/主译必须按 NA28 断句（跨节时 parentId 可指向下一节的子句），sources 记 ext:critical-text。tokens 中的标点来自 THGNT，不是 NA28。';
   if (criticalText) {
     const args = JSON.stringify({ range: '<本次范围>', ...criticalText.args });
     return `新约以 NA28/UBS 断句。本工作目录配置了 NA28 原文工具：先调用 ${criticalText.server} 服务器的 ${criticalText.tool}，参数 ${args}，取本范围带标点的 NA28 原文，${usage}`;
   }
   return '新约以 NA28/UBS 断句。先看有没有别的 MCP 服务器提供取原文的工具（名称常含 source / passage / text，有的可按版本码 na28 取经文）：'
     + '有就直接按工具名调用（参数传 range；不要去查 MCP resources，那不是工具），返回内容标明 NA28、或带 NA28 校勘符号的就是 NA28 原文，'
-    + `${usage}没有这类工具或取不到 NA28 时，按你对 NA28/UBS 断句的了解判断，拿不准就标为争议。`;
+    + `${usage}没有这类工具或取不到 NA28 时，按你对 NA28/UBS 断句的了解判断${disputes ? '，拿不准就标为争议' : ''}。`;
 }
 
 /** 影响翻译的经文异文，按节列出（切分时也要考虑，如异文改变句子结构）。 */
@@ -313,8 +327,9 @@ function textualVariantLines(deps: Deps, range: ScriptureRange, verses: Map<numb
   return lines.length > 0 ? lines : undefined;
 }
 
-export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
+export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange, options: { disputes?: boolean } = {}) {
   const verses = rangeTokens(deps, range);
+  const disputes = await disputesEnabled(deps, options.disputes);
   const chapters = chaptersBetween(range.startBcv, range.endBcv);
   const existing = [...(await chapterEntities(deps, range.bookName, chapters)).values()].flat().filter((clause) => inRange(parseClauseId(clause.id).bcv, range));
   const rules = (await deps.store.readRules()).filter((rule) => rule.task === 'analyze');
@@ -322,12 +337,13 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
     task: 'analyze',
     range: `${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel([...verses.keys()].at(-1)!)}`,
     language: range.isOT ? 'hebrew/aramaic' : 'greek',
-    baseText: range.isOT ? undefined : na28Check(deps.criticalText),
+    baseText: range.isOT ? undefined : na28Check(deps.criticalText, disputes),
+    disputes: disputesBriefing(disputes),
     tokens: tokensTsv(verses),
     morphLegend: morphLegend(deps, verses),
     maculaSeeds: seedsTsv(deps.db.seedsInRange(range.startBcv, range.endBcv), verses),
-    textualVariants: textualVariantLines(deps, range, verses),
-    ambiguityHints: ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)),
+    textualVariants: disputes ? textualVariantLines(deps, range, verses) : undefined,
+    ambiguityHints: disputes ? ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)) : undefined,
     existingClauses: existing.length > 0 ? existing : undefined,
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
@@ -337,7 +353,7 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange) {
 }
 
 /** 编辑器提交时带上读到的版本号做乐观锁；MCP 调用不带。origin 记进修改历史：MCP 提交为 ai，编辑器为 human。 */
-export type SubmitOptions = { expected?: VersionExpectation; origin?: HistoryOrigin };
+export type SubmitOptions = { expected?: VersionExpectation; origin?: HistoryOrigin; disputes?: boolean };
 
 export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, rawClauses: unknown[], options: SubmitOptions = {}) {
   const verses = rangeTokens(deps, range);
@@ -468,8 +484,9 @@ function textViewClauses(entities: ClauseEntity[], texts: ClauseText[]): TextVie
   });
 }
 
-export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange) {
+export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange, options: { disputes?: boolean } = {}) {
   const verses = rangeTokens(deps, range);
+  const withDisputes = await disputesEnabled(deps, options.disputes);
   const chapters = chaptersBetween(range.startBcv, range.endBcv);
   const entitiesByChapter = await chapterEntities(deps, range.bookName, chapters);
   const clauses = [...entitiesByChapter.values()].flat().filter((clause) => inRange(parseClauseId(clause.id).bcv, range));
@@ -487,8 +504,8 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   const existingTexts = (await Promise.all(chapters.map((chapter) => deps.store.readClauseTexts(range.bookName, chapter)))).flat();
 
   const allTokens = [...verses.values()].flat();
-  const disputes = collectDisputes(clauses, allTokens, deps.db.variantsInRange(range.startBcv, range.endBcv));
-  const readings = readingGroups(clauses);
+  const disputes = withDisputes ? collectDisputes(clauses, allTokens, deps.db.variantsInRange(range.startBcv, range.endBcv)) : new Map();
+  const readings = withDisputes ? readingGroups(clauses) : new Map<string, string[]>();
   const ownWords = clauseWords(clauses, allTokens);
   const clauseLines = clauses.map((clause) => {
     // 自身的词；嵌在中间的子句写成「⟨1030038b⟩」
@@ -501,8 +518,8 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       id: clause.id,
       parentId: clause.parentId,
       type: clause.type,
-      status: clause.status === 'accepted' ? undefined : clause.status,
-      alternatives: clause.alternatives.length > 0 ? clause.alternatives : undefined,
+      status: clause.status === 'accepted' || (!withDisputes && clause.status === 'ambiguous') ? undefined : clause.status,
+      alternatives: withDisputes && clause.alternatives.length > 0 ? clause.alternatives : undefined,
       note: clause.note || undefined,
       logic: clause.logic ?? undefined,
       text: pieces.join('').trim(),
@@ -557,13 +574,14 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   return {
     task: 'translate',
     range: `${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel([...verses.keys()].at(-1)!)}`,
-    baseText: range.isOT ? undefined : na28Check(deps.criticalText),
+    baseText: range.isOT ? undefined : na28Check(deps.criticalText, withDisputes),
+    disputes: disputesBriefing(withDisputes),
     clauseView: view,
     clauses: clauseLines,
     readings: readings.size > 0
       ? Object.fromEntries([...readings].map(([label, ids]) => [label, { clauses: ids, note: '这几句的同组可选读法要连起来才成立：各句都给 reading 相同的 alternative，连读要通' }]))
       : undefined,
-    ambiguityHints: ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)),
+    ambiguityHints: withDisputes ? ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)) : undefined,
     tokens: tokensTsv(verses),
     terms,
     precedingTranslations: preceding.length > 0 ? preceding : undefined,
@@ -584,7 +602,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
     style: await styleBriefing(deps, 'translate'),
-    submit: 'submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering；status 为 ambiguous 的子句须给 alternatives 并在 note 写主译理由，有 disputes.textual 的须给 textual alternative 或 note。',
+    submit: `submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering${withDisputes ? '；status 为 ambiguous 的子句须给 alternatives 并在 note 写主译理由，有 disputes.textual 的须给 textual alternative 或 note' : ''}。`,
   };
 }
 
@@ -599,10 +617,11 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
       clausesByVerse.set(bcv, [...(clausesByVerse.get(bcv) ?? []), clause]);
     }
   }
-  const disputes = collectDisputes([...clausesByVerse.values()].flat(), [...verses.values()].flat(), deps.db.variantsInRange(range.startBcv, range.endBcv));
+  const withDisputes = await disputesEnabled(deps, options.disputes);
+  const disputes = withDisputes ? collectDisputes([...clausesByVerse.values()].flat(), [...verses.values()].flat(), deps.db.variantsInRange(range.startBcv, range.endBcv)) : new Map();
   const level = await currentLevel(deps);
   // 编辑器改旧译文时沿用它原来的档位，不因 style.md 换了档位就拒收
-  const structural = checkTranslations(raw, clausesByVerse, verses, disputes, { level, itemLevels: options.origin === 'human' });
+  const structural = checkTranslations(raw, clausesByVerse, verses, disputes, { level, itemLevels: options.origin === 'human', disputes: withDisputes });
   const submittedVerses = new Set(structural.accepted.map((text) => text.bcv));
   const glossary = await deps.store.readGlossary();
   const memory = await deps.memory.build({ books: new Set([range.bookName]), excludeVerses: submittedVerses });
@@ -800,11 +819,13 @@ export async function chapterReviewIssues(deps: Deps, bookName: string, chapter:
     variants: deps.db.variantsInRange(startBcv, endBcv),
     glossary: await deps.store.readGlossary(),
     level: await currentLevel(deps),
+    disputes: await disputesEnabled(deps),
   }).issues;
 }
 
-export async function reviewReport(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }) {
+export async function reviewReport(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }, options: { disputes?: boolean } = {}) {
   const { range } = target;
+  const disputes = await disputesEnabled(deps, options.disputes);
   const chapters = range
     ? chaptersBetween(range.startBcv, range.endBcv).map((chapter) => ({ bookName: range.bookName, chapter }))
     : listChapterDirs(deps.store, target.books);
@@ -833,6 +854,7 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
       variants: deps.db.variantsInRange(startBcv, endBcv),
       glossary,
       level,
+      disputes,
     });
     issues.push(...review.issues.map((issue) => ({ ...issue, bookName })));
     humanReview.push(...review.humanReview);

@@ -1,6 +1,6 @@
 # BibleSkill
 
-把**希伯来文旧约**和**希腊文新约**译成**中文**的 AI 工作流：一组可公开的 skill，加一个基于开放数据（STEPBible、Macula、UBS 中文词典）的 MCP server。模型先做子句分析，再逐子句翻译，并检查用词统一、标出经文异文与解经争议。译文贴近原文形式还是偏重意义分 5 档（逐字、直译、平衡、意义对等、意译），按工作目录设定，默认直译。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
+把**希伯来文旧约**和**希腊文新约**译成**中文**的 AI 工作流：一组可公开的 skill，加一个基于开放数据（STEPBible、Macula、UBS 中文词典）的 MCP server。模型先做子句分析，再逐子句翻译，并检查用词统一；按需标出经文异文与解经争议（默认关闭，省 token）。译文贴近原文形式还是偏重意义分 5 档（逐字、直译、平衡、意义对等、意译），按工作目录设定，默认直译。同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）、Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型。
 
 工作流分四步，另有一个从修改历史学习的步骤：
 
@@ -12,7 +12,7 @@
 
 结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。`/bible-diagram` 还能画出一段经文的原文结构图（主句、从句与修饰关系）。
 
-> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`, `bible-diagram`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results can be viewed as an indented clause tree in the terminal, as a standalone HTML page, or edited in a local browser view. MIT licensed.
+> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`, `bible-diagram`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and, on request (off by default to save tokens), flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results can be viewed as an indented clause tree in the terminal, as a standalone HTML page, or edited in a local browser view. MIT licensed.
 
 ## 数据来源
 
@@ -28,7 +28,7 @@
 
 ### 主干选择
 
-- **新约**：以最新的 NA/UBS 为主要参考，主干是 TAGNT 中版本列含 NA28 的词，共 137,890 词（UBS5 正文与 NA28 相同）。NA28 双括号 `[[ ]]` 内的经文（可 16:8 短结尾和 16:9-20 长结尾、路 22:43-44、路 23:34a、约 7:53–8:11）在主干内，并带有标记；翻译时列为异文争议，译文用 `〚 〛` 标出。数据里的标点来自 THGNT，断句以 NA28/UBS 为准。
+- **新约**：以最新的 NA/UBS 为主要参考，主干是 TAGNT 中版本列含 NA28 的词，共 137,890 词（UBS5 正文与 NA28 相同）。NA28 双括号 `[[ ]]` 内的经文（可 16:8 短结尾和 16:9-20 长结尾、路 22:43-44、路 23:34a、约 7:53–8:11）在主干内，并带有标记；译文用 `〚 〛` 标出，开启争议时另列为异文争议。数据里的标点来自 THGNT，断句以 NA28/UBS 为准。
 - **旧约**：TAHOT 的 L（列宁格勒抄本）、Q（读型，Qere）、R（恢复文本）。写型（Ketiv）、LXX 补入文本（X）以及插入的补文进异文表。
 - **节号**：用英文（NRSV）节号体系，与和合本基本一致。原文节号保留在 `ref` 列，用于对齐 Macula。
 - **词 id**：定宽格式。旧约为 `o` + 书(2) 章(3) 节(3) 词(3) 语素(1)，新约为 `n` + 书(2) 章(3) 节(3) 词(3)，字典序即词序。格式与 Macula 相同，但编号不同；Macula 的 id 只出现在映射表里。
@@ -87,7 +87,7 @@ literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
 | 4 | 意义对等 | 按意思重组句子，比喻、成语、度量衡可译出其意，可补主语 | 不用 `[ ]`；∅ 不必写 note；偏离既有译法或 `preferred` 只提示不拦 |
 | 5 | 意译 | 释义，可补出读者理解所需的隐含信息，但不加原文没有的论断 | 同 4 |
 
-各档通用：依据原文、不照搬其他译本、争议必须标出、每个实词都要给 rendering（第 4、5 档可以用 `首-末` 区间对应整个短语）、`locked` 术语必须照用。各档的细则见 [prompts/literalness.md](prompts/literalness.md)。briefing 的 `approach` 把当前档位告诉模型。
+各档通用：依据原文、不照搬其他译本、开启争议时争议必须标出、每个实词都要给 rendering（第 4、5 档可以用 `首-末` 区间对应整个短语）、`locked` 术语必须照用。各档的细则见 [prompts/literalness.md](prompts/literalness.md)。briefing 的 `approach` 把当前档位告诉模型。
 
 一个工作目录用一个档位。想要另一档的译本，另开一个工作目录。中途换档位时，已译的经文不会被改写：每条译文记下写入时的档位（`literalness`），审校按各自的档位复查，并在 `otherLevel` 里列出与当前档位不同的节。`clauseOrder`（后置状语从句合并前置还是保留原文语序）只在第 2、3 档起作用；第 1 档固定保留原文语序，第 4、5 档固定按中文语序。
 
@@ -220,7 +220,7 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 config.json                        数据库路径
 glossary.json                      术语表 {strong, senseKey, lemma, zh, level: locked|preferred, note, scope}
 rules.json                         分析/翻译规则 {id, task, pattern, resolution, examples}（手工维护，或由 bible-learn 写入）
-style.md                           翻译档位与个人风格：Markdown，可带 frontmatter 选项（literalness: 1-5，clauseOrder: fluent|source）
+style.md                           翻译档位与个人风格：Markdown，可带 frontmatter 选项（literalness: 1-5，clauseOrder: fluent|source，disputes: off|on）
 terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh, avoid?, note?}]，可写注释
 <中文书名>/chNN/clause_entities.json  子句分析
 <中文书名>/chNN/clauses.json          译文
@@ -262,10 +262,10 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 | 类别 | 含义 |
 |---|---|
 | `structure` | 子句分析在翻译之后改过，译文对不上：缺译子句、子句 id 变了、rendering 越界、实词缺 rendering、本节没有子句分析 |
-| `dispute` | 子句后来标为 ambiguous，或有影响翻译的异文，但译文还没有处理 |
+| `dispute` | 开启争议时：子句后来标为 ambiguous，或有影响翻译的异文，但译文还没有处理 |
 | `glossary` | 违反当前术语表（`locked` 不符；`preferred` 不符且没写 note） |
 
-报告给出两份清单：`retranslate` 把需要改译的节合并成连续范围（如 `创世记 1:3-5`），可以直接交给 bible-translate；`humanReview` 列出 needs-review / ambiguous 子句，交人工复核。`bible-review` skill 按这份报告逐段重译，最后再跑一次确认清零。`upsert_glossary` 返回时会提示跑审校；重新分析已有译文的节时，`submit_clause_analysis` 会在 `translatedVerses` 里提醒。
+报告给出两份清单：`retranslate` 把需要改译的节合并成连续范围（如 `创世记 1:3-5`），可以直接交给 bible-translate；`humanReview` 列出 needs-review 子句（开启争议时另有 ambiguous），交人工复核。`bible-review` skill 按这份报告逐段重译，最后再跑一次确认清零。`upsert_glossary` 返回时会提示跑审校；重新分析已有译文的节时，`submit_clause_analysis` 会在 `translatedVerses` 里提醒。
 
 ## 个人风格、术语偏好与修改历史
 
@@ -283,7 +283,12 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 
 ## 争议处理
 
-争议尽量标出，主译之外并列其他译法，各自写依据。
+异文与解经争议**默认不处理**，省 token：briefing 不带异文与歧义线索，模型不标 `ambiguous`、不列争议读法，提交和审校也不查。需要时有两种开法：
+
+- 单次：在请求里说要标出异文或争议（如“翻译 约 1:1-5，带争议”），skill 会给 briefing、提交和审校都传 `disputes: true`；`pnpm passage` 用 `--disputes`。
+- 持久：在 `style.md` 的 frontmatter 写 `disputes: on`。
+
+开启后，争议尽量标出，主译之外并列其他译法，各自写依据（规则见 [prompts/disputes.md](prompts/disputes.md)）：
 
 - **系统已知的争议**会出现在 briefing 的 `disputes` 里，必须处理：
   - 影响翻译的经文异文：STEPBible 用大写标出，如 TAGNT 的 `T=` 异文、TAHOT 中意义不同的 Ketiv/Qere，以及只见于其他版本的整段（如约一 5:7）。处理方式是给出 `kind: textual` 的其他译法，或在 note 里说明为何不影响译文。
@@ -296,7 +301,7 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 
 skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>` 安装（不传时自动读取 `~/.config/bibleskill/ext.json`），格式同 `.mcp.json`。每个扩展分到隔离目录 `<workdir>/.ext/<名字>/`，配置里的 `${EXT_DIR}` 会替换成这个目录：如果扩展自带写工作文件的工具，就让它写到这里。
 
-新约断句以 NA28/UBS 为准。ext.json 里可以用顶层字段 `"criticalText": {"server", "tool", "args"}` 声明哪个扩展工具能取 NA28 原文。声明后，新约 briefing 会点名让模型调用这个工具，按 NA28 断句，并把校勘符号（`⸀ ⸂⸃ ⸋⸌ ˸` 等）当作争议线索。没有扩展的用户不受影响：模型按自己对 NA28/UBS 断句的了解判断，拿不准就标为争议。扩展里用不到的工具（写入、校验、扩展自己的工作流）可以列在 `"hideTools": {"<服务器>": [工具名…]}` 里，不放进模型上下文，省 token：agy 写成 `disabledTools`，Gemini 写成 `excludeTools`，`pnpm passage` 调 Claude Code 时转成 `--disallowedTools`。`--no-ext` 可以跳过自动读取扩展配置。如果环境里有其他 MCP 工具提供学术词典、注释书、交叉引用、引语层级、语法书检索等能力，skill 会用它们辅助判断，并在 `sources` 中记为 `ext:<能力>`。工作文件里只写结论，不写入受版权保护的原文。
+新约断句以 NA28/UBS 为准。ext.json 里可以用顶层字段 `"criticalText": {"server", "tool", "args"}` 声明哪个扩展工具能取 NA28 原文。声明后，新约 briefing 会点名让模型调用这个工具，按 NA28 断句；开启争议时还把校勘符号（`⸀ ⸂⸃ ⸋⸌ ˸` 等）当作争议线索。没有扩展的用户不受影响：模型按自己对 NA28/UBS 断句的了解判断。扩展里用不到的工具（写入、校验、扩展自己的工作流）可以列在 `"hideTools": {"<服务器>": [工具名…]}` 里，不放进模型上下文，省 token：agy 写成 `disabledTools`，Gemini 写成 `excludeTools`，`pnpm passage` 调 Claude Code 时转成 `--disallowedTools`。`--no-ext` 可以跳过自动读取扩展配置。如果环境里有其他 MCP 工具提供学术词典、注释书、交叉引用、引语层级、语法书检索等能力，skill 会用它们辅助判断，并在 `sources` 中记为 `ext:<能力>`。工作文件里只写结论，不写入受版权保护的原文。
 
 ## 常见问题
 
@@ -304,7 +309,7 @@ skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>
 一个开源的圣经原文中文翻译工作流。它让 AI 模型按“子句分析 → 逐子句翻译 → 用词统一 → 审校”的步骤，把希伯来文旧约和希腊文新约译成中文，每一步的结果都写进工作目录，可以人工复核和修改。
 
 **用的是什么原文底本？**
-新约以 NA28/UBS5 为准（取 STEPBible TAGNT 中 NA28 的词），旧约用列宁格勒抄本（TAHOT 的 L，并按读型 Qere 读）。异文另存，影响翻译的会作为争议列出。详见“主干选择”。
+新约以 NA28/UBS5 为准（取 STEPBible TAGNT 中 NA28 的词），旧约用列宁格勒抄本（TAHOT 的 L，并按读型 Qere 读）。异文另存，开启争议时影响翻译的会作为争议列出。详见“主干选择”。
 
 **支持哪些 AI 模型和工具？**
 同一份 skill 可在 Claude Code、Gemini CLI、agy（Google Antigravity CLI）和 Codex 中使用，因此可以选用 Claude、Gemini、GPT 等模型；子句分析和翻译还可以分别交给不同的模型。

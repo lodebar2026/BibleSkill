@@ -9,7 +9,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { BibleDb, HISTORY_ORIGINS, WorkFileStore, findBookByName, resolveConfig, type HistoryOrigin, type ScriptureRange } from '@bs/core';
 import { z } from 'zod';
-import { optionalString, resolveArray, resolveRange } from './args.js';
+import { optionalBoolean, optionalString, resolveArray, resolveRange } from './args.js';
 import {
   buildAnalysisBriefing,
   buildTranslationBriefing,
@@ -60,6 +60,8 @@ function bookOrRange(args: Record<string, unknown>): { range?: ScriptureRange; b
 }
 
 const range = z.string().optional().describe("经文范围，如 '创 1'（整章）、'创 1:1-5'、'约 3:16'。中英文书名与缩写均可。");
+const disputes = z.union([z.boolean(), z.string()]).optional().describe('是否处理异文与解经争议。用户要求标出异文/争议时传 true；不传按 style.md 的 disputes（默认 off，不处理）。');
+const DISPUTES_HINT = '异文与解经争议默认不处理，用户要求时传 disputes: true。';
 const loose = (shape: z.ZodRawShape) => z.object(shape).loose();
 
 const server = new McpServer(
@@ -90,10 +92,10 @@ server.registerTool('lookup_lexicon', {
 })));
 
 server.registerTool('build_analysis_briefing', {
-  description: '子句切分任务简报：逐词数据、Macula 子句种子（第二意见，不是标准答案）、已有分析与规则。',
-  inputSchema: loose({ range }),
+  description: `子句切分任务简报：逐词数据、Macula 子句种子（第二意见，不是标准答案）、已有分析与规则。${DISPUTES_HINT}`,
+  inputSchema: loose({ range, disputes }),
   annotations: { readOnlyHint: true },
-}, async (args) => json(await buildAnalysisBriefing(getDeps(), resolveRange(args))));
+}, async (args) => json(await buildAnalysisBriefing(getDeps(), resolveRange(args), { disputes: optionalBoolean(args, 'disputes') })));
 
 server.registerTool('submit_clause_analysis', {
   description:
@@ -104,18 +106,19 @@ server.registerTool('submit_clause_analysis', {
 }, async (args) => json(await submitClauseAnalysis(getDeps(), resolveRange(args), resolveArray(args, ['clauses', 'clauseEntities', 'items']))));
 
 server.registerTool('build_translation_briefing', {
-  description: '翻译任务简报：翻译档位（approach）、缩进结构、子句与实词、每个实词义项的术语表条目与既有译法、前文译文。',
-  inputSchema: loose({ range }),
+  description: `翻译任务简报：翻译档位（approach）、缩进结构、子句与实词、每个实词义项的术语表条目与既有译法、前文译文。${DISPUTES_HINT}`,
+  inputSchema: loose({ range, disputes }),
   annotations: { readOnlyHint: true },
-}, async (args) => json(await buildTranslationBriefing(getDeps(), resolveRange(args))));
+}, async (args) => json(await buildTranslationBriefing(getDeps(), resolveRange(args), { disputes: optionalBoolean(args, 'disputes') })));
 
 server.registerTool('submit_translation', {
   description:
     '提交译文。translations 为 JSON 数组，每个子句一项 {clauseId, span, merge?, text, renderings:[{tokens, zh, note?}], supplied?:[{text, note}], paraTitle?}；span>1 时 merge 写合并理由 reorder | constituent（第 4、5 档另可 meaning）。'
     + 'text 里补出的词用 [ ] 标出（第 4、5 档不用），supplied 给补词写说明。'
-    + '按节校验结构与用词统一；未通过的节在 errors / consistency 返回，需整节重提。',
-  inputSchema: loose({ range, translations: z.any().optional() }),
-}, async (args) => json(await submitTranslation(getDeps(), resolveRange(args), resolveArray(args, ['translations', 'clauses', 'items']))));
+    + '按节校验结构与用词统一；未通过的节在 errors / consistency 返回，需整节重提。'
+    + 'disputes 与取 briefing 时传的一致（开启时才检查争议是否处理）。',
+  inputSchema: loose({ range, translations: z.any().optional(), disputes }),
+}, async (args) => json(await submitTranslation(getDeps(), resolveRange(args), resolveArray(args, ['translations', 'clauses', 'items']), { disputes: optionalBoolean(args, 'disputes') })));
 
 server.registerTool('view_clauses', {
   description: '以缩进树形文本查看子句结构与已有译文。',
@@ -158,16 +161,16 @@ server.registerTool('consistency_report', {
 
 server.registerTool('review_report', {
   description:
-    '审校报告：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围（retranslate：译文与子句对不上、未处理的争议、违反术语表）'
-    + '和需要人工复核的子句（needs-review / ambiguous）。每节按它写入时的档位复查，按别的档位译的节列在 otherLevel。'
-    + 'range 给书卷名审整卷，给经文范围只审该范围，不给审全部。',
-  inputSchema: loose({ range }),
+    '审校报告：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围（retranslate：译文与子句对不上、违反术语表；开启争议时另有未处理的争议）'
+    + '和需要人工复核的子句（needs-review；开启争议时另有 ambiguous）。每节按它写入时的档位复查，按别的档位译的节列在 otherLevel。'
+    + `range 给书卷名审整卷，给经文范围只审该范围，不给审全部。${DISPUTES_HINT}`,
+  inputSchema: loose({ range, disputes }),
   annotations: { readOnlyHint: true },
-}, async (args) => json(await reviewReport(getDeps(), bookOrRange(args))));
+}, async (args) => json(await reviewReport(getDeps(), bookOrRange(args), { disputes: optionalBoolean(args, 'disputes') })));
 
 server.registerTool('update_style', {
   description:
-    '整体改写工作目录的个人风格 style.md（content 为完整 Markdown，可带 --- frontmatter 选项 literalness: 1-5（翻译档位，默认 2 直译）、clauseOrder: fluent|source）。'
+    '整体改写工作目录的个人风格 style.md（content 为完整 Markdown，可带 --- frontmatter 选项 literalness: 1-5（翻译档位，默认 2 直译）、clauseOrder: fluent|source、disputes: off|on（异文与解经争议，默认 off 不处理））。'
     + '风格是偏好级：原文两种译法都成立时才采用。先 build_translation_briefing 或 review_report 看 style 现状，在其基础上增改。',
   inputSchema: loose({ content: z.string().optional() }),
 }, async (args) => {

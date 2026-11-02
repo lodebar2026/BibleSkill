@@ -35,9 +35,10 @@ test('整节替换只把有变化的子句记进 history.jsonl，并带上来源
 
 test('style.md 的 frontmatter 选项与正文', () => {
   const style = parseStyle('---\nclauseOrder: source  # 保留原文语序\n---\n## 用语\n- 用现代口语词\n');
-  assert.deepEqual(style.options, { clauseOrder: 'source', literalness: 2 });
+  assert.deepEqual(style.options, { clauseOrder: 'source', literalness: 2, disputes: 'off' });
   assert.equal(style.text, '## 用语\n- 用现代口语词');
-  assert.deepEqual(parseStyle('只有正文').options, { clauseOrder: 'fluent', literalness: 2 });
+  assert.deepEqual(parseStyle('只有正文').options, { clauseOrder: 'fluent', literalness: 2, disputes: 'off' });
+  assert.equal(parseStyle('---\ndisputes: on\n---\n').options.disputes, 'on');
   assert.throws(() => parseStyle('---\nclauseOrder: maybe\n---\n'), /选项不对/);
 });
 

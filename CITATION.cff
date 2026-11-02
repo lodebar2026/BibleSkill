@@ -5,7 +5,7 @@ abstract: >-
   Agent skills and a Model Context Protocol (MCP) server for translating the
   biblical source texts into Chinese with large language models: clause
   analysis, clause-by-clause translation at five literalness levels,
-  glossary consistency, review, and flagging of textual variants and
+  glossary consistency, review, and optional flagging of textual variants and
   interpretive disputes. Built only from openly licensed data (STEPBible,
   Macula, UBS Chinese dictionaries).
 type: software

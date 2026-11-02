@@ -663,7 +663,7 @@ function diagramClient(D: DiagramData): void {
     // 每条线有几种走法（从子句顶边/底边直接出、起始侧沟槽、尾侧沟槽），排除穿过其他方框的，
     // 按「交叉数 → 折点数 → 长度」取最好的；跨度短的先定
     // into：箭头伸进母句框、指到被修饰词的那一段（画在方框上层）；没有目标词时为 null，箭头停在框边
-    type Wire = { candidates: Array<Array<[number, number]>>; span: number; group: string; into: number | null };
+    type Wire = { candidates: Array<Array<[number, number]>>; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null };
     const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
     // 画逻辑虚线的方框（起点与关联的子句）
@@ -774,7 +774,8 @@ function diagramClient(D: DiagramData): void {
           candidates.push([[sideX, ySide], [xT, ySide], [xT, tip]]);
         }
       }
-      // 2) 起始侧沟槽：在子句与母句之间所有方框的起始侧之外
+      // 2) 起始侧沟槽：在子句与母句之间所有方框的起始侧之外（记在 startSide）
+      const startSide = new Set<number>();
       let gutter = start(c) + (rtl ? 16 : -16);
       for (const item of visible) {
         if (!skip.includes(item.box) && item.top < Math.max(childEdge, edge) && item.bottom > Math.min(childEdge, edge)) {
@@ -783,9 +784,11 @@ function diagramClient(D: DiagramData): void {
       }
       for (let k = 0; k < 6; k += 1) {
         const g = gutter + (rtl ? 1 : -1) * k * 6;
+        startSide.add(candidates.length);
         candidates.push([[start(c), yChild], [g, yChild], [g, yLane], [xT, yLane], [xT, tip]]);
       }
-      // 3) 尾侧沟槽
+      // 3) 尾侧沟槽（这里和 4) 里竖道在尾侧的走法记在 farSide）
+      const farSide = new Set<number>();
       let far = endOf(c);
       for (const item of visible) {
         if (item.top < Math.max(childEdge, edge) && item.bottom > Math.min(childEdge, edge)) {
@@ -796,6 +799,7 @@ function diagramClient(D: DiagramData): void {
       const yFar = showLogic && logicBoxes.has(clause.id) ? Math.round(c.top - base.top + Math.min(c.height * 0.3, 40)) : yChild;
       for (let k = 0; k < 4; k += 1) {
         const g = far + (rtl ? -1 : 1) * (10 + k * 6);
+        farSide.add(candidates.length);
         candidates.push([[endOf(c), yFar], [g, yFar], [g, yLane], [xT, yLane], [xT, tip]]);
       }
       // 4) 经中间方框之间的空隙绕过去：从子句朝母句的边（或起始侧沟槽）进空隙，横走到尾侧沟槽或正对目标词处，再往母句去。
@@ -827,13 +831,14 @@ function diagramClient(D: DiagramData): void {
         }
         for (const entry of entries) {
           const g = (Number.isFinite(farAbove) ? farAbove : far) + (rtl ? -1 : 1) * 10;
+          farSide.add(candidates.length);
           candidates.push([...entry, [g, yG], [g, yLane], [xT, yLane], [xT, tip]]);
           if (!blockedV(xT, yG, tip, skip)) {
             candidates.push([...entry, [xT, yG], [xT, tip]]);
           }
         }
       }
-      wires.push({ candidates, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into });
+      wires.push({ candidates, farSide, startSide, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into });
     }
     const verticals: Array<{ x: number; top: number; bottom: number }> = [];
     const length = (points: Array<[number, number]>) => points.slice(1).reduce((sum, [x, y], i) => sum + Math.abs(x - points[i][0]) + Math.abs(y - points[i][1]), 0);
@@ -870,7 +875,11 @@ function diagramClient(D: DiagramData): void {
       const path = polyline(points);
       const logicCrossings = path.reduce((sum, seg) => sum + logicSegs.filter((other) => crosses(seg, other)).length, 0);
       const joints = crossJoints(path, groupSegs.get(wire.group) ?? []);
-      return (cost(path) + logicCrossings + joints) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05;
+      // 新约：主干、分叉优先走起始侧（左侧），尾侧留给逻辑虚线；只在左侧会多出交叉时才走尾侧
+      const farCost = !D.isOT && wire.farSide.has(index) ? 500 : 0;
+      // 新约：几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）
+      const sideCost = !D.isOT && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
+      return (cost(path) + logicCrossings + joints) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + farCost + sideCost;
     };
     const commit = (wire: Wire, best: Array<[number, number]>) => {
       // 与先画的线交叉处，后画的这条跨过去

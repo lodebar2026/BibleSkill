@@ -663,9 +663,9 @@ function diagramClient(D: DiagramData): void {
     // 每条线有几种走法（从子句顶边/底边直接出、起始侧沟槽、尾侧沟槽），排除穿过其他方框的，
     // 按「交叉数 → 折点数 → 长度」取最好的；跨度短的先定
     // into：箭头伸进母句框、指到被修饰词的那一段（画在方框上层）；没有目标词时为 null，箭头停在框边
-    type Wire = { candidates: Array<Array<[number, number]>>; span: number; farFrom: number; into: number | null };
-    // 尾侧是逻辑虚线走的地方：显示逻辑关系时，句法连线走尾侧要多付代价（逻辑线进出方框的横线都会穿过它）
-    const farPenalty = canvas.classList.contains('hide-logic') ? 0 : 1500;
+    type Wire = { candidates: Array<Array<[number, number]>>; penalties: number[]; span: number; group: string; into: number | null };
+    // 尾侧是逻辑虚线走的地方：显示逻辑关系时，句法连线走尾侧、竖线旁又有带逻辑关系的框，要多付代价（逻辑线进出那些框的横线会穿过它）
+    const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
     // 画逻辑虚线的方框（起点与关联的子句）
     const logicBoxes = new Set(D.clauses.flatMap((clause) => (clause.logic && clause.logic.targetIds.length > 0 ? [clause.id, clause.logic.targetIds[0]] : [])));
@@ -774,25 +774,56 @@ function diagramClient(D: DiagramData): void {
           far = rtl ? Math.min(far, item.left) : Math.max(far, item.right);
         }
       }
-      const farFrom = candidates.length;
+      const penalties: number[] = candidates.map(() => 0);
+      // 尾侧竖线从 y1 到 y2 旁边有带逻辑关系的框时多付的代价
+      const farCost = (y1: number, y2: number) => (showLogic && visible.some((item) => !skip.includes(item.box) && logicBoxes.has(item.box.dataset.box!)
+        && item.top < Math.max(y1, y2) && item.bottom > Math.min(y1, y2)) ? 1500 : 0);
+      // 子句自己带逻辑关系时，逻辑虚线接在尾边中点，句法线改从尾边上部出
+      const yFar = showLogic && logicBoxes.has(clause.id) ? Math.round(c.top - base.top + Math.min(c.height * 0.3, 40)) : yChild;
       for (let k = 0; k < 4; k += 1) {
         const g = far + (rtl ? -1 : 1) * (10 + k * 6);
-        candidates.push([[endOf(c), yChild], [g, yChild], [g, yLane], [xT, yLane], [xT, tip]]);
+        candidates.push([[endOf(c), yFar], [g, yFar], [g, yLane], [xT, yLane], [xT, tip]]);
+        penalties.push(farCost(yFar, yLane));
       }
-      wires.push({ candidates, span: Math.abs(childEdge - edge), farFrom, into });
+      // 4) 经中间方框之间的空隙绕过去：从子句朝母句的边（或起始侧沟槽）进空隙，横走到尾侧沟槽或正对目标词处，再往母句去。
+      // 挡在中间的从句与母句的连线（如嵌入子句的竖线）这样就不必横穿
+      const [lo, hi] = [Math.min(childEdge, edge), Math.max(childEdge, edge)];
+      const inRange = visible.filter((item) => item.top < hi && item.bottom > lo).sort((a, b) => a.top - b.top);
+      let cursor = lo;
+      const gaps: number[] = [];
+      for (const item of inRange) {
+        if (item.top - cursor >= 12) {
+          gaps.push(Math.round((cursor + item.top) / 2));
+        }
+        cursor = Math.max(cursor, item.bottom);
+      }
+      if (hi - cursor >= 12) {
+        gaps.push(Math.round((cursor + hi) / 2));
+      }
+      for (const yG of gaps.filter((y) => Math.abs(y - yLane) > 8 && Math.abs(y - childEdge) > 8)) {
+        const entries: Array<Array<[number, number]>> = [
+          ...[...new Set(exits)].filter((x) => !blockedV(x, childEdge, yG, skip)).map((x): Array<[number, number]> => [[x, childEdge], [x, yG]]),
+          [[start(c), yChild], [gutter, yChild], [gutter, yG]],
+        ];
+        for (const entry of entries) {
+          const g = far + (rtl ? -1 : 1) * 10;
+          candidates.push([...entry, [g, yG], [g, yLane], [xT, yLane], [xT, tip]]);
+          penalties.push(farCost(yG, yLane));
+          if (!blockedV(xT, yG, tip, skip)) {
+            candidates.push([...entry, [xT, yG], [xT, tip]]);
+            penalties.push(0);
+          }
+        }
+      }
+      wires.push({ candidates, penalties, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into });
     }
     const verticals: Array<{ x: number; top: number; bottom: number }> = [];
     const length = (points: Array<[number, number]>) => points.slice(1).reduce((sum, [x, y], i) => sum + Math.abs(x - points[i][0]) + Math.abs(y - points[i][1]), 0);
-    for (const wire of wires.sort((a, b) => a.span - b.span)) {
-      let best = wire.candidates[0];
-      let bestScore = Infinity;
-      for (const [index, points] of wire.candidates.entries()) {
-        const score = cost(polyline(points)) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + (index >= wire.farFrom ? farPenalty : 0);
-        if (score < bestScore) {
-          best = points;
-          bestScore = score;
-        }
-      }
+    const score = (wire: Wire, index: number) => {
+      const points = wire.candidates[index];
+      return cost(polyline(points)) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + wire.penalties[index];
+    };
+    const commit = (wire: Wire, best: Array<[number, number]>) => {
       // 与先画的线交叉处，后画的这条跨过去
       const hops = crossings(best);
       segs.push(...polyline(best));
@@ -810,6 +841,46 @@ function diagramClient(D: DiagramData): void {
         const [x, y] = best.at(-1)!;
         arrow(tips, [[x, y], [x, wire.into]]);
       }
+    };
+    // 指向同一个词的几条线一起挑（可共用一段主干绕开别的线）：组合不多时穷举；各组按其中跨度最短的那条排先后
+    const groups = new Map<string, Wire[]>();
+    for (const wire of wires) {
+      groups.set(wire.group, [...(groups.get(wire.group) ?? []), wire]);
+    }
+    const minSpan = (group: Wire[]) => Math.min(...group.map((wire) => wire.span));
+    for (const group of [...groups.values()].sort((a, b) => minSpan(a) - minSpan(b))) {
+      group.sort((a, b) => a.span - b.span);
+      const combos = group.reduce((product, wire) => product * wire.candidates.length, 1);
+      if (group.length === 1 || combos > 20000) {
+        for (const wire of group) {
+          const index = wire.candidates.reduce((best, _, i) => (score(wire, i) < score(wire, best) ? i : best), 0);
+          commit(wire, wire.candidates[index]);
+        }
+        continue;
+      }
+      const singles = group.map((wire) => wire.candidates.map((_, i) => score(wire, i)));
+      const pick = group.map(() => 0);
+      let bestPick = [...pick];
+      let bestScore = Infinity;
+      const walk = (depth: number, sum: number) => {
+        if (sum >= bestScore) {
+          return;
+        }
+        if (depth === group.length) {
+          bestScore = sum;
+          bestPick = [...pick];
+          return;
+        }
+        for (const [i, single] of singles[depth].entries()) {
+          pick[depth] = i;
+          const mine = polyline(group[depth].candidates[i]);
+          const mutual = pick.slice(0, depth).reduce((n, j, d) => n + polyline(group[d].candidates[j])
+            .reduce((m, seg) => m + mine.filter((other) => crosses(seg, other)).length, 0), 0);
+          walk(depth + 1, sum + single + mutual * 1000);
+        }
+      };
+      walk(0, 0);
+      group.forEach((wire, d) => commit(wire, wire.candidates[bestPick[d]]));
     }
 
     // ---- 叙事主线：主线上的顶层句用短横线接到最外侧的脊线（不画圆点，前置看框头标签）；离线句不接，脊线只连主线句 ----

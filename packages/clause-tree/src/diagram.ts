@@ -219,7 +219,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .legend span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 4px; vertical-align: middle; background: var(--c); }
 .hl { background: var(--hl) !important; }
 .sel { outline: 2px solid var(--accent); }
-#pop { position: absolute; z-index: 10; width: min(380px, calc(100% - 8px)); background: var(--panel); border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); display: none; font-size: 13px; direction: ltr; }
+#pop { position: fixed; z-index: 10; width: min(380px, calc(100vw - 16px)); overflow: auto; box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); display: none; font-size: 13px; direction: ltr; }
 #pop.show { display: block; }
 #pop .lemma { font-size: 24px; }
 #pop .x { position: absolute; right: 8px; top: 4px; border: none; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
@@ -283,7 +283,6 @@ function diagramClient(D: DiagramData, subtitle: string): void {
         <svg id="tips"></svg>
         <svg id="hits"></svg>
         <button type="button" id="bfold"></button>
-        <div id="pop"></div>
       </div>
     </div>
     <div class="legend">
@@ -319,7 +318,8 @@ ${D.narrative ? `
       <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span class="vm" style="--m:var(--m-inf)">不定式</span><span>（分词无底色）</span>
     </div>`}
   </section>
-</main>`);
+</main>
+<div id="pop"></div>`);
   document.body.classList.toggle('ot', D.isOT);
 
   // ---------- 原文与译文 ----------
@@ -1340,12 +1340,14 @@ ${D.narrative ? `
   const mark = (id: string, cls: string) => $$(`[data-id="${id}"]`).forEach((el) => el.classList.add(cls));
   const clear = (cls: string) => $$(`.${cls}`).forEach((el) => el.classList.remove(cls));
   let popId: string | null = null;
+  let popAnchor: HTMLElement | null = null;
   let popTimer = 0;
   function hidePop(): void {
     clearTimeout(popTimer);
     $('#pop').classList.remove('show');
     clear('sel');
     popId = null;
+    popAnchor = null;
   }
   // 移出词后稍等再收，好让指针移进词卡里展开词典
   function hidePopSoon(): void {
@@ -1375,10 +1377,28 @@ ${D.narrative ? `
       ${lexicon.map((entry) => `<details><summary>${entry.source === 'UBS-zh' ? 'UBS 中文词典' : `STEPBible 简明词典（${esc(entry.source)}）`}</summary><div class="def">${orig(entry.definition)}</div></details>`).join('')}`;
     $('.x', pop).addEventListener('click', hidePop);
     pop.classList.add('show');
-    const canvas = $('#canvas').getBoundingClientRect();
-    const rect = anchor.getBoundingClientRect();
-    pop.style.left = `${Math.max(0, Math.min(rect.left - canvas.left, canvas.width - pop.offsetWidth))}px`;
-    pop.style.top = `${rect.bottom - canvas.top + 6}px`;
+    popAnchor = anchor;
+    placePop();
+  }
+  // 词卡固定在视口里、不占版面（原先放在画布里，词在页面底部时词卡撑高页面，指针随之移出词，来回抖动）。
+  // 下方放得下就放下方，否则放剩余空间较大的一侧；放上方时以底边定位，展开词典往上长；仍放不下时词卡内部滚动。
+  function placePop(): void {
+    const pop = $('#pop');
+    if (!popAnchor || !pop.classList.contains('show')) {
+      return;
+    }
+    const gap = 6;
+    const margin = 8;
+    const rect = popAnchor.getBoundingClientRect();
+    pop.style.maxHeight = '';
+    pop.style.left = `${Math.max(margin, Math.min(rect.left, innerWidth - pop.offsetWidth - margin))}px`;
+    const below = innerHeight - rect.bottom - gap - margin;
+    const above = rect.top - gap - margin;
+    if (pop.offsetHeight <= below || below >= above) {
+      Object.assign(pop.style, { top: `${rect.bottom + gap}px`, bottom: 'auto', maxHeight: `${below}px` });
+    } else {
+      Object.assign(pop.style, { top: 'auto', bottom: `${innerHeight - rect.top + gap}px`, maxHeight: `${above}px` });
+    }
   }
   for (const el of $$('[data-id]')) {
     el.addEventListener('mouseenter', () => mark(el.dataset.id!, 'hl'));
@@ -1399,6 +1419,15 @@ ${D.narrative ? `
   $('#pop').addEventListener('mouseenter', () => clearTimeout(popTimer));
   $('#pop').addEventListener('mouseleave', hidePopSoon);
   $('#pop').addEventListener('click', (event) => event.stopPropagation());
+  // 展开、收起词典后词卡高度变了，重新挑位置
+  $('#pop').addEventListener('toggle', placePop, true);
+  // 词卡不随页面滚动，滚动时收起（词卡自己的滚动除外）
+  document.addEventListener('scroll', (event) => {
+    if (!$('#pop').contains(event.target as Node)) {
+      hidePop();
+    }
+  }, true);
+  addEventListener('resize', placePop);
   document.addEventListener('click', hidePop);
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {

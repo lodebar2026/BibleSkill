@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { renderClausesText, renderDiagramPage, type TextViewClause } from '@bs/clause-tree';
+import { DIAGRAM_ASSETS, renderClausesText, renderDiagramPage, type TextViewClause } from '@bs/clause-tree';
 import {
   DiagramNoteSchema,
   GlossaryEntrySchema,
@@ -689,8 +689,8 @@ function openInBrowser(file: string): void {
 }
 
 /**
- * 结构图：先写入 annotations（子句功能、连线标签、大意、要点），再按子句分析生成单文件 HTML，
- * 写到 <工作目录>/图示/。annotations 里的子句必须在范围内且已分析。
+ * 结构图：先写入 annotations（子句功能、连线标签、大意、要点），再按子句分析生成 HTML，
+ * 写到 <工作目录>/图示/，同时重写旁边各图共用的 diagram.css、diagram.js。annotations 里的子句必须在范围内且已分析。
  */
 export async function renderDiagram(deps: Deps, range: ScriptureRange, rawAnnotations: unknown[], open: boolean) {
   const clausesByChapter = new Map<number, ClauseEntity[]>();
@@ -737,6 +737,9 @@ export async function renderDiagram(deps: Deps, range: ScriptureRange, rawAnnota
   const file = path.join(deps.store.projectRoot, '图示', `${range.bookName}${rangeLabel(range).replace(/:/g, '_')}.html`);
   await mkdir(path.dirname(file), { recursive: true });
   await writeFile(file, renderDiagramPage(data));
+  for (const [name, content] of Object.entries(DIAGRAM_ASSETS)) {
+    await writeFile(path.join(path.dirname(file), name), content);
+  }
   if (open) {
     openInBrowser(file);
   }

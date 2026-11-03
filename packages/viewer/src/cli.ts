@@ -13,7 +13,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import { renderClausesText, renderDiagramPage } from '@bs/clause-tree';
+import { DIAGRAM_ASSETS, renderClausesText, renderDiagramPage } from '@bs/clause-tree';
 import { BibleDb, WorkFileStore, chapterFromBcv, loadChapterViews, loadDiagram, formattedMarkup, parseScriptureRange, resolveConfig } from '@bs/core';
 import { renderPage } from './page.js';
 import { serve } from './serve.js';
@@ -63,6 +63,9 @@ if (values.serve) {
     process.exit(1);
   }
   writeFileSync(values.diagram, renderDiagramPage(data, `结构以子句分析为准 · ${config.workdir}`));
+  for (const [name, content] of Object.entries(DIAGRAM_ASSETS)) {
+    writeFileSync(path.join(path.dirname(path.resolve(values.diagram)), name), content);
+  }
   process.stderr.write(`已写入 ${path.resolve(values.diagram)}\n`);
   db.close();
 } else if (values.html) {

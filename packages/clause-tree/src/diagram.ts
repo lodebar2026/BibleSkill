@@ -1,11 +1,12 @@
 /**
- * 结构图：单文件交互 HTML。
+ * 结构图：交互 HTML。
  *
  * 每个子句一行，按原文先后自上而下排（叙事链、话语内容的序列一句接一句往下读），缩进表示从属；
  * 框头标子句编号。框里每个句子成分一块（新约照 Macula 分出宾语、间接宾语、状语、表语）。
  * 连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框；箭头伸进母句框，指到那个词。
  * 新约词按格着色、动词按时态加框、按语气加底色。旧约非 qal 的动词按词干着色，谓语前的实词成分（前置）加框标出。
- * 点「详情」展开词义与要点，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），鼠标移到词上弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
+ * 点「详情」展开词义与要点，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），鼠标移到词上弹出词卡。
+ * 各图共用 diagram.css 与 diagram.js（DIAGRAM_ASSETS，页面骨架也由脚本生成），每张图的 HTML 只内嵌自己的数据。
  */
 import type { DiagramData } from '@bs/core';
 
@@ -230,7 +231,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 `;
 
 /** 页面脚本：只用 data 与 DOM，不得引用模块里的其他东西（以源码嵌入页面）。 */
-function diagramClient(D: DiagramData): void {
+function diagramClient(D: DiagramData, subtitle: string): void {
   const $ = <T extends Element = HTMLElement>(selector: string, root: ParentNode = document) => root.querySelector(selector) as T;
   const $$ = <T extends Element = HTMLElement>(selector: string, root: ParentNode = document) => [...root.querySelectorAll(selector)] as T[];
   const esc = (value: unknown) => String(value ?? '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
@@ -242,6 +243,78 @@ function diagramClient(D: DiagramData): void {
   const words = D.words;
   const punct = (after: string) => after.trim();
 
+  // ---------- 页面骨架：各图共用这份脚本，只有数据各自内嵌 ----------
+  document.title = `${D.title} 结构图`;
+  document.body.insertAdjacentHTML('afterbegin', `<header>
+  <h1>${esc(D.title)} · 原文结构</h1>
+  <div class="sub">${esc(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，鼠标移到词上看词典</div>
+</header>
+<main>
+  <section class="card">
+    <h2>原文与译文 <span class="toolbar"><button id="theme" type="button">切换明暗</button></span></h2>
+    <div id="text" class="text-line o"></div>
+    <div id="trans" class="trans"></div>
+  </section>
+  <section class="card">
+    <h2>结构图
+      <span class="toolbar">
+        <button type="button" id="openAll">展开详情</button>
+        <button type="button" id="closeAll">收起详情</button>
+        <button type="button" id="foldAll" title="把所有分支收到主句，只看主线">只看主句</button>
+        <button type="button" id="unfoldAll">展开分支</button>
+        <button type="button" data-toggle="z" aria-pressed="true">中文</button>
+        <button type="button" data-toggle="m" aria-pressed="false">词法</button>
+        <button type="button" data-toggle="e" aria-pressed="false">英文</button>
+        <button type="button" data-toggle="roles" aria-pressed="true" title="成分块顶上的名称（主语、谓语、宾语……）；关掉后只留顶边色条">成分名</button>
+        <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>${D.isOT ? '\n        <button type="button" data-toggle="forms" aria-pressed="true">句型与主线</button>\n        <button type="button" data-toggle="focus" aria-pressed="true" title="非 qal 词干的动词着色、动词前的实词成分（前置）加框">词干与前置</button>' : `
+        <button type="button" data-toggle="case" aria-pressed="true">格与时态</button>
+        <button type="button" data-toggle="forms" aria-pressed="true">${D.narrative ? '时态与主线' : '时态标签'}</button>`}
+      </span>
+    </h2>
+    <div class="scroller">
+      <div id="canvas" class="canvas hide-m hide-e"${D.isOT ? ' dir="rtl"' : ''}>
+        <div id="forest" class="forest"></div>
+        <svg id="wires"></svg>
+        <svg id="tips"></svg>
+        <svg id="hits"></svg>
+        <button type="button" id="bfold"></button>
+        <div id="pop"></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
+      <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
+    </div>${D.isOT ? `
+    <div class="forms-legend">
+      <span>边框颜色 = 动词形式：</span>
+      <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
+      <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
+      <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
+      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
+    </div>
+    <div class="forms-legend">
+      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" data-stem="niphal">Ni</span></span>
+      <span class="o" style="color:var(--st-piel)">piel <span class="sb" data-stem="piel">Pi</span></span>
+      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" data-stem="hiphil">Hi</span></span>
+      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" data-stem="hithpael">Ht</span></span>
+      <span>（qal 不着色；被动如 pual <span class="sb pass" data-stem="piel">Pu</span>、hophal 用空心标签）</span>
+      <span>· <span class="front-key">前置</span> = 动词前的实词成分（X-动词语序），多为焦点、对比或话题；框头「前置」同义</span>
+      <span>· <span class="cog-key">同根强调</span> = 不定式独立形 + 同根动词（מוֹת תָּמוּת），强调动作本身</span>
+    </div>` : `
+${D.narrative ? `
+    <div class="forms-legend">
+      <span>框头标签 = 谓语动词的时态与语气 · 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用不定过去式直说语气（背景、历史现在式、评述），不接主线</span>
+    </div>` : ''}
+    <div class="case-legend">
+      <span>格：</span><span class="o"><b>主格</b></span><span class="o" style="color:var(--c-acc)">宾格</span><span class="o" style="color:var(--c-gen)">属格</span>
+      <span class="o" style="color:var(--c-dat)">与格</span><span class="o" style="color:var(--c-voc)">呼格</span>
+      <span>· 动词框色 = 时态：</span><span class="vt" style="--t:var(--t-aor)">不定过去</span><span class="vt" style="--t:var(--t-pres)">现在</span>
+      <span class="vt" style="--t:var(--t-impf)">未完成</span><span class="vt" style="--t:var(--t-fut)">将来</span><span class="vt" style="--t:var(--t-perf)">完成</span>
+      <span>· 底色 = 语气：</span><span class="vm" style="--m:var(--m-ind)">直说</span><span class="vm" style="--m:var(--m-impv)">祈使</span>
+      <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span>（分词、不定式无底色）</span>
+    </div>`}
+  </section>
+</main>`);
   document.body.classList.toggle('ot', D.isOT);
 
   // ---------- 原文与译文 ----------
@@ -1357,91 +1430,25 @@ function diagramClient(D: DiagramData): void {
   }
 }
 
+/** 各结构图共用的样式与脚本，写在图旁边；重写这两个文件，已生成的图刷新就用上新版。 */
+export const DIAGRAM_ASSETS: Record<string, string> = {
+  'diagram.css': `@import url('https://fonts.googleapis.com/css2?family=Gentium+Book+Plus:wght@400;700&family=Noto+Serif+Hebrew:wght@400;600&display=swap');\n${STYLE}`,
+  'diagram.js': `(() => {\n  const data = document.getElementById('data');\n  (${diagramClient.toString()})(JSON.parse(data.textContent), data.dataset.subtitle);\n})();\n`,
+};
+
+/** 一张图的 HTML：只有标题与数据，样式、骨架和脚本都在共用的 DIAGRAM_ASSETS 里。 */
 export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
-  const ot = data.isOT;
   return `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(data.title)} 结构图</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Gentium+Book+Plus:wght@400;700&family=Noto+Serif+Hebrew:wght@400;600&display=swap" rel="stylesheet">
-<style>${STYLE}</style>
+<link rel="stylesheet" href="diagram.css">
 </head>
 <body>
-<header>
-  <h1>${escapeHtml(data.title)} · 原文结构</h1>
-  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，鼠标移到词上看词典</div>
-</header>
-<main>
-  <section class="card">
-    <h2>原文与译文 <span class="toolbar"><button id="theme" type="button">切换明暗</button></span></h2>
-    <div id="text" class="text-line o"></div>
-    <div id="trans" class="trans"></div>
-  </section>
-  <section class="card">
-    <h2>结构图
-      <span class="toolbar">
-        <button type="button" id="openAll">展开详情</button>
-        <button type="button" id="closeAll">收起详情</button>
-        <button type="button" id="foldAll" title="把所有分支收到主句，只看主线">只看主句</button>
-        <button type="button" id="unfoldAll">展开分支</button>
-        <button type="button" data-toggle="z" aria-pressed="true">中文</button>
-        <button type="button" data-toggle="m" aria-pressed="false">词法</button>
-        <button type="button" data-toggle="e" aria-pressed="false">英文</button>
-        <button type="button" data-toggle="roles" aria-pressed="true" title="成分块顶上的名称（主语、谓语、宾语……）；关掉后只留顶边色条">成分名</button>
-        <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>${ot ? '\n        <button type="button" data-toggle="forms" aria-pressed="true">句型与主线</button>\n        <button type="button" data-toggle="focus" aria-pressed="true" title="非 qal 词干的动词着色、动词前的实词成分（前置）加框">词干与前置</button>' : `
-        <button type="button" data-toggle="case" aria-pressed="true">格与时态</button>
-        <button type="button" data-toggle="forms" aria-pressed="true">${data.narrative ? '时态与主线' : '时态标签'}</button>`}
-      </span>
-    </h2>
-    <div class="scroller">
-      <div id="canvas" class="canvas hide-m hide-e"${ot ? ' dir="rtl"' : ''}>
-        <div id="forest" class="forest"></div>
-        <svg id="wires"></svg>
-        <svg id="tips"></svg>
-        <svg id="hits"></svg>
-        <button type="button" id="bfold"></button>
-        <div id="pop"></div>
-      </div>
-    </div>
-    <div class="legend">
-      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
-      <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
-    </div>${ot ? `
-    <div class="forms-legend">
-      <span>边框颜色 = 动词形式：</span>
-      <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
-      <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
-      <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
-      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
-    </div>
-    <div class="forms-legend">
-      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" data-stem="niphal">Ni</span></span>
-      <span class="o" style="color:var(--st-piel)">piel <span class="sb" data-stem="piel">Pi</span></span>
-      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" data-stem="hiphil">Hi</span></span>
-      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" data-stem="hithpael">Ht</span></span>
-      <span>（qal 不着色；被动如 pual <span class="sb pass" data-stem="piel">Pu</span>、hophal 用空心标签）</span>
-      <span>· <span class="front-key">前置</span> = 动词前的实词成分（X-动词语序），多为焦点、对比或话题；框头「前置」同义</span>
-      <span>· <span class="cog-key">同根强调</span> = 不定式独立形 + 同根动词（מוֹת תָּמוּת），强调动作本身</span>
-    </div>` : `
-${data.narrative ? `
-    <div class="forms-legend">
-      <span>框头标签 = 谓语动词的时态与语气 · 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用不定过去式直说语气（背景、历史现在式、评述），不接主线</span>
-    </div>` : ''}
-    <div class="case-legend">
-      <span>格：</span><span class="o"><b>主格</b></span><span class="o" style="color:var(--c-acc)">宾格</span><span class="o" style="color:var(--c-gen)">属格</span>
-      <span class="o" style="color:var(--c-dat)">与格</span><span class="o" style="color:var(--c-voc)">呼格</span>
-      <span>· 动词框色 = 时态：</span><span class="vt" style="--t:var(--t-aor)">不定过去</span><span class="vt" style="--t:var(--t-pres)">现在</span>
-      <span class="vt" style="--t:var(--t-impf)">未完成</span><span class="vt" style="--t:var(--t-fut)">将来</span><span class="vt" style="--t:var(--t-perf)">完成</span>
-      <span>· 底色 = 语气：</span><span class="vm" style="--m:var(--m-ind)">直说</span><span class="vm" style="--m:var(--m-impv)">祈使</span>
-      <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span>（分词、不定式无底色）</span>
-    </div>`}
-  </section>
-</main>
-<script id="data" type="application/json">${safeJson(data)}</script>
-<script>(${diagramClient.toString()})(JSON.parse(document.getElementById('data').textContent));</script>
+<script id="data" type="application/json" data-subtitle="${escapeHtml(subtitle || '结构以子句分析为准')}">${safeJson(data)}</script>
+<script src="diagram.js"></script>
 </body>
 </html>
 `;

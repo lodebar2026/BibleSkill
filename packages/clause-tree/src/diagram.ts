@@ -1030,7 +1030,8 @@ function diagramClient(D: DiagramData): void {
         const rank = anchorRank.get(key) ?? 0;
         const x = Math.round(end(rect) + (rtl ? 1 : -1) * (16 + rank * 10));
         const yEdge = (up ? rect.top : rect.bottom) - base.top;
-        const yLane = Math.round((up ? row.top - 10 - rank * 6 : row.bottom + 10 + rank * 6) - base.top);
+        // 框可能比整行的外框更靠外（如 徒 8:10a 底边低于行底）：横道从两者更外的边算起，离框边至少 16px，箭头（9px）前留一段竖线
+        const yLane = Math.round((up ? Math.min(row.top, rect.top) - 16 - rank * 6 : Math.max(row.bottom, rect.bottom) + 16 + rank * 6) - base.top);
         return [[x, yEdge], [x, yLane]];
       };
       const from = attach(c, cRow, `${index}c`, t.top < c.top);

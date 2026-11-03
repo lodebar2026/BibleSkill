@@ -233,7 +233,7 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 
 - 子句：`status`（accepted / ambiguous / needs-review）、`alternatives`（其他切法与依据）、`seedDiff`、`sources`、`note`
 - 译文：`renderings`（每条可带 `at`：译词在本行译文中的位置，存盘时自动定位）、`alternatives`（其他译法 `{text, kind, basis}`）、`sources`、`literalness`（写入时的档位，旧数据没有，按 2 算）
-- `formatted` 是 `TranslationSegment[]`（`{text, styleName?, note?}`）的 JSON 字符串。补出的词单独成段，`styleName: "added"`，`text` 不带括号，`note` 是补词的说明；主译的取舍理由在最后一个普通段的 note 上。模型提交时仍在 `text` 里写 `[ ]`、用 `supplied: [{text, note}]` 写补词说明，由系统拆成段；briefing、文本视图里再拼回 `[ ]`。`renderings` 的 `zh`、`at` 按不带括号的纯文本计算。HTML 视图和结构图里补词照和合本凡例字下加点（不带括号），悬停可看补词说明。
+- `formatted` 是 `TranslationSegment[]`（`{text, styleName?, note?}`）的 JSON 字符串。补出的词单独成段，`styleName: "added"`，`text` 不带括号，`note` 是补词的说明；主译的取舍理由在最后一个普通段的 note 上。模型提交时仍在 `text` 里写 `[ ]`、用 `supplied: [{text, note}]` 写补词说明，由系统拆成段；briefing、文本视图里再拼回 `[ ]`。`renderings` 的 `zh`、`at` 按不带括号的纯文本计算。HTML 视图和结构图里补词加点状下划线（不带括号），悬停可看补词说明。
 
   旧版本把 `[ ]` 直接写在正文里。转换成补词段（文字不变，对齐位置随之调整，不记修改历史）：
 

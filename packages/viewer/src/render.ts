@@ -145,7 +145,7 @@ function wordsOfRange(range: string, words: Word[]): string[] {
   return words.filter((word) => word.id >= first && word.id <= last).map((word) => word.id);
 }
 
-/** 主译文：按对齐切成片段，data-words 记下对应的原文词；补词段包在 .zh-added 里（字下加点）。 */
+/** 主译文：按对齐切成片段，data-words 记下对应的原文词；补词段包在 .zh-added 里（点状下划线）。 */
 function translationLine(text: Text, words: Word[]): HTMLElement {
   const main = el('span', 'zh-main');
   const segments = parseFormatted(text.formatted);

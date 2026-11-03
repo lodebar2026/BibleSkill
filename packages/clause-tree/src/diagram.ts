@@ -1021,6 +1021,7 @@ function diagramClient(D: DiagramData): void {
       list.forEach((item, i) => anchorY.set(item.key, Math.round(middle + (i - (list.length - 1) / 2) * step)));
     }
     const order = links.map((link, index) => ({ ...link, index }));
+    const labels: Array<{ label: HTMLElement; line: Array<[number, number]>; lane: number }> = [];
     for (const { clause, c, t, top, bottom, edge, index, cRow, tRow } of order.sort((a, b) => (a.bottom - a.top) - (b.bottom - b.top))) {
       /** 框上的连接段：尾侧空着时从侧边横出；被挡住时从顶边或底边竖出，再到整行外侧的横道。返回 [框上的点, 横道上的点]。 */
       const attach = (rect: DOMRect, row: DOMRect | null, key: string, up: boolean): Array<[number, number]> => {
@@ -1061,9 +1062,34 @@ function diagramClient(D: DiagramData): void {
       const label = document.createElement('div');
       label.className = 'll';
       label.textContent = clause.logic!.targetIds.length > 1 ? `${clause.logic!.label} → ${clause.logic!.targetText}` : clause.logic!.label;
-      label.style.left = `${best}px`;
-      label.style.top = `${(y1 + y2) / 2}px`;
       canvas.append(label);
+      labels.push({ label, line: points(best), lane: best });
+    }
+    // 标签放在这条线独有的横段上（几条竖道并排时，放在竖线上看不出归属）：挑最长的横段，避开横穿它的竖线；
+    // 横段都放不下时才放在竖线中点
+    for (const { label, line, lane } of labels) {
+      const width = label.offsetWidth + 8;
+      let spot: [number, number] | null = null;
+      let room = 0;
+      for (let i = 1; i < line.length; i += 1) {
+        const [[xa, ya], [xb, yb]] = [line[i - 1], line[i]];
+        if (ya !== yb || Math.abs(xb - xa) < width + 12) {
+          continue;
+        }
+        const lo = Math.min(xa, xb) + 6 + width / 2;
+        const hi = Math.max(xa, xb) - 6 - width / 2;
+        for (let x = lo; x <= hi; x += 4) {
+          const clear = !verticals.some((v) => v.x !== lane && v.top < ya && v.bottom > ya && Math.abs(v.x - x) < width / 2 + 2);
+          if (clear && hi - lo + width > room) {
+            spot = [x, ya];
+            room = hi - lo + width;
+            break;
+          }
+        }
+      }
+      const [x, y] = spot ?? [lane, (line[0][1] + line.at(-1)![1]) / 2];
+      label.style.left = `${x}px`;
+      label.style.top = `${y}px`;
     }
   }
   let frame = 0;

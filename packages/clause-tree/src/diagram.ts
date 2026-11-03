@@ -445,10 +445,20 @@ function diagramClient(D: DiagramData): void {
     return Boolean(parent && isMarker(parent) && kids.get(parent.id)!.map((id) => byId.get(id)!)
       .sort((a, b) => firstWord(a).localeCompare(firstWord(b)))[0] === clause);
   };
-  for (const clause of [...D.clauses].sort((a, b) => firstWord(a).localeCompare(firstWord(b)))) {
+  const lastWord = (clause: (typeof D.clauses)[number]) => clause.chips.flatMap((chip) => chip.wordIds).sort().at(-1) ?? firstWord(clause);
+  const ordered = [...D.clauses].sort((a, b) => firstWord(a).localeCompare(firstWord(b)));
+  // 原文里紧接着母句：两者之间的子句都嵌在母句里面（首词在母句末词之前，如 徒 8:7a 的 ⟨7b⟩），或已排在母句那一行。
+  // 隔着别的子句时（如 徒 8:9d λέγων 前面是 9b、9c）照常另起一行，不打乱原文顺序
+  const follows = (clause: (typeof D.clauses)[number], parentBox: HTMLElement) => {
+    const parent = byId.get(clause.parentId!)!;
+    const between = ordered.slice(ordered.indexOf(parent) + 1, ordered.indexOf(clause));
+    return between.every((item) => lastWord(parent).localeCompare(firstWord(item)) > 0
+      || $(`[data-box="${item.id}"]`)?.parentElement === parentBox.parentElement && parentBox.parentElement!.classList.contains('row'));
+  };
+  for (const clause of ordered) {
     const verse = clause.id.replace(/[a-z]+$/, '');
     const parentBox = isSide(clause) || besideMarker(clause) ? $(`[data-box="${clause.parentId}"]`) : null;
-    if (parentBox) {
+    if (parentBox && follows(clause, parentBox)) {
       let row = parentBox.parentElement!;
       if (!row.classList.contains('row')) {
         row = document.createElement('div');
@@ -632,6 +642,12 @@ function diagramClient(D: DiagramData): void {
     const crossings = (points: Array<[number, number]>): Array<[number, number]> => polyline(points).flatMap((seg) => segs.filter((other) => crosses(seg, other))
       .map((other): [number, number] => (seg.x1 === seg.x2 ? [seg.x1, other.y1] : [other.x1, seg.y1])));
     /** 与已画的竖线并排、又贴得太近（不到 10px，共用主干的除外）的竖段数。 */
+    /** 两段在同一条直线上且有一段叠在一起。 */
+    const overlapping = (a: Seg, b: Seg) => {
+      const range = (p1: number, p2: number, q1: number, q2: number) => Math.min(Math.max(p1, p2), Math.max(q1, q2)) - Math.max(Math.min(p1, p2), Math.min(q1, q2)) > 1;
+      return a.x1 === a.x2 && b.x1 === b.x2 ? Math.abs(a.x1 - b.x1) < 1 && range(a.y1, a.y2, b.y1, b.y2)
+        : a.y1 === a.y2 && b.y1 === b.y2 && Math.abs(a.y1 - b.y1) < 1 && range(a.x1, a.x2, b.x1, b.x2);
+    };
     const crowded = (points: Array<[number, number]>) => polyline(points).filter((seg) => seg.x1 === seg.x2).reduce((sum, seg) => sum + segs.filter((other) => other.x1 === other.x2
       && Math.abs(other.x1 - seg.x1) >= 1 && Math.abs(other.x1 - seg.x1) < 10
       && Math.min(Math.max(seg.y1, seg.y2), Math.max(other.y1, other.y2)) > Math.max(Math.min(seg.y1, seg.y2), Math.min(other.y1, other.y2))).length, 0);
@@ -699,6 +715,27 @@ function diagramClient(D: DiagramData): void {
     const targetOf = (clause: (typeof D.clauses)[number], parentBox: HTMLElement) => clause.targetSlot
       ? $(`[data-slot="${clause.targetSlot}"] .g`, parentBox)
       : clause.targetWordId ? $(`[data-id="${clause.targetWordId}"] .g`, parentBox) : null;
+    // 同一母句同一侧的横道按跨度排：子句离得最远的那组（主干在最外圈）用最靠近母句的横道，
+    // 内圈的竖线从更远的横道起，不会横穿外圈的横线（徒 8:9a 下 10a→Σίμων 与 9b–9d→προϋπῆρχεν）
+    const reach = new Map<string, Map<string, number>>();
+    for (const clause of D.clauses) {
+      const childBox = clause.parentId && byId.has(clause.parentId) ? $(`[data-box="${clause.id}"]`) : null;
+      const parentBox = childBox ? $(`[data-box="${clause.parentId}"]`) : null;
+      if (!childBox || !parentBox || childBox.hidden || parentBox.hidden || childBox.classList.contains('side')) {
+        continue;
+      }
+      const c = childBox.getBoundingClientRect();
+      const p = parentBox.getBoundingClientRect();
+      const below = c.top >= p.bottom;
+      const key = `${clause.parentId}|${below ? 'b' : 'a'}`;
+      const targetKey = clause.targetSlot ?? clause.targetWordId ?? '';
+      const spans = reach.get(key) ?? new Map<string, number>();
+      spans.set(targetKey, Math.max(spans.get(targetKey) ?? 0, below ? c.top - p.bottom : p.top - c.bottom));
+      reach.set(key, spans);
+    }
+    for (const [key, spans] of reach) {
+      lanes.set(key, new Map([...spans].sort((a, b) => b[1] - a[1]).map(([target], i) => [target, i])));
+    }
     for (const clause of D.clauses) {
       if (!clause.parentId || !byId.has(clause.parentId)) {
         continue;
@@ -874,18 +911,22 @@ function diagramClient(D: DiagramData): void {
       const points = wire.candidates[index];
       const path = polyline(points);
       const logicCrossings = path.reduce((sum, seg) => sum + logicSegs.filter((other) => crosses(seg, other)).length, 0);
-      const joints = crossJoints(path, groupSegs.get(wire.group) ?? []);
+      const own = groupSegs.get(wire.group) ?? [];
+      const joints = crossJoints(path, own);
+      // 与别组的线重合（同一条竖道或横道上有一段叠在一起）看不出各自指向哪个词，与交叉同价
+      const shared = path.reduce((sum, seg) => sum + segs.filter((other) => !own.includes(other) && overlapping(seg, other)).length, 0);
       // 新约：主干、分叉优先走起始侧（左侧），尾侧留给逻辑虚线；只在左侧会多出交叉时才走尾侧
       const farCost = !D.isOT && wire.farSide.has(index) ? 500 : 0;
       // 新约：几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）
       const sideCost = !D.isOT && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
-      return (cost(path) + logicCrossings + joints) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + farCost + sideCost;
+      return (cost(path) + logicCrossings + joints + shared) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + farCost + sideCost;
     };
     const commit = (wire: Wire, best: Array<[number, number]>) => {
       // 与先画的线交叉处，后画的这条跨过去
       const hops = crossings(best);
-      segs.push(...polyline(best));
-      groupSegs.set(wire.group, [...(groupSegs.get(wire.group) ?? []), ...polyline(best)]);
+      const lines = polyline(best);
+      segs.push(...lines);
+      groupSegs.set(wire.group, [...(groupSegs.get(wire.group) ?? []), ...lines]);
       // 句法竖线也记下，逻辑虚线不贴着它们走
       for (const seg of polyline(best).filter((item) => item.x1 === item.x2)) {
         verticals.push({ x: seg.x1, top: Math.min(seg.y1, seg.y2), bottom: Math.max(seg.y1, seg.y2) });

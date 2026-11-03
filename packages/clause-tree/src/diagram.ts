@@ -27,7 +27,7 @@ const STYLE = `
   --hl: #fde68a; --amb: #fff1c7; --rev: #fde2e2;
   --c-acc: rgb(42, 127, 255); --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: rgb(255, 102, 0);
   --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #ff0000;
-  --m-ind: #f5f5dc; --m-impv: #ffc0c0; --m-subj: #ffe0ff; --m-opt: #e0ffe0;
+  --m-ind: #f5f5dc; --m-impv: #ffc0c0; --m-subj: #ffe0ff; --m-opt: #e0ffe0; --m-inf: #e0e0e0;
   --focus: #d97706; --st-qal: #6b665d; --st-niphal: #0369a1; --st-piel: #c2410c; --st-hiphil: #7e22ce; --st-hithpael: #15803d;
 }
 @media (prefers-color-scheme: dark) {
@@ -38,7 +38,7 @@ const STYLE = `
     --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
     --c-acc: #6aa8ff; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
     --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
-    --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a;
+    --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
     --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
   }
 }
@@ -49,7 +49,7 @@ const STYLE = `
   --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
   --c-acc: #6aa8ff; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
   --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
-  --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a;
+  --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
   --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
 }
 * { box-sizing: border-box; }
@@ -146,7 +146,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .canvas:not(.hide-case) .w[data-tense="plpf"] .g { border-width: 2.5px; }
 .w[data-tense="pres"] { --t: var(--t-pres); } .w[data-tense="impf"] { --t: var(--t-impf); } .w[data-tense="fut"] { --t: var(--t-fut); }
 .w[data-tense="aor"] { --t: var(--t-aor); } .w[data-tense="perf"] { --t: var(--t-perf); } .w[data-tense="plpf"] { --t: var(--t-plpf); }
-.w[data-mood="ind"] { --m: var(--m-ind); } .w[data-mood="impv"] { --m: var(--m-impv); } .w[data-mood="subj"] { --m: var(--m-subj); } .w[data-mood="opt"] { --m: var(--m-opt); }
+.w[data-mood="ind"] { --m: var(--m-ind); } .w[data-mood="impv"] { --m: var(--m-impv); } .w[data-mood="subj"] { --m: var(--m-subj); } .w[data-mood="opt"] { --m: var(--m-opt); } .w[data-mood="inf"] { --m: var(--m-inf); }
 .case-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; align-items: baseline; }
 .case-legend .o { font-size: 15px; }
 .case-legend .vt { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 4px; }
@@ -311,7 +311,7 @@ ${D.narrative ? `
       <span>· 动词框色 = 时态：</span><span class="vt" style="--t:var(--t-aor)">不定过去</span><span class="vt" style="--t:var(--t-pres)">现在</span>
       <span class="vt" style="--t:var(--t-impf)">未完成</span><span class="vt" style="--t:var(--t-fut)">将来</span><span class="vt" style="--t:var(--t-perf)">完成</span>
       <span>· 底色 = 语气：</span><span class="vm" style="--m:var(--m-ind)">直说</span><span class="vm" style="--m:var(--m-impv)">祈使</span>
-      <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span>（分词、不定式无底色）</span>
+      <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span class="vm" style="--m:var(--m-inf)">不定式</span><span>（分词无底色）</span>
     </div>`}
   </section>
 </main>`);

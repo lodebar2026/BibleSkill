@@ -5,7 +5,7 @@
  * 框头标子句编号。框里每个句子成分一块（新约照 Macula 分出宾语、间接宾语、状语、表语）。
  * 连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框；箭头伸进母句框，指到那个词。
  * 新约词按格着色、动词按时态加框、按语气加底色。旧约非 qal 的动词按词干着色，谓语前的实词成分（前置）加框标出。
- * 点「详情」展开词义与要点，点「收起分支」隐藏下属子句，点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
+ * 点「详情」展开词义与要点，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
  */
 import type { DiagramData } from '@bs/core';
 
@@ -107,6 +107,14 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .forms-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; border: 2px solid var(--tc); }
 .bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 .box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.bh .unfold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+/* 鼠标移到连线上：这一支加亮，旁边出现「收起」按钮 */
+#hits { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; overflow: visible; }
+#hits path.hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+#hits path.lit { fill: none; stroke: var(--accent); stroke-width: 6; opacity: .45; pointer-events: none; }
+.box.lit { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+#bfold { position: absolute; z-index: 6; display: none; font: inherit; font-size: 12px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
+#bfold.on { display: block; }
 .box[hidden] { display: none; }
 /* 只有一个词的引语框架（εἰπόντες、לֵאמֹר）放在母句同一行的行尾，省竖向空间 */
 .row { display: flex; align-items: flex-start; gap: 10px 36px; flex-wrap: wrap; }
@@ -200,7 +208,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 @media (max-width: 760px) {
   .forest { gap: 12px; }
   .box { margin-inline-start: calc(var(--depth, 0) * 14px); max-width: calc(100% - var(--depth, 0) * 14px); }
-  #wires, #tips, .ll { display: none; }
+  #wires, #tips, #hits, #bfold, .ll { display: none; }
   .box > .up { display: block; }
   .more .up { display: none; }
 }
@@ -336,8 +344,7 @@ function diagramClient(D: DiagramData): void {
     const typeBadge = !form ? '' : D.isOT ? `<span class="ty" title="${esc(FORM_ZH[form])}">${esc(clause.type)}</span>${marks}`
       : `<span class="ty" title="谓语动词的时态与语气">${esc(ntBadge())}</span>${marks}`;
     const status = clause.status === 'ambiguous' ? '<span class="st ambiguous">有歧义</span>' : clause.status === 'needs-review' ? '<span class="st needs-review">待复核</span>' : '';
-    const foldButton = descendants(clause.id).length > 0 ? '<button type="button" class="fold" title="收起/展开这个分支（隐藏或显示下属子句）">收起分支</button>' : '';
-    box.innerHTML = `<div class="bh">${foldButton}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button><span class="gist">${esc(clause.gist)}</span></div>`;
+    box.innerHTML = `<div class="bh">${kids.has(clause.id) ? '<button type="button" class="fold" title="收起/展开这一句下面的所有分支">收起分支</button>' : ''}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button><span class="gist">${esc(clause.gist)}</span></div>`;
     const chips = document.createElement('div');
     chips.className = 'chips';
     for (const chip of clause.chips) {
@@ -416,7 +423,10 @@ function diagramClient(D: DiagramData): void {
     $('.det', box).addEventListener('click', () => setOpen(box, !box.classList.contains('open')));
     box.querySelector('.fold')?.addEventListener('click', (event) => {
       event.stopPropagation();
-      setFolded(clause.id, !box.classList.contains('folded'));
+      const all = kids.get(clause.id)!;
+      const shut = all.every((kid) => folded.has(kid));
+      all.forEach((kid) => (shut ? folded.delete(kid) : folded.add(kid)));
+      applyFolds();
     });
     forest.append(box);
     return box;
@@ -544,34 +554,115 @@ function diagramClient(D: DiagramData): void {
     }
   }
 
-  // ---------- 分支展开/收起：收起的方框隐藏全部下属子句，按钮显示收起了几句 ----------
+  // ---------- 分支展开/收起：一支 = 一个子句连同它的下属。收起的支在母句框头留一个「▸ 编号」按钮，点它展开 ----------
+  const folded = new Set<string>();
+  const branchLabel = (id: string) => {
+    const ids = [id, ...descendants(id)].sort();
+    return ids.length > 1 ? `${clauseNo(ids[0])}–${clauseNo(ids.at(-1)!)}` : clauseNo(id);
+  };
   function applyFolds(): void {
-    const hidden = new Set($$('.box.folded').flatMap((box) => descendants(box.dataset.box!)));
+    const hidden = new Set([...folded].flatMap((id) => [id, ...descendants(id)]));
     for (const box of $$('.box')) {
       box.hidden = hidden.has(box.dataset.box!);
       const row = box.parentElement!;
       if (row.classList.contains('row')) {
         row.hidden = [...row.children].every((item) => hidden.has((item as HTMLElement).dataset.box!));
       }
-      const button = box.querySelector<HTMLElement>('.fold');
-      if (button) {
-        button.textContent = box.classList.contains('folded') ? '展开分支' : '收起分支';
+      $$('.unfold', box).forEach((button) => button.remove());
+      // 这一句的分支全部收起时，「收起分支」改为「展开分支」，不再逐支列出
+      const all = kids.get(box.dataset.box!) ?? [];
+      const shut = all.length > 0 && all.every((id) => folded.has(id));
+      box.classList.toggle('folded', shut);
+      const fold = box.querySelector<HTMLElement>('.fold');
+      if (fold) {
+        fold.textContent = shut ? '展开分支' : '收起分支';
+      }
+      if (shut) {
+        continue;
+      }
+      const cid = $('.bh .cid', box);
+      for (const kid of [...(kids.get(box.dataset.box!) ?? [])].reverse().filter((id) => folded.has(id))) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'unfold';
+        button.textContent = `▸ ${branchLabel(kid)}`;
+        button.title = `展开收起的分支 ${branchLabel(kid)}（${1 + descendants(kid).length} 句）`;
+        button.addEventListener('click', (event) => {
+          event.stopPropagation();
+          folded.delete(kid);
+          applyFolds();
+        });
+        cid.before(button);
       }
     }
     hidePop();
+    hideBranchButton();
     redraw();
   }
-  function setFolded(id: string, folded: boolean): void {
-    $(`[data-box="${id}"]`)?.classList.toggle('folded', folded);
-    applyFolds();
-  }
+  // 只看主句：收起主句下的每一支
   $('#foldAll').addEventListener('click', () => {
-    $$('.box').forEach((box) => box.classList.toggle('folded', !byId.get(box.dataset.box!)?.parentId && kids.has(box.dataset.box!)));
+    folded.clear();
+    D.clauses.filter((clause) => clause.parentId && byId.has(clause.parentId) && !byId.get(clause.parentId)!.parentId).forEach((clause) => folded.add(clause.id));
     applyFolds();
   });
   $('#unfoldAll').addEventListener('click', () => {
-    $$('.box').forEach((box) => box.classList.remove('folded'));
+    folded.clear();
     applyFolds();
+  });
+  // 鼠标移到连线上：加亮这一支（线与子句框），在鼠标旁给出「收起」按钮；移开后稍等再收，好让鼠标移到按钮上
+  const branchButton = $('#bfold');
+  let branchTimer = 0;
+  let hoverBranch: string | null = null;
+  function highlightBranch(id: string | null): void {
+    $$('#hits path.lit').forEach((path) => path.remove());
+    $$('.box.lit').forEach((box) => box.classList.remove('lit'));
+    if (!id) {
+      return;
+    }
+    for (const hit of $$(`#hits path.hit[data-branch="${id}"]`)) {
+      const mark = hit.cloneNode() as SVGPathElement;
+      mark.setAttribute('class', 'lit');
+      mark.removeAttribute('data-branch');
+      hit.before(mark);
+    }
+    [id, ...descendants(id)].forEach((kid) => $(`[data-box="${kid}"]`)?.classList.add('lit'));
+  }
+  function hideBranchButton(): void {
+    clearTimeout(branchTimer);
+    branchButton.classList.remove('on');
+    hoverBranch = null;
+    highlightBranch(null);
+  }
+  function showBranchButton(id: string, event: MouseEvent): void {
+    clearTimeout(branchTimer);
+    if (hoverBranch !== id) {
+      const base = $('#canvas').getBoundingClientRect();
+      branchButton.textContent = `收起 ${branchLabel(id)}`;
+      branchButton.style.left = `${event.clientX - base.left + 8}px`;
+      branchButton.style.top = `${event.clientY - base.top + 8}px`;
+      branchButton.classList.add('on');
+      hoverBranch = id;
+      highlightBranch(id);
+    }
+  }
+  const leaveBranch = () => {
+    clearTimeout(branchTimer);
+    branchTimer = window.setTimeout(hideBranchButton, 400);
+  };
+  $('#hits').addEventListener('mouseover', (event) => {
+    const id = (event.target as Element).getAttribute?.('data-branch');
+    if (id) {
+      showBranchButton(id, event as MouseEvent);
+    }
+  });
+  $('#hits').addEventListener('mouseout', leaveBranch);
+  branchButton.addEventListener('mouseenter', () => clearTimeout(branchTimer));
+  branchButton.addEventListener('mouseleave', leaveBranch);
+  branchButton.addEventListener('click', () => {
+    if (hoverBranch) {
+      folded.add(hoverBranch);
+      applyFolds();
+    }
   });
 
   function setOpen(box: HTMLElement, open: boolean): void {
@@ -600,7 +691,9 @@ function diagramClient(D: DiagramData): void {
     const base = canvas.getBoundingClientRect();
     const tips = $<SVGSVGElement>('#tips');
     tips.innerHTML = '';
-    for (const layer of [svg, tips]) {
+    const hits = $<SVGSVGElement>('#hits');
+    hits.innerHTML = '';
+    for (const layer of [svg, tips, hits]) {
       layer.setAttribute('width', String(canvas.scrollWidth));
       layer.setAttribute('height', String(canvas.scrollHeight));
     }
@@ -656,6 +749,14 @@ function diagramClient(D: DiagramData): void {
      * 一律画在最上层（#tips），不被方框边框盖住，各处大小一样。
      */
     const ARROW = 9;
+    /** 连线的感应区（透明粗线），鼠标移上去可收起 branch 这一支。 */
+    const hitArea = (points: Array<[number, number]>, branch: string) => {
+      const path = document.createElementNS(SVG, 'path');
+      path.setAttribute('class', 'hit');
+      path.setAttribute('d', pathD(points));
+      path.dataset.branch = branch;
+      hits.append(path);
+    };
     const arrow = (layer: SVGSVGElement, points: Array<[number, number]>, cls = '', hops: Array<[number, number]> = []): void => {
       const [tx, ty] = points.at(-1)!;
       const [px, py] = points.at(-2)!;
@@ -679,7 +780,7 @@ function diagramClient(D: DiagramData): void {
     // 每条线有几种走法（从子句顶边/底边直接出、起始侧沟槽、尾侧沟槽），排除穿过其他方框的，
     // 按「交叉数 → 折点数 → 长度」取最好的；跨度短的先定
     // into：箭头伸进母句框、指到被修饰词的那一段（画在方框上层）；没有目标词时为 null，箭头停在框边
-    type Wire = { candidates: Array<Array<[number, number]>>; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null };
+    type Wire = { candidates: Array<Array<[number, number]>>; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null; clause: string };
     const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
     // 画逻辑虚线的方框（起点与关联的子句）
@@ -754,6 +855,7 @@ function diagramClient(D: DiagramData): void {
         const points: Array<[number, number]> = [[start(c), y], [endOf(p) + (rtl ? -1 : 1), y]];
         segs.push(...polyline(points));
         arrow(svg, points);
+        hitArea(points, clause.id);
         continue;
       }
       const below = c.top >= p.bottom;
@@ -875,7 +977,7 @@ function diagramClient(D: DiagramData): void {
           }
         }
       }
-      wires.push({ candidates, farSide, startSide, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into });
+      wires.push({ candidates, farSide, startSide, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into, clause: clause.id });
     }
     const verticals: Array<{ x: number; top: number; bottom: number }> = [];
     const length = (points: Array<[number, number]>) => points.slice(1).reduce((sum, [x, y], i) => sum + Math.abs(x - points[i][0]) + Math.abs(y - points[i][1]), 0);
@@ -931,6 +1033,7 @@ function diagramClient(D: DiagramData): void {
       for (const seg of polyline(best).filter((item) => item.x1 === item.x2)) {
         verticals.push({ x: seg.x1, top: Math.min(seg.y1, seg.y2), bottom: Math.max(seg.y1, seg.y2) });
       }
+      hitArea(best, wire.clause);
       if (wire.into === null) {
         arrow(svg, best, '', hops);
       } else {
@@ -1136,7 +1239,13 @@ function diagramClient(D: DiagramData): void {
   let frame = 0;
   const redraw = () => {
     cancelAnimationFrame(frame);
-    frame = requestAnimationFrame(drawWires);
+    frame = requestAnimationFrame(() => {
+      drawWires();
+      // 重画会清掉感应区，正在悬停的那一支重新加亮
+      if (hoverBranch) {
+        highlightBranch(hoverBranch);
+      }
+    });
   };
   new ResizeObserver(redraw).observe($('#forest'));
   addEventListener('resize', () => {
@@ -1248,7 +1357,7 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
 <body>
 <header>
   <h1>${escapeHtml(data.title)} · 原文结构</h1>
-  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」隐藏下属子句，点词看词典</div>
+  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，点词看词典</div>
 </header>
 <main>
   <section class="card">
@@ -1277,6 +1386,8 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
         <div id="forest" class="forest"></div>
         <svg id="wires"></svg>
         <svg id="tips"></svg>
+        <svg id="hits"></svg>
+        <button type="button" id="bfold"></button>
         <div id="pop"></div>
       </div>
     </div>

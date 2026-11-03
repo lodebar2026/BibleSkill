@@ -13,7 +13,7 @@ import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
 import { LOGIC_LABELS } from './logic.js';
 import { LITERALNESS_LEVELS, type ClauseEntity, type ClauseText, type DiagramNote } from './schemas.js';
-import { clauseNote, parseFormatted, plainText } from './segments.js';
+import { ADDED_STYLE, clauseNote, parseFormatted, type Segment } from './segments.js';
 import type { WorkFileStore } from './store.js';
 
 export type DiagramWord = {
@@ -160,7 +160,8 @@ export type DiagramClause = {
   parentId: string | null;
   label: string;
   link: string | null;
-  gist: string;
+  /** 框头的一句：bible-diagram 写的大意，没有时取译文（补词段带 added）。 */
+  gist: DiagramText;
   status: ClauseEntity['status'];
   /** 旧约句型展示码（WayX、XQtl、NmCl…）；新约为空。 */
   type: string;
@@ -184,7 +185,18 @@ export type DiagramClause = {
   records: DiagramRecord[];
 };
 
-export type DiagramVerse = { bcv: number; verse: number; wordIds: string[]; translation: string };
+/** 带补词标记的中文：added 段是原文没有、译者补出的词，note 是补词说明。 */
+export type DiagramText = Array<{ text: string; added?: true; note?: string }>;
+
+export type DiagramVerse = { bcv: number; verse: number; wordIds: string[]; translation: DiagramText };
+
+/** 译文分段 → DiagramText：去掉换行，只留补词的说明（主译理由在详情的记录里）。 */
+function diagramText(segments: Segment[]): DiagramText {
+  return segments.map((segment) => {
+    const text = segment.text.replace(/\s*\n\s*/g, '');
+    return segment.styleName === ADDED_STYLE ? { text, added: true as const, ...(segment.note ? { note: segment.note } : {}) } : { text };
+  }).filter((part) => part.text);
+}
 
 export type DiagramLexiconEntry = { source: string; lemma: string; gloss: string; definition: string };
 
@@ -598,9 +610,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
 
     const text = textByKey.get(clause.id);
     const segments = text ? parseFormatted(text.formatted) : [];
-    let gist = note?.gist ?? '';
-    if (!gist && text) {
-      gist = text.translationSpan === 0 ? '（译文并入前句）' : plainText(segments).replace(/\s*\n\s*/g, '') + (text.translationSpan > 1 ? '（合译）' : '');
+    let gist: DiagramText = note?.gist ? [{ text: note.gist }] : [];
+    if (gist.length === 0 && text) {
+      gist = text.translationSpan === 0 ? [{ text: '（译文并入前句）' }] : [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）' }] : [])];
     }
 
     const records: DiagramRecord[] = [];
@@ -657,7 +669,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     let verse = verses.at(-1);
     if (!verse || verse.bcv !== token.bcv) {
       const texts = input.texts.filter((text) => text.bcv === token.bcv && text.translationSpan > 0).sort((a, b) => a.sub.localeCompare(b.sub));
-      verse = { bcv: token.bcv, verse: token.bcv % 1000, wordIds: [], translation: texts.map((text) => plainText(parseFormatted(text.formatted))).join('').replace(/\s*\n\s*/g, '') };
+      verse = { bcv: token.bcv, verse: token.bcv % 1000, wordIds: [], translation: texts.flatMap((text) => diagramText(parseFormatted(text.formatted))) };
       verses.push(verse);
     }
     verse.wordIds.push(token.id);

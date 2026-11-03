@@ -71,6 +71,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .vn { font-size: 12px; color: var(--accent); vertical-align: super; margin: 0 2px 0 6px; font-family: sans-serif; }
 .trans { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 16px; }
 .trans .vn { font-size: 11px; }
+/* 补词：照和合本凡例在字旁（横排为字下）加点 */
+.added { -webkit-text-emphasis: dot var(--muted); text-emphasis: dot var(--muted); -webkit-text-emphasis-position: under right; text-emphasis-position: under right; cursor: help; }
 .tok { cursor: pointer; border-radius: 4px; padding: 0 1px; }
 .tok.var { text-decoration: underline dotted var(--accent); text-underline-offset: 4px; }
 
@@ -241,6 +243,9 @@ function diagramClient(D: DiagramData, subtitle: string): void {
   const TENSE_ZH: Record<string, string> = { pres: '现在', impf: '未完成', fut: '将来', aor: '不定过去', perf: '完成', plpf: '过去完成' };
   const MOOD_ZH: Record<string, string> = { ind: '直说', subj: '虚拟', opt: '祈愿', impv: '祈使', inf: '不定式', ptcp: '分词' };
   const words = D.words;
+  /** 译文：补词段字下加点（照和合本凡例），悬停看补词说明。旧图的数据里译文还是纯字符串。 */
+  const zh = (value: string | Array<{ text: string; added?: true; note?: string }>) => typeof value === 'string' ? esc(value)
+    : value.map((part) => part.added ? `<span class="added" title="${esc(part.note ? `补词：${part.note}` : '补词：原文没有，译者补出')}">${esc(part.text)}</span>` : esc(part.text)).join('');
   const punct = (after: string) => after.trim();
 
   // ---------- 页面骨架：各图共用这份脚本，只有数据各自内嵌 ----------
@@ -330,8 +335,8 @@ ${D.narrative ? `
       span.textContent = word.text;
       text.append(span, document.createTextNode(word.after));
     }
-    if (verse.translation) {
-      trans.insertAdjacentHTML('beforeend', `<span class="vn">${verse.verse}</span>${esc(verse.translation)}`);
+    if (verse.translation.length > 0) {
+      trans.insertAdjacentHTML('beforeend', `<span class="vn">${verse.verse}</span>${zh(verse.translation)}`);
     }
   }
   if (!trans.textContent) {
@@ -417,7 +422,7 @@ ${D.narrative ? `
     const typeBadge = !form ? '' : D.isOT ? `<span class="ty" title="${esc(FORM_ZH[form])}">${esc(clause.type)}</span>${marks}`
       : `<span class="ty" title="谓语动词的时态与语气">${esc(ntBadge())}</span>${marks}`;
     const status = clause.status === 'ambiguous' ? '<span class="st ambiguous">有歧义</span>' : clause.status === 'needs-review' ? '<span class="st needs-review">待复核</span>' : '';
-    box.innerHTML = `<div class="bh">${kids.has(clause.id) ? '<button type="button" class="fold" title="收起/展开这一句下面的所有分支">收起分支</button>' : ''}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button><span class="gist">${esc(clause.gist)}</span></div>`;
+    box.innerHTML = `<div class="bh">${kids.has(clause.id) ? '<button type="button" class="fold" title="收起/展开这一句下面的所有分支">收起分支</button>' : ''}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button><span class="gist">${zh(clause.gist)}</span></div>`;
     const chips = document.createElement('div');
     chips.className = 'chips';
     for (const chip of clause.chips) {

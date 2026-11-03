@@ -41,7 +41,7 @@ const CLAUSES = [
 const TEXTS: ClauseText[] = [
   { bcv: 44007018, sub: 'a', translationSpan: 1, formatted: JSON.stringify([{ text: '直到另一个王\n兴起治理埃及，', note: '取状语' }]), paraTitle: null,
     renderings: [{ tokens: 'n44007018004', zh: '王' }], alternatives: [], sources: ['ai'], version: 0, literalness: 3 },
-  { bcv: 44007018, sub: 'b', translationSpan: 1, formatted: JSON.stringify([{ text: '他不认识约瑟。' }]), paraTitle: null,
+  { bcv: 44007018, sub: 'b', translationSpan: 1, formatted: JSON.stringify([{ text: '他', styleName: 'added', note: '补出主语' }, { text: '不认识约瑟。' }]), paraTitle: null,
     renderings: [], alternatives: [{ text: '他不顾念约瑟。', kind: 'lexical', basis: 'οἶδα 的顾念义' }], sources: ['ai'], version: 0, literalness: 3 },
 ];
 
@@ -56,19 +56,20 @@ test('成分块：主语、谓语取自分析，句首“介词 + 关系代名�
   assert.deepEqual(show(relative.chips), ['s:8', '-:9', 'v:10', '-:11,12']);
 });
 
-test('挂接：连线从首词指到母句里被修饰的词；默认标签按被修饰词的词类，大意取译文', () => {
+test('挂接：连线从首词指到母句里被修饰的词；默认标签按被修饰词的词类，大意取译文（补词带标记与说明）', () => {
   const data = build();
   const [main, relative] = data.clauses;
   assert.equal(main.parentId, null);
   assert.equal(main.label, '主句');
-  assert.equal(main.gist, '直到另一个王兴起治理埃及，');
+  assert.deepEqual(main.gist, [{ text: '直到另一个王兴起治理埃及，' }]);
+  assert.deepEqual(relative.gist, [{ text: '他', added: true, note: '补出主语' }, { text: '不认识约瑟。' }]);
   assert.equal(relative.parentId, '44007018a');
   assert.equal(relative.targetWordId, 'n44007018004');
   assert.equal(relative.label, '定语从句');
   assert.equal(relative.link, '修饰“王”');
   assert.deepEqual(relative.records.map((record) => record.tag), ['另一种分析', '其他译法·词义']);
   assert.equal(data.literalness, '第 3 档「平衡」');
-  assert.deepEqual(data.verses.map((verse) => verse.translation), ['直到另一个王兴起治理埃及，他不认识约瑟。']);
+  assert.deepEqual(data.verses.map((verse) => verse.translation), [[{ text: '直到另一个王兴起治理埃及，' }, { text: '他', added: true, note: '补出主语' }, { text: '不认识约瑟。' }]]);
 });
 
 test('异文：只标影响翻译的；拼写差异不标', () => {
@@ -82,7 +83,7 @@ test('说明：首末词与当前子句对得上才用，对不上（重新切�
   const stale: DiagramNote = { clauseId: '44007018a', firstWordId: 'n44007018002', lastWordId: 'n44007018007', label: '时间从句', notes: [] };
   const [main, relative] = build([current, stale]).clauses;
   assert.equal(relative.label, '关系从句');
-  assert.equal(relative.gist, '这王不认识约瑟');
+  assert.deepEqual(relative.gist, [{ text: '这王不认识约瑟' }]);
   assert.deepEqual(relative.points, ['ὅς 作主语']);
   assert.equal(relative.annotated, true);
   assert.equal(main.label, '主句');

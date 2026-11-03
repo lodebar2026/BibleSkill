@@ -5,7 +5,7 @@
  * 框头标子句编号。框里每个句子成分一块（新约照 Macula 分出宾语、间接宾语、状语、表语）。
  * 连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框；箭头伸进母句框，指到那个词。
  * 新约词按格着色、动词按时态加框、按语气加底色。旧约非 qal 的动词按词干着色，谓语前的实词成分（前置）加框标出。
- * 点「详情」展开词义与要点，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），点词弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
+ * 点「详情」展开词义与要点，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），鼠标移到词上弹出词卡。页面脚本是 diagramClient，整个函数以源码嵌入页面。
  */
 import type { DiagramData } from '@bs/core';
 
@@ -1258,18 +1258,25 @@ function diagramClient(D: DiagramData): void {
     redraw();
   });
 
-  // ---------- 悬停高亮、点词弹出词卡 ----------
+  // ---------- 悬停高亮、悬停弹出词卡 ----------
   const mark = (id: string, cls: string) => $$(`[data-id="${id}"]`).forEach((el) => el.classList.add(cls));
   const clear = (cls: string) => $$(`.${cls}`).forEach((el) => el.classList.remove(cls));
   let popId: string | null = null;
+  let popTimer = 0;
   function hidePop(): void {
+    clearTimeout(popTimer);
     $('#pop').classList.remove('show');
     clear('sel');
     popId = null;
   }
+  // 移出词后稍等再收，好让指针移进词卡里展开词典
+  function hidePopSoon(): void {
+    clearTimeout(popTimer);
+    popTimer = window.setTimeout(hidePop, 250);
+  }
   function showPop(id: string, anchor: HTMLElement): void {
+    clearTimeout(popTimer);
     if (popId === id) {
-      hidePop();
       return;
     }
     hidePop();
@@ -1300,11 +1307,19 @@ function diagramClient(D: DiagramData): void {
     el.addEventListener('mouseleave', () => clear('hl'));
   }
   for (const el of $$('#canvas [data-id]')) {
+    el.addEventListener('mouseenter', () => {
+      clearTimeout(popTimer);
+      popTimer = window.setTimeout(() => showPop(el.dataset.id!, el), 120);
+    });
+    el.addEventListener('mouseleave', hidePopSoon);
+    // 触屏没有悬停，点一下照样弹出
     el.addEventListener('click', (event) => {
       event.stopPropagation();
       showPop(el.dataset.id!, el);
     });
   }
+  $('#pop').addEventListener('mouseenter', () => clearTimeout(popTimer));
+  $('#pop').addEventListener('mouseleave', hidePopSoon);
   $('#pop').addEventListener('click', (event) => event.stopPropagation());
   document.addEventListener('click', hidePop);
   document.addEventListener('keydown', (event) => {
@@ -1357,7 +1372,7 @@ export function renderDiagramPage(data: DiagramData, subtitle = ''): string {
 <body>
 <header>
   <h1>${escapeHtml(data.title)} · 原文结构</h1>
-  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，点词看词典</div>
+  <div class="sub">${escapeHtml(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，鼠标移到词上看词典</div>
 </header>
 <main>
   <section class="card">

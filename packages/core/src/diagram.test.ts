@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import type { SyntaxNode, Token, TokenSyntax } from './db.js';
 import { PAUSE_COORD, PAUSE_EMBED, PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, cognateInfinitive, greekMorph, hebrewStem, rangeLabel } from './diagram.js';
 import { parseScriptureRange } from './ref.js';
-import type { ClauseEntity, ClauseText, DiagramNote } from './schemas.js';
+import type { ClauseEntity, ClauseText } from './schemas.js';
 
 const ALL = 'NA28+NA27+Tyn+SBL+WH+Treg+TR+Byz';
 
@@ -45,8 +45,8 @@ const TEXTS: ClauseText[] = [
     renderings: [], alternatives: [{ text: '他不顾念约瑟。', kind: 'lexical', basis: 'οἶδα 的顾念义' }], sources: ['ai'], version: 0, literalness: 3 },
 ];
 
-function build(notes: DiagramNote[] = []) {
-  return buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: CLAUSES, texts: TEXTS, tokens: TOKENS, variants: [], notes, morphExpansion: () => null });
+function build() {
+  return buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: CLAUSES, texts: TEXTS, tokens: TOKENS, variants: [], morphExpansion: () => null });
 }
 
 test('成分块：主语、谓语取自分析，句首“介词 + 关系代名词”算连接词，其余相邻的词合成一块', () => {
@@ -78,18 +78,6 @@ test('异文：只标影响翻译的；拼写差异不标', () => {
   assert.equal(words.n44007018012.variant, null);
 });
 
-test('说明：首末词与当前子句对得上才用，对不上（重新切分过）的作废', () => {
-  const current: DiagramNote = { clauseId: '44007018b', firstWordId: 'n44007018008', lastWordId: 'n44007018012', label: '关系从句', link: '修饰“王”', gist: '这王不认识约瑟', notes: ['ὅς 作主语'] };
-  const stale: DiagramNote = { clauseId: '44007018a', firstWordId: 'n44007018002', lastWordId: 'n44007018007', label: '时间从句', notes: [] };
-  const [main, relative] = build([current, stale]).clauses;
-  assert.equal(relative.label, '关系从句');
-  assert.deepEqual(relative.gist, [{ text: '这王不认识约瑟' }]);
-  assert.deepEqual(relative.points, ['ὅς 作主语']);
-  assert.equal(relative.annotated, true);
-  assert.equal(main.label, '主句');
-  assert.equal(main.annotated, false);
-});
-
 test('范围简写', () => {
   assert.equal(rangeLabel(parseScriptureRange('徒 7:17-18')), '7:17-18');
   assert.equal(rangeLabel(parseScriptureRange('徒 7')), '7');
@@ -113,7 +101,7 @@ test('切行停顿：旧约按停顿重音分强弱（远分强于近分），�
 
 test('逻辑关系：结构图给出关系名与关联子句，一段时列出范围内的子句', () => {
   const logic = { relation: 'cause' as const, target: '44007018a', note: '理由' };
-  const data = buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: [CLAUSES[0], { ...CLAUSES[1], logic }], texts: TEXTS, tokens: TOKENS, variants: [], notes: [], morphExpansion: () => null });
+  const data = buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: [CLAUSES[0], { ...CLAUSES[1], logic }], texts: TEXTS, tokens: TOKENS, variants: [], morphExpansion: () => null });
   assert.deepEqual(data.clauses[1].logic, { relation: 'cause', label: '原因', targetIds: ['44007018a'], targetText: '18a', note: '理由' });
   assert.equal(data.clauses[0].logic, null);
 });
@@ -143,7 +131,7 @@ test('成分分块：新约按 Macula 短语树分出间接宾语、宾语，主
   const c = node(1, 'cl', null, 'V-IO-O');
   const syntax = syntaxOf([[1, 'v', [c]], [2, 'io', [c]], [3, null, [c, node(2, 'np', 'o')]]]);
   const data = buildDiagram({ title: '', isOT: false, clauses: [clause('44007018a', 1, 3, { verbRange: 'n44007018001' })], texts: [], tokens,
-    variants: [], notes: [], morphExpansion: () => null, syntax, narrative: true });
+    variants: [], morphExpansion: () => null, syntax, narrative: true });
   assert.deepEqual(data.clauses[0].chips.map((chip) => chip.role), ['v', 'io', 'o']);
   assert.equal(data.clauses[0].ntForm, 'aor-impv');
   assert.equal(data.narrative, true);
@@ -170,7 +158,7 @@ test('块内按短语树折行：嵌入的分词短语连同冠词自成一行�
     [8, null, [c, pp, both, coord]], [9, null, [c, pp, both, coord, fathers]], [10, null, [c, pp, both, coord, fathers]],
   ]);
   const data = buildDiagram({ title: '', isOT: false, clauses: [clause('44007018a', 1, 10, { verbRange: 'n44007018001' })], texts: [], tokens,
-    variants: [], notes: [], morphExpansion: () => null, syntax });
+    variants: [], morphExpansion: () => null, syntax });
   const [verb, predicate] = data.clauses[0].chips;
   assert.equal(verb.role, 'v');
   assert.equal(predicate.role, 'p');
@@ -198,7 +186,7 @@ test('旧约也按短语树分成分块（介词短语按状语），但块内�
   const paths: SyntaxNode[][] = [[c], [c, pp], [c, pp], [c, obj, spotted], [c, obj, spotted], [c, obj, spotted], [c, obj, spotted], [c, obj, spotted], [c, obj], [c, obj, brown], [c, obj, brown], [c, obj, brown]];
   const syntax = new Map(words.map((word, i) => [word.id, { role: i === 0 ? 'v' : null, path: paths[i] }]));
   const entity = { ...clause('1030032b', 1, 12), firstWordId: words[0].id, lastWordId: words.at(-1)!.id, verbRange: words[0].id };
-  const data = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], notes: [], morphExpansion: () => null, syntax });
+  const data = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], morphExpansion: () => null, syntax });
   const [verb, place, object] = data.clauses[0].chips;
   assert.deepEqual([verb.role, place.role, object.role], ['v', 'adv', 'o']);
   // 并列的 וְ 前不另加强度：与只按重音算的结果相同
@@ -208,7 +196,7 @@ test('旧约也按短语树分成分块（介词短语按状语），但块内�
 
 test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就放在块内，否则随被修饰词），连线指向占位符', () => {
   const nested = (subjectRange: string) => buildDiagram({
-    title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], notes: [], morphExpansion: () => null,
+    title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,
     clauses: [
       clause('44007018a', 1, 12, { verbRange: 'n44007018003', subjectRange }),
       clause('44007018b', 8, 10, { parentId: '44007018a', modifies: 'n44007018004', verbRange: 'n44007018010' }),
@@ -247,7 +235,7 @@ test('旧约前置：限定动词句里谓语前含名词性词的成分块标�
   const words = [ot(1, 'וְ', 'HC', ''), ot(2, 'אֶת', 'HTo', '־'), ot(3, 'הָ', 'HTd', ''), ot(4, 'אָרֶץ', 'HNcbsa'), ot(5, 'לֹא', 'HTn'),
     ot(6, 'נָתַן', 'HVqp3ms'), ot(7, 'אֱלֹהִים', 'HNcmpa')];
   const base = { ...clause('1001001a', 1, 7), firstWordId: id(1), lastWordId: id(7), verbRange: id(6), subjectRange: id(7) };
-  const run = (entity: ClauseEntity, isOT = true) => buildDiagram({ title: '', isOT, clauses: [entity], texts: [], tokens: words, variants: [], notes: [], morphExpansion: () => null })
+  const run = (entity: ClauseEntity, isOT = true) => buildDiagram({ title: '', isOT, clauses: [entity], texts: [], tokens: words, variants: [], morphExpansion: () => null })
     .clauses[0].chips.map((chip) => `${chip.role ?? '-'}:${chip.wordIds.map((wordId) => Number(wordId.slice(-4, -1))).join(',')}${chip.fronted ? '!' : ''}`);
   assert.deepEqual(run({ ...base, type: 'QtlX' }), ['conj:1', '-:2,3,4,5!', 'v:6', 's:7']);
   // 否定词单独成块时不算前置
@@ -257,7 +245,7 @@ test('旧约前置：限定动词句里谓语前含名词性词的成分块标�
   // 疑问代词居首不算
   const what = [ot(1, 'וְ', 'HC', ''), ot(2, 'מָה', 'HPi'), ot(3, 'נָתַן', 'HVqp3ms'), ot(4, 'אֱלֹהִים', 'HNcmpa')];
   const asked = buildDiagram({ title: '', isOT: true, clauses: [{ ...base, type: 'QtlX', firstWordId: id(1), lastWordId: id(4), verbRange: id(3), subjectRange: id(4) }],
-    texts: [], tokens: what, variants: [], notes: [], morphExpansion: () => null });
+    texts: [], tokens: what, variants: [], morphExpansion: () => null });
   assert.ok(asked.clauses[0].chips.every((chip) => !chip.fronted));
   assert.ok(run({ ...base, type: '' }, false).every((chip) => !chip.endsWith('!')));
 });

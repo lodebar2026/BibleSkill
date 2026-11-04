@@ -5,7 +5,7 @@
  * 框头标子句编号。框里每个句子成分一块（新约照 Macula 分出宾语、间接宾语、状语、表语）。
  * 连线走在缩进留出的沟槽里，从子句连到母句里被修饰的词，不穿过别的框；箭头伸进母句框，指到那个词。
  * 新约词按格着色、动词按时态加框、按语气加底色。旧约非 qal 的动词按词干着色，谓语前的实词成分（前置）加框标出。
- * 点「详情」展开词义与要点，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），鼠标移到词上弹出词卡。
+ * 点「详情」展开词义与分析、翻译记录，点「收起分支」收起这一句下面的所有分支，鼠标移到连线上可只收那一支（这个子句及其下属），鼠标移到词上弹出词卡。
  * 各图共用 diagram.css 与 diagram.js（DIAGRAM_ASSETS，页面骨架也由脚本生成），每张图的 HTML 只内嵌自己的数据。
  */
 import type { DiagramData } from '@bs/core';
@@ -252,7 +252,7 @@ function diagramClient(D: DiagramData, subtitle: string): void {
   document.title = `${D.title} 结构图`;
   document.body.insertAdjacentHTML('afterbegin', `<header>
   <h1>${esc(D.title)} · 原文结构</h1>
-  <div class="sub">${esc(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与要点，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，鼠标移到词上看词典</div>
+  <div class="sub">${esc(subtitle || '结构以子句分析为准')} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与分析、翻译记录，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，鼠标移到词上看词典</div>
 </header>
 <main>
   <section class="card">
@@ -484,7 +484,6 @@ ${D.narrative ? `
       chips.append(el);
     }
     box.append(chips);
-    const points = clause.points.map((point) => `<li>${orig(point)}</li>`).join('');
     const records = clause.records.map((record) => `<li><span class="tag">${esc(record.tag)}</span>：${orig(record.text)}</li>`).join('');
     const ups: string[] = [];
     if (clause.parentId && byId.has(clause.parentId)) {
@@ -495,9 +494,9 @@ ${D.narrative ? `
       ups.push(`<span class="lg">⇢ 逻辑：${esc(clause.logic.label)} → ${esc(clause.logic.targetText)}${clause.logic.note ? ` · ${esc(clause.logic.note)}` : ''}</span>`);
     }
     const up = ups.length > 0 ? `<div class="up">${ups.join('<br>')}</div>` : '';
-    box.insertAdjacentHTML('beforeend', `<div class="more">${up}${points ? `<ul>${points}</ul>` : ''}`
-      + (records ? `<details${points ? '' : ' open'}><summary>分析与翻译记录（${clause.records.length}）</summary><ul>${records}</ul></details>` : '')
-      + (!points && !records && !up ? '<span class="hint">没有备注。</span>' : '') + `</div>${up}`);
+    box.insertAdjacentHTML('beforeend', `<div class="more">${up}`
+      + (records ? `<details open><summary>分析与翻译记录（${clause.records.length}）</summary><ul>${records}</ul></details>` : '')
+      + (!records && !up ? '<span class="hint">没有备注。</span>' : '') + `</div>${up}`);
     $('.det', box).addEventListener('click', () => setOpen(box, !box.classList.contains('open')));
     box.querySelector('.fold')?.addEventListener('click', (event) => {
       event.stopPropagation();

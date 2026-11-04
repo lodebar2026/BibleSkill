@@ -10,9 +10,9 @@
 4. **review**：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围和需要人工复核的子句。
 5. **learn**：汇总人工修改历史，整理成术语偏好、个人风格和项目规则，经用户确认后写入；可以批量替换不一致的译词。
 
-结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。`/bible-diagram` 还能画出一段经文的原文结构图（主句、从句与修饰关系）。
+结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。查看工具还能画出一段经文的原文结构图（主句、从句与修饰关系）。
 
-> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`, `bible-diagram`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and, on request (off by default to save tokens), flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results can be viewed as an indented clause tree in the terminal, as a standalone HTML page, or edited in a local browser view. MIT licensed.
+> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and, on request (off by default to save tokens), flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results can be viewed as an indented clause tree in the terminal, as a standalone HTML page, or edited in a local browser view. MIT licensed.
 
 ## 数据来源
 
@@ -101,7 +101,6 @@ literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
 /bible-consistency 创世记
 /bible-review 创世记
 /bible-learn 创世记
-/bible-diagram 徒 7:17-18
 ```
 
 查看结果：
@@ -115,7 +114,7 @@ pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram acts7.html   # 原�
 
 ### 原文结构图
 
-`/bible-diagram <范围>` 按子句分析画一张可交互的结构图（HTML，写到工作目录的 `图示/` 并在浏览器打开；各图共用旁边的 `diagram.css`、`diagram.js`，更新后已有的图刷新即用新版）：
+`pnpm run view <范围> --workdir <目录> --diagram <文件>.html` 按子句分析画一张可交互的结构图（单文件 HTML，惯例写到工作目录的 `图示/`；各图共用旁边的 `diagram.css`、`diagram.js`，每次生成都重写，已有的图刷新即用新版）：
 
 - **层级**：每个子句一行，按原文先后自上而下，缩进表示从属；框头标子句编号，「详情」在框的右上角，下面一行是译文。只有一个说话动词的引语框架（εἰπόντες、λέγων、לֵאמֹר）不单占一行，放在母句那一行的行尾（旧约在左侧）；只有一个 הָיָה 的过渡句（וַיְהִי、וְהָיָה）引出的第一个从句，也排在它那一行的行尾。
 - **连线**：从从句出发，走在缩进留出的沟槽里，箭头伸进母句框，指到被修饰的词（加下划线）；逻辑关系与句法不同时另画虚线。
@@ -123,9 +122,9 @@ pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram acts7.html   # 原�
 - **成分**：每个句子成分一块。主语、谓语取自分析的 `subjectRange`、`verbRange`，句首连接词按词法认出；其余的词照 Macula 短语树分成宾语、间接宾语、状语、表语等（子句切分仍以分析为准）。块太长时折行，排得下就不断；要断时同一级的断点一起断。旧约只看停顿重音（atnach ＞ zaqef ＞ tipcha ＞ revia ＞ pashta 等，按整个重音单位算，maqqef 后不断），不用分析里的 `br`，希伯来文的介词短语按状语显示；新约按短语树，并列的 καί 前最先断，其次是嵌入的分词短语、关系从句（连同冠词）前后，断开的嵌入部分缩进。
 - **格与时态**（新约）：主格加粗，宾格蓝、属格绿、与格紫、呼格橙；动词按时态加框（不定过去黑、现在蓝、未完成紫红、将来绿、完成红），按语气加底色（直说米色、祈使红、虚拟紫、祈愿绿）。
 - **主线**：旧约方框边框按谓语动词形式着色（wayyiqtol 等）；新约方框不着色，框头标出谓语的时态与语气。旧约叙事与新约叙事书卷（福音书、使徒行传、启示录）的顶层主句用最外侧的竖线串起来，不是主线形式的（旧约不用 wayyiqtol，新约不用不定过去式直说语气）标「离线」，不接到主线竖线上；同一说话动词下的各句汇成一条主干，是会话序列。书信暂不画主线。
-- **交互**：点框头展开逐词词义、要点与“分析与翻译记录”（分析备注、另一种分析、译注、其他译法、异文，自动列出）；点词弹出词卡（词法、本处译法、UBS 中文词典、STEPBible 简明词典）；可切换词法、英文、成分名（只留色条）、明暗。
+- **交互**：点框头展开逐词词义与“分析与翻译记录”（分析备注、另一种分析、译注、其他译法、异文，自动列出）；点词弹出词卡（词法、本处译法、UBS 中文词典、STEPBible 简明词典）；可切换词法、英文、成分名（只留色条）、明暗。
 
-子句功能、连线标签、中文大意和要点由模型写（`render_diagram` 的 `annotations`），存在 `<书名>/chNN/diagram.json`，重画时沿用；子句重新切分后对不上的自动作废。没有说明时用默认值：顶层为“主句”、修饰名词的为“定语从句”，大意取该子句的译文。
+子句功能按挂接关系取默认值：顶层为“主句”、修饰名词的为“定语从句”，连线标“修饰“…””，框头的大意取该子句的译文。
 
 ### 按设定的模型跑分析与翻译
 
@@ -187,7 +186,6 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 | `build_analysis_briefing` / `submit_clause_analysis` | 子句切分 |
 | `build_translation_briefing` / `submit_translation` | 翻译（按档位） |
 | `view_clauses` | 缩进文本视图 |
-| `render_diagram` | 原文结构图（HTML），写入子句功能、连线标签、大意与要点 |
 | `upsert_glossary` / `consistency_report` | 术语表与用词统一报告 |
 | `review_report` | 审校：复查已写入的译文，列出需要改译的范围与需要人工复核的子句 |
 | `revision_report` | 修改历史：按原文义项汇总人工改过的译词，以及导入历史里的文本替换 |
@@ -224,7 +222,6 @@ style.md                           翻译档位与个人风格：Markdown，可�
 terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh, avoid?, note?}]，可写注释
 <中文书名>/chNN/clause_entities.json  子句分析
 <中文书名>/chNN/clauses.json          译文
-<中文书名>/chNN/diagram.json          结构图上的说明 {clauseId, firstWordId, lastWordId, label, link, gist, notes}
 图示/                               结构图 HTML
 <中文书名>/chNN/history.jsonl         译文修改历史 {bcv, sub, at, origin: ai|human|replace|import, before, after}
 ```

@@ -3,7 +3,6 @@
  *
  * 结构一律以工作目录里的子句分析为准（clause_entities.json：切分、parentId、modifies、主语、谓语），
  * 不取 Macula 的子句切分；子句内部的成分（宾语、间接宾语、状语、表语）与块内折行照 Macula 短语树（新、旧约都是）。
- * bible-diagram 写入的说明（diagram.json）只补子句功能、连线标签、大意与要点。
  * 纯函数 buildDiagram 便于测试；loadDiagram 负责读库与工作文件。
  */
 import { HEBREW_STEMS } from './clause-type.js';
@@ -12,7 +11,7 @@ import type { BibleDb, SyntaxNode, Token, TokenSyntax, VariantToken } from './db
 import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
 import { LOGIC_LABELS } from './logic.js';
-import { LITERALNESS_LEVELS, type ClauseEntity, type ClauseText, type DiagramNote } from './schemas.js';
+import { LITERALNESS_LEVELS, type ClauseEntity, type ClauseText } from './schemas.js';
 import { ADDED_STYLE, clauseNote, parseFormatted, type Segment } from './segments.js';
 import type { WorkFileStore } from './store.js';
 
@@ -160,7 +159,7 @@ export type DiagramClause = {
   parentId: string | null;
   label: string;
   link: string | null;
-  /** 框头的一句：bible-diagram 写的大意，没有时取译文（补词段带 added）。 */
+  /** 框头的一句：子句的译文（补词段带 added）。 */
   gist: DiagramText;
   status: ClauseEntity['status'];
   /** 旧约句型展示码（WayX、XQtl、NmCl…）；新约为空。 */
@@ -177,10 +176,6 @@ export type DiagramClause = {
   logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
   /** 旧约：同根不定式独立形强调动词（מוֹת תָּמוּת、וַתִּבְכֶּה בָכֹה）时，不定式与限定动词的词 id；没有时为空。 */
   cognate: string[];
-  /** 是否有 bible-diagram 写的说明（没有时功能、连线、大意用默认值）。 */
-  annotated: boolean;
-  /** bible-diagram 写的要点。 */
-  points: string[];
   /** 分析与译文里已有的备注、其他读法、异文。 */
   records: DiagramRecord[];
 };
@@ -220,7 +215,6 @@ export type DiagramInput = {
   texts: ClauseText[];
   tokens: Token[];
   variants: VariantToken[];
-  notes: DiagramNote[];
   morphExpansion: (code: string) => string | null;
   /** 新约词在 Macula 短语树上的位置（成分分块、块内折行用）；不给时按旧写法分块。 */
   syntax?: Map<string, TokenSyntax>;
@@ -585,10 +579,6 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
   const wordsOf = clauseWords(input.clauses, tokens);
   const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])]));
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
-  // 子句重新切分后，首末词对不上的说明作废
-  const noteOf = new Map(input.notes
-    .filter((note) => input.clauses.some((clause) => clause.id === note.clauseId && clause.firstWordId === note.firstWordId && clause.lastWordId === note.lastWordId))
-    .map((note) => [note.clauseId, note]));
 
   const clauses = input.clauses.map((clause): DiagramClause => {
     const own = wordsOf.get(clause.id) ?? [];
@@ -605,13 +595,12 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     // 嵌在母句中间：连线指向母句里的占位符
     const container = parent ? containerOf(clause, input.clauses) : undefined;
     const slot = container && container.id === parent!.id ? slotsOf.get(container.id)?.find((item) => item.clauseIds.includes(clause.id)) : undefined;
-    const note = noteOf.get(clause.id);
     const verbWord = words[[...idsInRange(clause.verbRange, own)][0] ?? ''];
 
     const text = textByKey.get(clause.id);
     const segments = text ? parseFormatted(text.formatted) : [];
-    let gist: DiagramText = note?.gist ? [{ text: note.gist }] : [];
-    if (gist.length === 0 && text) {
+    let gist: DiagramText = [];
+    if (text) {
       gist = text.translationSpan === 0 ? [{ text: '（译文并入前句）' }] : [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）' }] : [])];
     }
 
@@ -645,8 +634,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return {
       id: clause.id,
       parentId,
-      label: note?.label ?? (clause.parentId === null ? '主句' : target && isNominal(target, isOT) ? '定语从句' : '从句'),
-      link: note?.link ?? (targetZh ? `修饰“${targetZh}”` : null),
+      label: clause.parentId === null ? '主句' : target && isNominal(target, isOT) ? '定语从句' : '从句',
+      link: targetZh ? `修饰“${targetZh}”` : null,
       gist,
       status: clause.status,
       type: clause.type,
@@ -658,8 +647,6 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       targetSlot: slot ? `${container!.id}@${slot.at}` : null,
       logic: logicOf(clause, input.clauses),
       cognate: isOT ? cognateInfinitive(own) : [],
-      annotated: note !== undefined,
-      points: note?.notes ?? [],
       records,
     };
   });
@@ -707,14 +694,12 @@ const DEFINITION_LIMIT = 3000;
 export async function loadDiagram(db: BibleDb, store: WorkFileStore, range: ScriptureRange): Promise<DiagramData> {
   const clauses: ClauseEntity[] = [];
   const texts: ClauseText[] = [];
-  const notes: DiagramNote[] = [];
   for (let chapter = chapterFromBcv(range.startBcv); chapter <= chapterFromBcv(range.endBcv); chapter += 1) {
     const startBcv = Math.max(toBcv(range.bookId, chapter, 0), range.startBcv);
     const endBcv = Math.min(toBcv(range.bookId, chapter, 999), range.endBcv);
     const inRange = (bcv: number) => bcv >= startBcv && bcv <= endBcv;
     clauses.push(...(await store.readClauseEntities(range.bookName, chapter)).filter((clause) => inRange(parseClauseId(clause.id).bcv)));
     texts.push(...(await store.readClauseTexts(range.bookName, chapter)).filter((text) => inRange(text.bcv)));
-    notes.push(...await store.readDiagramNotes(range.bookName, chapter));
   }
   const tokens = db.tokensInRange(range.startBcv, range.endBcv);
   const data = buildDiagram({
@@ -726,7 +711,6 @@ export async function loadDiagram(db: BibleDb, store: WorkFileStore, range: Scri
     texts,
     tokens,
     variants: db.variantsInRange(range.startBcv, range.endBcv),
-    notes,
     morphExpansion: (code) => db.morphExpansion(code),
   });
   const lexicon: Record<string, DiagramLexiconEntry[]> = {};

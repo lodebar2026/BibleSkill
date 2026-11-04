@@ -5,7 +5,7 @@
  *   pnpm view 创 1:1-5 [--workdir <翻译工作目录>]            终端文本
  *   pnpm view 创 1 --html out.html [--workdir <目录>]        单文件 HTML（只读）
  *   pnpm view 创 1 --serve [--port 4310] [--workdir <目录>]  本地服务，可在页面里编辑（按整章打开）
- *   pnpm view 创 1:1-5 --diagram out.html [--workdir <目录>] 原文结构图（单文件交互 HTML，用 bible-diagram 写的说明）
+ *   pnpm view 创 1:1-5 --diagram out.html [--workdir <目录>] 原文结构图（单文件交互 HTML）
  *
  * 工作目录与数据库的解析同 MCP server：--workdir / BS_WORKDIR / 当前目录，数据库取 config.json 或 BS_DATA_DB。
  */

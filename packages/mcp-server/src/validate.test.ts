@@ -78,6 +78,15 @@ test('parentId 找不到、modifies 不在父句内、成环都被拒', () => {
   assert.match(cycle.errors[0].messages.join(), /成环/);
 });
 
+test('mainline 只用于顶层子句，且要在 note 写理由', () => {
+  const check = (extra: Record<string, unknown>) => checkClauseAnalysis(
+    [clause('a', 1, 2), clause('b', 3, 4, { type: 'nominal', verbRange: null, ...extra })], verses, []);
+  assert.equal(check({ mainline: true, note: '推进情节' }).errors.length, 0);
+  assert.equal(check({ mainline: true, note: '推进情节' }).accepted.find((item) => item.id === '1001001b')?.mainline, true);
+  assert.match(check({ mainline: true }).errors[0].messages.join(), /note 写理由/);
+  assert.match(check({ mainline: false, note: '背景', parentId: '1001001a' }).errors[0].messages.join(), /只用于顶层子句/);
+});
+
 test('挂接不交叉：越过不在父句之下的子句被拒；中间的子句也挂在父句下时通过；写 seedDiff 放行并标 needs-review', () => {
   const nominal = { type: 'nominal', verbRange: null };
   const crossing = [clause('a', 1, 2), clause('b', 3, 3, nominal), clause('c', 4, 4, { ...nominal, parentId: '1001001a', modifies: id(2) })];

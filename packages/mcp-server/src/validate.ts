@@ -100,6 +100,7 @@ export const SubmittedClauseSchema = z.object({
   sources: z.array(z.string()).default(['ai']),
   note: z.string().default(''),
   logic: ClauseLogicSchema.nullable().default(null),
+  mainline: z.boolean().nullable().default(null),
 }).loose();
 
 /** 子句 id 按节、再按字母序比较。 */
@@ -288,6 +289,7 @@ export function checkClauseAnalysis(
       note: clause.note,
       version: 0,
       ...(clause.logic ? { logic: clause.logic } : {}),
+      ...(clause.mainline !== null ? { mainline: clause.mainline } : {}),
     };
     byVerse.set(bcv, [...(byVerse.get(bcv) ?? []), entity]);
   });
@@ -436,6 +438,20 @@ export function checkClauseAnalysis(
       }
     }
   }
+  // mainline 只用于顶层子句，并在 note 写理由
+  for (const [bcv, clauses] of byVerse) {
+    for (const clause of clauses) {
+      if (clause.mainline === undefined) {
+        continue;
+      }
+      if (clause.parentId !== null) {
+        fail(bcv, clause.id, 'mainline 只用于顶层子句（parentId 为 null）');
+      } else if (!clause.note.trim()) {
+        fail(bcv, clause.id, 'mainline 覆盖了按动词形式的默认判断，需在 note 写理由');
+      }
+    }
+  }
+
   // logic.target 要在本章找得到，范围首尾有序，不能指向自己
   for (const [bcv, clauses] of byVerse) {
     for (const clause of clauses) {

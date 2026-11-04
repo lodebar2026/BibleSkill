@@ -436,6 +436,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       alternatives: withDisputes && clause.alternatives.length > 0 ? clause.alternatives : undefined,
       note: clause.note || undefined,
       logic: clause.logic ?? undefined,
+      mainline: clause.mainline ?? undefined,
       text: pieces.join('').trim(),
       contentTokens: tokens.filter((token) => isContentWord(token.morph, token.strong)).map((token) => token.id).join(','),
       // 子句分析的其他读法已在 alternatives 里，这里只给异文

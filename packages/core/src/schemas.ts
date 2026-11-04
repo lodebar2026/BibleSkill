@@ -61,6 +61,8 @@ export const ClauseEntitySchema = z.object({
   version: z.number().int().nonnegative(),
   /** 逻辑关系与句法挂接不同、或需要点明时才有；没有就按句法关系看。 */
   logic: ClauseLogicSchema.nullable().optional(),
+  /** 叙事主线的人工判断，覆盖按动词形式的默认（旧约 wayyiqtol、新约不定过去式直说语气为主线）；只用于顶层子句，理由写在 note。 */
+  mainline: z.boolean().nullable().optional(),
 });
 
 export type ClauseEntity = z.infer<typeof ClauseEntitySchema>;

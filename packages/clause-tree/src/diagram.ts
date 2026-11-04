@@ -390,10 +390,11 @@ ${D.narrative ? `
     qal: 'Q', 'qal passive': 'Qp', niphal: 'Ni', piel: 'Pi', pual: 'Pu', hiphil: 'Hi', hophal: 'Ho', hithpael: 'Ht', polel: 'Po', polal: 'Pol',
     poel: 'Po', poal: 'Poa', pilpel: 'Pil', polpal: 'Ppl', hithpolel: 'Htp', hishtaphel: 'Hsht',
   };
-  // 叙事主线：旧约顶层子句里 wayyiqtol 是主线，新约叙事书卷里是不定过去式直说语气；其余形式离开主线（背景、评述、凸显）
+  // 叙事主线：旧约顶层子句里 wayyiqtol 是主线，新约叙事书卷里是不定过去式直说语气；其余形式离开主线（背景、评述、凸显）。
+  // 分析里写了 mainline 的按分析（如徒 8:17 τότε 引出的未完成式推进情节）；旧图的数据没有这个字段
   const mainline = D.isOT || D.narrative;
-  const offline = (clause: (typeof D.clauses)[number]) => mainline && !clause.parentId && formOf(clause) !== null
-    && (D.isOT ? formOf(clause) !== 'wayyiqtol' : clause.ntForm !== 'aor-ind');
+  const offline = (clause: (typeof D.clauses)[number]) => mainline && !clause.parentId && (clause.mainline != null ? !clause.mainline
+    : formOf(clause) !== null && (D.isOT ? formOf(clause) !== 'wayyiqtol' : clause.ntForm !== 'aor-ind'));
   const OFFLINE_TITLE = D.isOT ? '顶层叙事不用 wayyiqtol：离开主线，多为背景、评述或凸显'
     : '顶层叙事不用不定过去式直说语气：未完成式、过去完成式多为背景，现在式多为历史现在式或评述，完成式表结果状态';
   // 子句编号：bcv+字母，显示为「节+字母」；范围跨章时带章号
@@ -1173,7 +1174,7 @@ ${D.narrative ? `
     const roots: Array<[number, HTMLElement]> = [];
     for (const clause of D.clauses) {
       const box = $(`[data-box="${clause.id}"]`);
-      if (mainline && box && (box.dataset.form || box.dataset.ntForm) && !box.hidden && !(clause.parentId && byId.has(clause.parentId)) && !offline(clause)) {
+      if (mainline && box && (box.dataset.form || box.dataset.ntForm || clause.mainline) && !box.hidden && !(clause.parentId && byId.has(clause.parentId)) && !offline(clause)) {
         const r = box.getBoundingClientRect();
         roots.push([Math.round(r.top + r.height / 2 - base.top), box]);
       }

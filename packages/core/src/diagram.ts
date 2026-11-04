@@ -176,6 +176,8 @@ export type DiagramClause = {
   targetSlot: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
   logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
+  /** 叙事主线的人工判断（覆盖按动词形式的默认）；没有判断时为 null。 */
+  mainline: boolean | null;
   /** 旧约：同根不定式独立形强调动词（מוֹת תָּמוּת、וַתִּבְכֶּה בָכֹה）时，不定式与限定动词的词 id；没有时为空。 */
   cognate: string[];
   /** 分析与译文里已有的备注、其他读法、异文。 */
@@ -651,6 +653,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       targetWordIds,
       targetSlot: slot ? `${container!.id}@${slot.at}` : null,
       logic: logicOf(clause, input.clauses),
+      mainline: clause.mainline ?? null,
       cognate: isOT ? cognateInfinitive(own) : [],
       records,
     };

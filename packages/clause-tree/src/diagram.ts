@@ -1242,8 +1242,8 @@ ${D.narrative ? `
       list.filter((item) => item.up).reverse().forEach((item, i) => anchorRank.set(item.key, i));
       list.filter((item) => !item.up).forEach((item, i) => anchorRank.set(item.key, i));
       const rect = list[0].rect;
-      // 以框的垂直中点为中心上下排开
-      const step = Math.min(10, (rect.height - 16) / Math.max(1, list.length));
+      // 以框的垂直中点为中心上下排开；间距大于标签高度，贴着同一框的两段横线各放标签时不重叠（徒 8:22a）
+      const step = Math.min(24, (rect.height - 16) / Math.max(1, list.length));
       const middle = rect.top - base.top + rect.height / 2;
       list.forEach((item, i) => anchorY.set(item.key, Math.round(middle + (i - (list.length - 1) / 2) * step)));
     }
@@ -1292,10 +1292,14 @@ ${D.narrative ? `
       canvas.append(label);
       labels.push({ label, line: points(best), lane: best });
     }
-    // 标签放在这条线独有的横段上（几条竖道并排时，放在竖线上看不出归属）：挑最长的横段，避开横穿它的竖线；
-    // 横段都放不下时才放在竖线中点
+    // 标签放在这条线独有的横段上（几条竖道并排时，放在竖线上看不出归属）：挑最长的横段，避开横穿它的竖线和已放好的标签；
+    // 横段都放不下时才放在竖线中点，与已放好的标签重叠就往下挪
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const overlapsLabel = (x: number, y: number, w: number, h: number) => placed.some((other) => Math.abs(other.x - x) < (other.w + w) / 2
+      && Math.abs(other.y - y) < (other.h + h) / 2);
     for (const { label, line, lane } of labels) {
       const width = label.offsetWidth + 8;
+      const height = label.offsetHeight + 4;
       let spot: [number, number] | null = null;
       let room = 0;
       for (let i = 1; i < line.length; i += 1) {
@@ -1306,7 +1310,8 @@ ${D.narrative ? `
         const lo = Math.min(xa, xb) + 6 + width / 2;
         const hi = Math.max(xa, xb) - 6 - width / 2;
         for (let x = lo; x <= hi; x += 4) {
-          const clear = !verticals.some((v) => v.x !== lane && v.top < ya && v.bottom > ya && Math.abs(v.x - x) < width / 2 + 2);
+          const clear = !verticals.some((v) => v.x !== lane && v.top < ya && v.bottom > ya && Math.abs(v.x - x) < width / 2 + 2)
+            && !overlapsLabel(x, ya, width, height);
           if (clear && hi - lo + width > room) {
             spot = [x, ya];
             room = hi - lo + width;
@@ -1314,7 +1319,11 @@ ${D.narrative ? `
           }
         }
       }
-      const [x, y] = spot ?? [lane, (line[0][1] + line.at(-1)![1]) / 2];
+      let [x, y] = spot ?? [lane, (line[0][1] + line.at(-1)![1]) / 2];
+      while (!spot && overlapsLabel(x, y, width, height)) {
+        y += height;
+      }
+      placed.push({ x, y, w: width, h: height });
       label.style.left = `${x}px`;
       label.style.top = `${y}px`;
     }

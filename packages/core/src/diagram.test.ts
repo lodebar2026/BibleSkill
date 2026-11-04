@@ -72,6 +72,17 @@ test('挂接：连线从首词指到母句里被修饰的词；默认标签按�
   assert.deepEqual(data.verses.map((verse) => verse.translation), [[{ text: '直到另一个王兴起治理埃及，' }, { text: '他', added: true, note: '补出主语' }, { text: '不认识约瑟。' }]]);
 });
 
+test('挂接：modifies 是一段（并列的先行词）时，全段都是被修饰的词，连线指向首词', () => {
+  const data = buildDiagram({
+    title: '测试', isOT: false, texts: TEXTS, tokens: TOKENS, variants: [], morphExpansion: () => null,
+    clauses: [CLAUSES[0], { ...CLAUSES[1], modifies: 'n44007018004-n44007018005' }],
+  });
+  const relative = data.clauses[1];
+  assert.equal(relative.targetWordId, 'n44007018004');
+  assert.deepEqual(relative.targetWordIds, ['n44007018004', 'n44007018005']);
+  assert.equal(relative.link, '修饰“王ἕτερος”');
+});
+
 test('异文：只标影响翻译的；拼写差异不标', () => {
   const { words } = build();
   assert.equal(words.n44007018006.variant, 'TR、Byz 此处无此词');

@@ -365,7 +365,8 @@ ${D.narrative ? `
     }
     return depth;
   };
-  const targets = new Set(D.clauses.map((clause) => clause.targetWordId).filter(Boolean));
+  // 被修饰的词都加下划线；旧图的数据只有 targetWordId
+  const targets = new Set(D.clauses.flatMap((clause) => clause.targetWordIds ?? [clause.targetWordId]).filter(Boolean));
   // 旧约句型码 → 动词形式（着色用）；X 在动词前 = 成分前置
   const formOf = (clause: (typeof D.clauses)[number]): string | null => {
     if (!D.isOT) return clause.ntForm ? `nt-${clause.ntForm.split('-')[0]}` : null;
@@ -487,7 +488,8 @@ ${D.narrative ? `
     const records = clause.records.map((record) => `<li><span class="tag">${esc(record.tag)}</span>：${orig(record.text)}</li>`).join('');
     const ups: string[] = [];
     if (clause.parentId && byId.has(clause.parentId)) {
-      const target = clause.targetWordId ? ` <span class="o">${esc(words[clause.targetWordId]?.text)}</span>` : '';
+      const targetIds = clause.targetWordIds ?? (clause.targetWordId ? [clause.targetWordId] : []);
+      const target = targetIds.length ? ` <span class="o">${esc(targetIds.map((id) => words[id]?.text).join(' '))}</span>` : '';
       ups.push(`↳ 句法：属 ${esc(clauseNo(clause.parentId))}${clause.link ? ` · ${esc(clause.link)}` : ''}${target}`);
     }
     if (clause.logic) {

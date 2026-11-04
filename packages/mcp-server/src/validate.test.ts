@@ -66,6 +66,11 @@ test('parentId 找不到、modifies 不在父句内、成环都被拒', () => {
     verses, [],
   );
   assert.match(badModifies.errors[0].messages.join(), /不在父句/);
+  const nested = (modifies: string) => checkClauseAnalysis(
+    [clause('a', 1, 2), clause('b', 3, 4, { type: 'nominal', verbRange: null, parentId: '1001001a', modifies })], verses, []);
+  assert.equal(nested(`${id(1)}-${id(2)}`).errors.length, 0);
+  assert.match(nested(`${id(1)}-${id(3)}`).errors[0].messages.join(), /不在父句/);
+  assert.match(nested(`${id(2)}-${id(1)}`).errors[0].messages.join(), /不在父句/);
   const cycle = checkClauseAnalysis(
     [clause('a', 1, 2, { parentId: '1001001b' }), clause('b', 3, 4, { type: 'nominal', verbRange: null, parentId: '1001001a' })],
     verses, [],

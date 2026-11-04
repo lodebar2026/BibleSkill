@@ -167,9 +167,11 @@ export type DiagramClause = {
   /** 新约：谓语动词的时态与语气，如 `aor-ind`；没有动词谓语时为 null。 */
   ntForm: string | null;
   chips: DiagramChip[];
-  /** 连线起点（本句首词）与终点（母句中被修饰的词）。 */
+  /** 连线起点（本句首词）与终点（母句中被修饰的词；修饰一段时取首词）。 */
   fromWordId: string;
   targetWordId: string | null;
+  /** 母句中被修饰的全部词（modifies 是一段时不止一个，如 Πέτρον καὶ Ἰωάννην），都加下划线。 */
+  targetWordIds: string[];
   /** 嵌在母句中间时，连线指向母句里的占位符（DiagramSlot.id）。 */
   targetSlot: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
@@ -497,8 +499,8 @@ function placeSlots(chips: DiagramChip[], own: Token[], slots: Array<{ at: numbe
     const [before, after] = [own[at - 1]?.id, own[at]?.id];
     const prev = result.findIndex((chip) => before !== undefined && chip.wordIds.includes(before));
     const next = result.findIndex((chip) => after !== undefined && chip.wordIds.includes(after));
-    const targets = clauseIds.map(modifiesOf).filter(Boolean);
-    const holds = (index: number) => index >= 0 && result[index].wordIds.some((id) => targets.includes(id));
+    const targets = clauseIds.map(modifiesOf).filter((range): range is string => Boolean(range)).map(parseTokenRange);
+    const holds = (index: number) => index >= 0 && result[index].wordIds.some((id) => targets.some(([first, last]) => id >= first && id <= last));
     const slot: DiagramSlot = { id: `${containerId}@${at}`, at: 0, clauseIds };
     let chip: DiagramChip;
     if (prev >= 0 && prev === next) {
@@ -585,12 +587,14 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const parentId = clause.parentId && clauseIds.has(clause.parentId) ? clause.parentId : null;
     const parent = parentId ? input.clauses.find((item) => item.id === parentId) : undefined;
     const parentWords = parent ? wordsOf.get(parent.id) ?? [] : [];
-    let targetWordId: string | null = null;
+    let targetWordIds: string[] = [];
     if (parent) {
-      targetWordId = clause.modifies && parentWords.some((word) => word.id === clause.modifies)
-        ? clause.modifies
-        : [...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId;
+      targetWordIds = [...idsInRange(clause.modifies, parentWords)];
+      if (!targetWordIds.length) {
+        targetWordIds = [[...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId];
+      }
     }
+    const targetWordId = targetWordIds[0] ?? null;
     const target = targetWordId ? tokenById.get(targetWordId) : undefined;
     // 嵌在母句中间：连线指向母句里的占位符
     const container = parent ? containerOf(clause, input.clauses) : undefined;
@@ -630,7 +634,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       }
     }
 
-    const targetZh = target ? words[target.id]?.rendering ?? target.glossZh ?? target.surface : null;
+    const targetZh = target ? targetWordIds.map((id) => words[id]?.rendering ?? tokenById.get(id)?.glossZh ?? tokenById.get(id)?.surface ?? '').join('') : null;
     return {
       id: clause.id,
       parentId,
@@ -644,6 +648,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
         (id) => modifiesOf.get(id) ?? null),
       fromWordId: clause.firstWordId,
       targetWordId,
+      targetWordIds,
       targetSlot: slot ? `${container!.id}@${slot.at}` : null,
       logic: logicOf(clause, input.clauses),
       cognate: isOT ? cognateInfinitive(own) : [],

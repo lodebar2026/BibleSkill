@@ -197,7 +197,7 @@ function checkRangeField(value: string | null, label: string, owns: (id: string)
  * - 子句 id 的 bcv 必须在提交范围内，sub 按 a,b,c… 连续（按首词先后）
  * - 每节的子句首尾相接、恰好覆盖该节全部主干词（不重叠、不遗漏）；子句可以嵌在另一子句中间（范围严格落在其内），不能交叉
  * - 嵌入子句的 parentId 链要经过包含它的子句
- * - parentId 指向本章子句且不成环；modifies 是父句自身的词
+ * - parentId 指向本章子句且不成环；modifies（词或一段）是父句自身的词
  * - 挂接不交叉：本句与父句之间夹着的子句都要在父句之下（写了 seedDiff 的放行并标 needs-review）
  * - subjectRange / verbRange / br 落在本句自身的词上；ambiguous 必须给 alternatives
  */
@@ -409,6 +409,15 @@ export function checkClauseAnalysis(
     const bcv = parseClauseId(clause.id).bcv;
     return clauseOfWord(wordId, [...all.values()].filter((item) => parseClauseId(item.id).bcv === bcv))?.id === clause.id;
   };
+  // modifies 可以是一段（并列的先行词）：首末词都要是父句自身的词
+  const ownsRange = (clause: ClauseEntity, range: string) => {
+    try {
+      const [start, end] = parseTokenRange(range);
+      return start <= end && ownsWord(clause, start) && ownsWord(clause, end);
+    } catch {
+      return false;
+    }
+  };
   // 嵌在句中的子句：parentId 链要经过包含它的子句（夹在句中却挂到别处，说明切分或挂接有误）
   for (const [bcv, clauses] of byVerse) {
     for (const clause of clauses) {
@@ -466,7 +475,7 @@ export function checkClauseAnalysis(
           fail(bcv, clause.id, `parentId ${clause.parentId} 在本章找不到`);
         } else if (errors.has(parentBcv) && byVerse.has(parentBcv)) {
           fail(bcv, clause.id, `parentId ${clause.parentId} 所在节未通过校验，需一起重提`);
-        } else if (clause.modifies !== null && !ownsWord(parent, clause.modifies)) {
+        } else if (clause.modifies !== null && !ownsRange(parent, clause.modifies)) {
           fail(bcv, clause.id, `modifies ${clause.modifies} 不在父句 ${parent.id} 范围内（或落在嵌在父句中间的子句里）`);
         } else if (formsCycle(clause, all)) {
           fail(bcv, clause.id, 'parentId 成环');

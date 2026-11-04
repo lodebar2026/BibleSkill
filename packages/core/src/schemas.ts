@@ -29,7 +29,7 @@ export const ClauseAlternativeSchema = z.object({
   /** 依据：语法、标点传统、版本、学者意见等。 */
   basis: z.string().optional(),
   parentId: ClauseKey.nullable().optional(),
-  modifies: TokenId.nullable().optional(),
+  modifies: TokenRange.nullable().optional(),
   firstWordId: TokenId.optional(),
   lastWordId: TokenId.optional(),
   reading: ReadingLabel.optional(),
@@ -39,8 +39,8 @@ export const ClauseEntitySchema = z.object({
   id: ClauseKey,
   type: z.string(),
   parentId: ClauseKey.nullable(),
-  /** 父句中被本句修饰的词；决定缩进视图里分支符的位置。 */
-  modifies: TokenId.nullable(),
+  /** 父句中被本句修饰的词，或「首id-末id」一段（如并列的先行词 Πέτρον καὶ Ἰωάννην）；结构图连线指向这些词。 */
+  modifies: TokenRange.nullable(),
   firstWordId: TokenId,
   lastWordId: TokenId,
   verbRange: TokenRange.nullable(),

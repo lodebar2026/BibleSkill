@@ -581,7 +581,20 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
 
   const clauseIds = new Set(input.clauses.map((clause) => clause.id));
   const wordsOf = clauseWords(input.clauses, tokens);
-  const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])]));
+  // 嵌在母句中间、修饰母句谓语的子句（状语分词、状语从句，如徒 8:25b）不放占位符，连线直接指到动词；
+  // 修饰名词等其他成分的（关系从句夹在名词短语里）才放，标出它在母句里的位置
+  const modifiesVerb = (clauseId: string, container: ClauseEntity) => {
+    const clause = input.clauses.find((item) => item.id === clauseId);
+    if (!clause || clause.parentId !== container.id || !container.verbRange) {
+      return false;
+    }
+    const [verbFirst, verbLast] = parseTokenRange(container.verbRange);
+    const [first, last] = clause.modifies ? parseTokenRange(clause.modifies) : [verbFirst, verbFirst];
+    return first >= verbFirst && last <= verbLast;
+  };
+  const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])
+    .map((slot) => ({ ...slot, clauseIds: slot.clauseIds.filter((id) => !modifiesVerb(id, clause)) }))
+    .filter((slot) => slot.clauseIds.length > 0)]));
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
 
   const clauses = input.clauses.map((clause): DiagramClause => {

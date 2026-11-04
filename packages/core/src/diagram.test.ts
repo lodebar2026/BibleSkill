@@ -224,6 +224,19 @@ test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就�
   assert.equal(split.clauses[0].chips[2].pauses?.at(-1), PAUSE_JOINED);
 });
 
+test('嵌入：修饰母句谓语的状语子句不放占位符，连线直接指到动词', () => {
+  const data = buildDiagram({
+    title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,
+    clauses: [
+      clause('44007018a', 1, 12, { verbRange: 'n44007018003', subjectRange: 'n44007018004' }),
+      clause('44007018b', 8, 10, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018010' }),
+    ],
+  });
+  assert.equal(data.clauses[0].chips.some((chip) => chip.slots?.length), false);
+  assert.equal(data.clauses[1].targetSlot, null);
+  assert.equal(data.clauses[1].targetWordId, 'n44007018003');
+});
+
 test('旧约词干：qal 主动不标，其余按词干类归并，被动另记', () => {
   assert.equal(hebrewStem('HVqp3ms'), null);
   assert.deepEqual(hebrewStem('HVpp3ms'), { name: 'piel', family: 'piel', passive: false });

@@ -17,7 +17,7 @@ description: 圣经译文的审校。当用户要求「审校」「复查」「�
      - `structure`：子句分析在翻译之后改过，译文对不上（缺译子句、子句 id 变了、rendering 越界、实词缺 rendering 等）
      - `dispute`（开启争议时）：子句后来标成了 ambiguous，或有影响翻译的异文，但译文还没有处理
      - `glossary`：违反当前术语表
-   - **需要人工复核的子句**（`humanReview`）：needs-review 写明推翻 Macula 的理由，ambiguous（开启争议时）列出各种读法。这些由用户判断，不要替用户定。用户可以在终端运行 `pnpm view <范围> --serve --workdir <工作目录>` 打开可编辑视图，自己改切分、挂接、主语和状态；改完再回来跑审校。
+   - **需要人工复核的子句**（`humanReview`）：needs-review 写明推翻 Macula 的理由，ambiguous（开启争议时）列出各种读法。这些由用户判断，不要替用户定。需要改切分时，按用户的意见用 bible-analyze 重新分析这些节，再回来跑审校。
    - `untranslated` 只是进度信息，简单提一句即可。
    - `otherLevel`：这些节是按别的翻译档位译的（工作目录后来改了 `literalness`）。它们按原来的档位复查，不算问题；告诉用户，用户想统一成当前档位时，再把这些范围交给 bible-translate 重译。
    - `legacy`：这些节的补词还以 `[ ]` 字符存在正文里（旧格式）。请用户在 BibleSkill 目录运行 `pnpm migrate:segments --workdir <工作目录>` 转换；不要为此重译。

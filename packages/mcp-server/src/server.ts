@@ -26,7 +26,6 @@ import {
   updateTermPreferences,
   upsertGlossary,
   upsertRules,
-  viewClauses,
   type Deps,
 } from './service.js';
 
@@ -105,7 +104,7 @@ server.registerTool('submit_clause_analysis', {
 }, async (args) => json(await submitClauseAnalysis(getDeps(), resolveRange(args), resolveArray(args, ['clauses', 'clauseEntities', 'items']))));
 
 server.registerTool('build_translation_briefing', {
-  description: `翻译任务简报：翻译档位（approach）、缩进结构、子句与实词、每个实词义项的术语表条目与既有译法、前文译文。${DISPUTES_HINT}`,
+  description: `翻译任务简报：翻译档位（approach）、子句与实词、每个实词义项的术语表条目与既有译法、前文译文。${DISPUTES_HINT}`,
   inputSchema: loose({ range, disputes }),
   annotations: { readOnlyHint: true },
 }, async (args) => json(await buildTranslationBriefing(getDeps(), resolveRange(args), { disputes: optionalBoolean(args, 'disputes') })));
@@ -118,12 +117,6 @@ server.registerTool('submit_translation', {
     + 'disputes 与取 briefing 时传的一致（开启时才检查争议是否处理）。',
   inputSchema: loose({ range, translations: z.any().optional(), disputes }),
 }, async (args) => json(await submitTranslation(getDeps(), resolveRange(args), resolveArray(args, ['translations', 'clauses', 'items']), { disputes: optionalBoolean(args, 'disputes') })));
-
-server.registerTool('view_clauses', {
-  description: '以缩进树形文本查看子句结构与已有译文。',
-  inputSchema: loose({ range }),
-  annotations: { readOnlyHint: true },
-}, async (args) => text(await viewClauses(getDeps(), resolveRange(args))));
 
 server.registerTool('upsert_glossary', {
   description:

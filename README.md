@@ -10,9 +10,9 @@
 4. **review**：按当前子句分析与术语表复查已写入的译文，列出需要整节改译的范围和需要人工复核的子句。
 5. **learn**：汇总人工修改历史，整理成术语偏好、个人风格和项目规则，经用户确认后写入；可以批量替换不一致的译词。
 
-结果用缩进树形视图查看，可在终端显示，也可生成单文件 HTML；人工复核时可以起本地服务，直接在视图里改。查看工具还能画出一段经文的原文结构图（主句、从句与修饰关系）。
+结果用脚本画成原文结构图（单文件交互 HTML）：主句、从句与修饰关系，附译文。
 
-> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and, on request (off by default to save tokens), flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results can be viewed as an indented clause tree in the terminal, as a standalone HTML page, or edited in a local browser view. MIT licensed.
+> **English summary.** BibleSkill is an open-source AI workflow for translating the Hebrew Bible (Old Testament) and the Greek New Testament into Chinese. It ships agent skills (`bible-analyze`, `bible-translate`, `bible-consistency`, `bible-review`, `bible-learn`) and a Model Context Protocol (MCP) server built only from openly licensed data: STEPBible TAHOT/TAGNT, Clear Bible's Macula Hebrew/Greek syntax trees, and the UBS Chinese Hebrew and Greek dictionaries. The model first segments each passage into clauses, then translates clause by clause at one of five literalness levels (word-for-word, literal, balanced, dynamic equivalence, paraphrase), records a rendering for every content word, enforces a shared glossary, and, on request (off by default to save tokens), flags textual variants (NA28/UBS base text for the New Testament, Leningrad Codex with Qere for the Old Testament) and interpretive disputes with alternative renderings. The same skills run in Claude Code, Gemini CLI, Google Antigravity CLI (agy), and OpenAI Codex. Results are rendered by a script as an interactive source-text structure diagram (standalone HTML). MIT licensed.
 
 ## 数据来源
 
@@ -103,13 +103,10 @@ literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
 /bible-learn 创世记
 ```
 
-查看结果：
+查看结果（原文结构图）：
 
 ```bash
-pnpm run view 创 1 --workdir ~/圣经翻译                    # 终端文本
-pnpm run view 创 1 --workdir ~/圣经翻译 --html gen1.html   # 单文件 HTML（canvas 精确对齐分支位置）
-pnpm run view 创 1 --workdir ~/圣经翻译 --serve            # 可编辑视图：http://127.0.0.1:4310/（--port 改端口）
-pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram acts7.html   # 原文结构图
+pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram ~/圣经翻译/图示/徒7-17-18.html
 ```
 
 ### 原文结构图
@@ -118,7 +115,7 @@ pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram acts7.html   # 原�
 
 - **层级**：每个子句一行，按原文先后自上而下，缩进表示从属；框头标子句编号，「详情」在框的右上角，下面一行是译文。只有一个说话动词的引语框架（εἰπόντες、λέγων、לֵאמֹר）不单占一行，放在母句那一行的行尾（旧约在左侧）；只有一个 הָיָה 的过渡句（וַיְהִי、וְהָיָה）引出的第一个从句，也排在它那一行的行尾。
 - **连线**：从从句出发，走在缩进留出的沟槽里，箭头伸进母句框，指到被修饰的词（加下划线）；逻辑关系与句法不同时另画虚线。
-- **嵌入**：夹在一个子句中间的从句（分析里范围落在外层子句之内）单独成框，外层只列自己的词，嵌入处显示占位符（如 `⟨38b⟩`），连线指到占位符；点占位符跳到那个子句。缩进视图同样在外层那一行显示占位符。
+- **嵌入**：夹在一个子句中间的从句（分析里范围落在外层子句之内）单独成框，外层只列自己的词，嵌入处显示占位符（如 `⟨38b⟩`），连线指到占位符；点占位符跳到那个子句。
 - **成分**：每个句子成分一块。主语、谓语取自分析的 `subjectRange`、`verbRange`，句首连接词按词法认出；其余的词照 Macula 短语树分成宾语、间接宾语、状语、表语等（子句切分仍以分析为准）。块太长时折行，排得下就不断；要断时同一级的断点一起断。旧约只看停顿重音（atnach ＞ zaqef ＞ tipcha ＞ revia ＞ pashta 等，按整个重音单位算，maqqef 后不断），不用分析里的 `br`，希伯来文的介词短语按状语显示；新约按短语树，并列的 καί 前最先断，其次是嵌入的分词短语、关系从句（连同冠词）前后，断开的嵌入部分缩进。
 - **格与时态**（新约）：主格加粗，宾格蓝、属格绿、与格紫、呼格橙；动词按时态加框（不定过去黑、现在蓝、未完成紫红、将来绿、完成红），按语气加底色（直说米色、祈使红、虚拟紫、祈愿绿）。
 - **主线**：旧约方框边框按谓语动词形式着色（wayyiqtol 等）；新约方框不着色，框头标出谓语的时态与语气。旧约叙事与新约叙事书卷（福音书、使徒行传、启示录）的顶层主句用最外侧的竖线串起来，不是主线形式的（旧约不用 wayyiqtol，新约不用不定过去式直说语气）标「离线」，不接到主线竖线上；同一说话动词下的各句汇成一条主干，是会话序列。书信暂不画主线。
@@ -146,26 +143,6 @@ pnpm passage 创 30:32-33 --workdir ~/圣经翻译 --translate claude:opus@high 
 
 在 CLI 里直接 `/bible-translate` 而经文还没有分析时，模型会说明设定的分析模型和命令，问你是去跑那个模型，还是由它直接分析。
 
-### 在缩进视图里编辑
-
-`--serve` 按整章打开（拆分、合并会给本节子句重新编号，要连带改全章的 parentId），只监听本机。工具条选模式后点原文的词：
-
-| 模式 | 操作 |
-|---|---|
-| 拆分 | 点词，在它前面把子句切开。谓词、主语、br 按落点分给两段，没有谓词的一段句型改为 nominal |
-| 挂接 | 先选中子句，再点父句里被它修饰的词：同时设定 parentId 与 modifies |
-| 主语 / 谓词 | 先选中子句，再依次点首词、末词（单个词点两次） |
-| 换行 | 点词，在它后面换行或取消 |
-| 对齐 | 依次点原文首词、末词（单个词点两次），再在译文里划选对应的中文：设为这几个词的对照，与它们重叠的旧对照被替换 |
-
-右侧详情栏可以改句型、状态、说明、seedDiff，也可以设为独立、清除 modifies / 主语 / 谓词、与下一句合并；「译法对照」表可以改 note、把某个词设为不译（∅，须写 note）或删掉对照。译文区可以把下一行译文并进来（translationSpan 合并），或者把合并行的最后一句拆出来另填译文。撤销、重做用工具条按钮或 Ctrl/⌘+Z、Ctrl/⌘+Shift+Z。
-
-- **保存**：每步操作后立即提交，走与 `submit_clause_analysis` / `submit_translation` 相同的校验（含主语检查与术语表检查）。没通过的节留作草稿，节号标红，并在表中显示错误，可以接着改或撤销。
-- **乐观锁**：提交时带上读到的版本号。文件已在别处改过（例如模型同时在提交），返回冲突，刷新页面即可。
-- **人工标记**：改过的子句 `sources` 追加 `human`。人工写 seedDiff 推翻 Macula 时，状态不会再自动降为 needs-review，因为人工修改本身就是复核结论。
-- **词级对齐**：HTML 和 `--serve` 视图里，鼠标悬停原文词会高亮它在译文里的译词，悬停译文也会反过来高亮原文词；原文词的提示里也带着译词。
-- **重译提示**：结构改动导致已有译文对不上的节，节号后显示 ↻，悬停可看到原因。这些节交给 `/bible-review` 整节重译。
-
 ### 在 agy 下跑端到端测试
 
 ```bash
@@ -185,7 +162,6 @@ AGY_MODEL="Gemini 3.8 Flash (Medium)" AGY_PROMPT_FILE=/tmp/p.txt AGY_IDLE=120 AG
 | `lookup_lexicon` | UBS 中文词典 + TBESH/TBESG |
 | `build_analysis_briefing` / `submit_clause_analysis` | 子句切分 |
 | `build_translation_briefing` / `submit_translation` | 翻译（按档位） |
-| `view_clauses` | 缩进文本视图 |
 | `upsert_glossary` / `consistency_report` | 术语表与用词统一报告 |
 | `review_report` | 审校：复查已写入的译文，列出需要改译的范围与需要人工复核的子句 |
 | `revision_report` | 修改历史：按原文义项汇总人工改过的译词，以及导入历史里的文本替换 |
@@ -292,7 +268,7 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
   - 子句分析里标为 `ambiguous` 的结构争议：必须给出其他译法，并在 note 里写明主译为什么这样取舍。
 - **其他争议由模型主动标出**，分为断句、句法、词义几类，规则文档里给了常见例子。
 - **主语检查**：以 Macula 句法树的主语标注为证据，漏标主语、把表语当成主语、把主语切到别的子句里，都会被拒绝。模型可以写理由推翻 Macula 的判断，但该子句会被标为 `needs-review`，交人工复核。
-- **视图**：缩进视图在每句主译下列出其他译法。点开子句可以看到每种译法的依据和主译的取舍理由。
+- **视图**：结构图点开子句，在“分析与翻译记录”里列出其他译法、各自的依据和主译的取舍理由。
 
 ## 扩展 MCP
 
@@ -326,17 +302,17 @@ MCP server 和数据库都在本地运行，不依赖任何私有或付费数据
 ## 开发
 
 ```bash
-pnpm build && pnpm test        # 单元测试（校验器、档位、补词分段、审校、迁移、引用解析、句型换算、对齐定位、编辑操作）
-pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍完整流程，最后经 --serve 的接口做编辑
+pnpm build && pnpm test        # 单元测试（校验器、档位、补词分段、审校、迁移、引用解析、句型换算、对齐定位、结构图）
+pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍完整流程
 ```
 
 | 包 | 职责 |
 |---|---|
 | `packages/core` | 经文引用、词 id、schema、工作文件存储、数据库读取 |
 | `packages/data-build` | 开放数据 → sqlite |
-| `packages/clause-tree` | 子句树算法（建树、缩进、树形前缀）与结构图页面 |
+| `packages/clause-tree` | 结构图页面（样式、骨架与脚本） |
 | `packages/mcp-server` | MCP 工具与提交校验 |
-| `packages/viewer` | 缩进查看（终端 / HTML）与可编辑视图（`--serve`） |
+| `packages/viewer` | 命令行：生成结构图（`--diagram`）、导入修改历史、迁移译文分段 |
 | `skills/`、`prompts/` | skill 与规则文档（安装时把 prompts 复制进各 skill 的 `references/`） |
 
 ## 二期

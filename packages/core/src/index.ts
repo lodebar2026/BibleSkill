@@ -8,7 +8,6 @@ export * from './db-schema.js';
 export * from './db.js';
 export * from './config.js';
 export * from './clause-type.js';
-export * from './view-data.js';
 export * from './align.js';
 export * from './segments.js';
 export * from './clause-words.js';

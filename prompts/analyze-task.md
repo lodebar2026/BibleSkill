@@ -8,7 +8,6 @@
 2. 读 `tokens`（逐词 TSV，`# 章:节` 分节）与 `maculaSeeds`。
 3. 逐节确定子句，组成 `clauses` 数组提交。
 4. 若返回 `errors`，只修正并重提出错的节；已写入的节不要重提。
-5. 完成后可调 `view_clauses(range)` 检查缩进结构。
 
 ## Macula 种子是第二意见，不是标准答案
 
@@ -28,10 +27,10 @@
 | `firstWordId` / `lastWordId` | 只用 briefing 中出现的词 id |
 | `type` | 仅旧约：**基础句型全称**（见下），系统换算展示码；新约不填 |
 | `parentId` | 父子句的完整 id；顶层子句为 `null` |
-| `modifies` | 父句中被本句修饰的词 id（决定缩进视图分支位置）；与父句相邻时应填写 |
+| `modifies` | 父句中被本句修饰的词 id（决定结构图连线指向的词）；与父句相邻时应填写 |
 | `subjectRange` | 明示主语的词 id 或 `首-末` 区间；无明示主语则省略 |
 | `verbRange` | 谓词中心的词 id |
-| `br` | 可选，逗号分隔的词 id，在这些词之后换行显示（长子句） |
+| `br` | 可选，逗号分隔的词 id，在这些词之后换行（新约结构图里长子句的断行） |
 | `alone` | 可选，`true` 表示从当前树组中独立出来、开始新的段落树 |
 | `status` | 可选，`accepted`（默认）/ `needs-review`；`ambiguous` 只在开启争议时用 |
 | `alternatives` | 开启争议时用，`ambiguous` 时必填（见 disputes.md）：`[{summary, basis?, parentId?, modifies?, firstWordId?, lastWordId?, reading?}]`；`reading` 是关联读法组（见 disputes.md 的“关联读法”），几句的读法要连起来才成立时标同一个 `R1`、`R2`… |

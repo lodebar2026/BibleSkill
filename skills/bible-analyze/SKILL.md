@@ -19,7 +19,7 @@ description: 圣经原文子句切分。当用户要求分析、切分、断句�
    新约：如果有能返回 NA28 原文的扩展工具，再用它取一次本范围带标点的整节原文，按 NA28 断句（规则见 principles.md 的“底本”）。
 2. 逐节切分。Macula 种子是第二意见：同意就照用，不同意要写 `seedDiff`。开启争议时，拿不准就标 `ambiguous` 并给 `alternatives`；几句的可选读法要连起来才成立时标同一个 `reading`。
 3. `submit_clause_analysis(range, clauses)` 提交；有 `errors` 只重提出错的节；有 `readingWarnings` 时补齐或去掉对应的 `reading` 再重提。返回 `needsReview` 时，把这些子句和理由逐条告诉用户。
-4. `view_clauses(range)` 看一眼缩进结构，把结构给用户看，并列出 `seedDiff` 处（开启争议时另列所有 `ambiguous` 及依据）。
+4. 向用户简述切分结果，并列出 `seedDiff` 处（开启争议时另列所有 `ambiguous` 及依据）。
 
 约束：
 

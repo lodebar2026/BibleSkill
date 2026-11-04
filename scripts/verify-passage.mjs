@@ -1,19 +1,16 @@
 #!/usr/bin/env node
 /**
  * MCP 冒烟验证：用真实 MCP client 拉起 server，在临时工作目录里走一遍
- * get_passage → analyze → view → translate → 用词统一检查 → consistency_report → review_report，
- * 最后拉起 pnpm view --serve，通过它的 HTTP 接口做拆分 / 撤销 / 译文合并拆开 / 改对齐。
+ * get_passage → analyze → translate → 用词统一检查 → consistency_report → review_report。
  *
  *   pnpm verify:passage            （默认 创 1:1-2 与 约 1:1）
  */
-import { spawn } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { finalizeClauses, mergeTranslationWithNext, setRendering, splitClause, splitTranslation } from '../packages/viewer/dist/edit-ops.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const workdir = mkdtempSync(path.join(tmpdir(), 'bibleskill-verify-'));
@@ -72,10 +69,6 @@ try {
   const stored = JSON.parse(readFileSync(path.join(workdir, '创世记/ch01/clause_entities.json'), 'utf8'));
   check('句型换算为展示码并回填动词信息', stored[0].type === 'QtlX' && stored[0].verbStem === 'qal' && stored[0].verbPerson === '3ms' && stored[1].type === 'XQtl',
     `${stored[0].type} ${stored[0].verbStem} ${stored[0].verbPerson} / ${stored[1].type}`);
-
-  const view = await call('view_clauses', { range: '创 1:1-2' });
-  check('view_clauses 有树形前缀', /[┐┤┘]/.test(view));
-  console.log(view);
 
   const tBriefing = await call('build_translation_briefing', { range: '创 1:1' });
   check('translation briefing 列出实词义项', tBriefing.terms.length >= 4, `${tBriefing.terms.length}`);
@@ -184,7 +177,7 @@ try {
   const ntRows = nt.tokens.split('\n').filter((line) => line.startsWith('n'));
   check('约 1:1 有 17 个词', ntRows.length === 17, `${ntRows.length}`);
 
-  // 可编辑视图：1:2 的「地」放宽为 preferred（已写理由），译文整节才能重提
+  // 1:2 的「地」放宽为 preferred（已写理由），译文整节才能重提
   await call('upsert_glossary', { entries: [{ strong: 'H0776G', zh: '大地', level: 'preferred', lemma: 'אֶרֶץ' }] });
 
   // 补词：[ ] 存成补词段，supplied 写说明
@@ -194,7 +187,6 @@ try {
   const row12 = JSON.parse(readFileSync(path.join(workdir, '创世记/ch01/clauses.json'), 'utf8')).find((text) => text.bcv === 1001002 && text.sub === 'a');
   check('补词存成 added 段并带说明', supplied.writtenVerses.length === 1 && JSON.parse(row12.formatted)[0].styleName === 'added' && JSON.parse(row12.formatted)[0].note === '测试补词'
     && row12.renderings[0].at === 1 && row12.literalness === 2, row12?.formatted);
-  check('view_clauses 把补词显示为 [ ]', (await call('view_clauses', { range: '创 1:2' })).includes('[那]大地'));
 
   // 档位：改为 4（意义对等）
   const styled = await call('update_style', { content: '---\nliteralness: 4\n---\n' });
@@ -209,77 +201,9 @@ try {
   check('第 4 档偏离 preferred 只提示不拦', loose.writtenVerses.length === 1 && loose.consistency?.length > 0, JSON.stringify(loose.errors ?? loose.consistency).slice(0, 120));
   await call('update_style', { content: '---\nliteralness: 2\n---\n' });
 
-  await verifyEditor();
 } finally {
   await client.close();
   rmSync(workdir, { recursive: true, force: true });
-}
-
-async function verifyEditor() {
-  const port = 43100 + Math.floor(Math.random() * 800);
-  const viewer = spawn(process.execPath, [path.join(root, 'packages/viewer/dist/cli.js'), '创', '1', '--serve', '--port', String(port)], {
-    env: { ...process.env, BS_WORKDIR: workdir, BS_DATA_DB: path.join(root, 'data/bible.sqlite') },
-    stdio: ['ignore', 'ignore', 'pipe'],
-  });
-  try {
-    await new Promise((resolve, reject) => {
-      viewer.stderr.on('data', (chunk) => String(chunk).includes('127.0.0.1') && resolve());
-      viewer.on('exit', (code) => reject(new Error(`viewer 退出 ${code}`)));
-    });
-    const base = `http://127.0.0.1:${port}`;
-    const html = await (await fetch(`${base}/`)).text();
-    const data = JSON.parse(html.match(/window\.__BIBLESKILL__ = (.*);<\/script>/)[1]);
-    const chapter = data.chapters[0];
-    check('serve 页面带 token 与整章数据', data.editable === true && data.token.length > 0 && chapter.clauses.length >= 4);
-    const post = async (route, body, token = data.token) => {
-      const response = await fetch(`${base}${route}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-bs-token': token }, body: JSON.stringify(body) });
-      return { status: response.status, body: await response.json() };
-    };
-    const forVerse = (items, bcv) => items.filter((item) => (item.bcv ?? Number(item.id.slice(0, 7))) === bcv);
-    const versions = (items) => Object.fromEntries(items.map((item) => [item.id ?? `${item.bcv}${item.sub}`, item.version]));
-
-    check('没有 token 被拒', (await post('/api/clauses', {}, 'x')).status === 403);
-
-    // 在 1:2b「渊面黑暗」的「面」前拆开：1:2c 改名为 1:2d
-    const before = chapter.clauses;
-    const { entities, verses } = finalizeClauses(before, splitClause(before, 'o010010020061', chapter.words));
-    const saveSplit = { bookName: '创世记', chapter: 1, clauses: forVerse(entities, verses[0]), expected: versions(forVerse(before, verses[0])) };
-    const split = await post('/api/clauses', saveSplit);
-    const stored = JSON.parse(readFileSync(path.join(workdir, '创世记/ch01/clause_entities.json'), 'utf8'));
-    check('编辑器拆分子句写入', split.status === 200 && split.body.result.writtenVerses.join() === '1:2' && stored.some((c) => c.id === '1001002d'),
-      JSON.stringify(split.body.result?.errors ?? split.body).slice(0, 160));
-    check('人工改过的子句标 human、改名后 parentId 仍对', stored.find((c) => c.id === '1001002c')?.sources.includes('human') && stored.find((c) => c.id === '1001002d')?.parentId === '1001002a');
-    check('拆分后本节译文标为需要重译', split.body.chapter?.issues.some((issue) => issue.bcv === 1001002 && issue.kind === 'structure'));
-    check('拿旧版本号再提交是冲突', (await post('/api/clauses', saveSplit)).status === 409);
-
-    // 撤销：把拆分前的子句当作新编辑提交
-    const undo = await post('/api/clauses', { bookName: '创世记', chapter: 1, clauses: forVerse(before, 1001002), expected: versions(forVerse(split.body.chapter.clauses, 1001002)) });
-    check('撤销拆分', undo.status === 200 && undo.body.chapter.clauses.filter((c) => c.id.startsWith('1001002')).length === 3 && !undo.body.chapter.issues.some((issue) => issue.bcv === 1001002 && issue.kind === 'structure'),
-      JSON.stringify(undo.body.result?.errors ?? undo.body).slice(0, 160));
-
-    // 译文：1:2b 与 1:2c 合成一行，再拆开
-    const texts = undo.body.chapter.texts;
-    const merged = forVerse(mergeTranslationWithNext(texts, '1001002b'), 1001002);
-    const mergeSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: merged, expected: versions(forVerse(texts, 1001002)) });
-    const mergedRows = mergeSave.body.chapter?.texts.filter((text) => text.bcv === 1001002) ?? [];
-    check('译文合并写入（span 2 + 0）', mergeSave.status === 200 && mergedRows.map((text) => text.translationSpan).join() === '1,2,0',
-      JSON.stringify(mergeSave.body.result?.errors ?? mergeSave.body).slice(0, 160));
-    const unmerged = forVerse(splitTranslation(mergeSave.body.chapter.texts, mergeSave.body.chapter.clauses, '1001002b', '渊面黑暗', '神的灵运行在水面上'), 1001002);
-    const splitSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: unmerged, expected: versions(mergedRows) });
-    check('译文拆开写入', splitSave.status === 200 && splitSave.body.chapter.texts.filter((text) => text.bcv === 1001002).map((text) => text.translationSpan).join() === '1,1,1',
-      JSON.stringify(splitSave.body.result?.errors ?? splitSave.body).slice(0, 160));
-
-    // 对齐：1:2c「神的灵运行在水面上」把「水」(o010010020142) 改对到「水面」上，再试一次违反 locked 的「神的」
-    const realigned = forVerse(setRendering(splitSave.body.chapter.texts, '1001002c', { tokens: 'o010010020142', zh: '水面', at: 6, note: '人工对齐' }), 1001002);
-    const alignSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: realigned, expected: versions(forVerse(splitSave.body.chapter.texts, 1001002)) });
-    const water = alignSave.body.chapter?.texts.find((text) => `${text.bcv}${text.sub}` === '1001002c')?.renderings.find((rendering) => rendering.tokens === 'o010010020142');
-    check('编辑器改对齐写入', alignSave.status === 200 && water?.zh === '水面' && water?.at === 6, JSON.stringify(alignSave.body.result?.errors ?? alignSave.body).slice(0, 160));
-    const lockedAlign = forVerse(setRendering(alignSave.body.chapter.texts, '1001002c', { tokens: 'o010010020101', zh: '神的', at: 0 }), 1001002);
-    const lockedSave = await post('/api/translations', { bookName: '创世记', chapter: 1, texts: lockedAlign, expected: versions(forVerse(alignSave.body.chapter.texts, 1001002)) });
-    check('对齐改成违反 locked 的译词被拒', lockedSave.status === 200 && lockedSave.body.result.writtenVerses.length === 0, JSON.stringify(lockedSave.body.result).slice(0, 160));
-  } finally {
-    viewer.kill();
-  }
 }
 
 if (failures > 0) {

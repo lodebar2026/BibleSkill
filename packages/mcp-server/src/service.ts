@@ -4,13 +4,11 @@
  * 输出控制体积：逐词数据用 TSV 文本而不是 JSON 对象数组（大 payload 下模型摘要会失真，
  * 在 Codex/agy 上实测过）。
  */
-import { renderClausesText, type TextViewClause } from '@bs/clause-tree';
 import {
   GlossaryEntrySchema,
   RuleSchema,
   TermPreferenceSchema,
   bareLemma,
-  basicClauseType,
   bookById,
   chapterFromBcv,
   clauseWords,
@@ -21,17 +19,14 @@ import {
   formattedMarkup,
   isContentWord,
   isMeaningBased,
-  loadChapterViews,
   parseSegments,
   suppliedNotes,
   parseClauseId,
-  parseScriptureRange,
   strongMatches,
   type BibleDb,
   type CriticalTextTool,
   type TaskModels,
   type ClauseEntity,
-  type ClauseText,
   type HistoryOrigin,
   type Literalness,
   type ScriptureRange,
@@ -65,7 +60,6 @@ import {
   type ReplaceTarget,
 } from './revisions.js';
 
-export { toSubmission } from './review.js';
 export { importRevisions, type ImportLine } from './revisions.js';
 export { migrateSegments } from './migrate.js';
 export type { ReviewIssue } from './review.js';
@@ -398,83 +392,11 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
       ? '按 errors 修正后整节重提这些节（已写入的节不必重提）'
       : overrides.length > 0
         ? 'needsReview 中的子句用 seedDiff 推翻了 Macula 的主语判断，已标为 needs-review；向用户逐条列出，供人工复核'
-        : '可以用 view_clauses 查看缩进结构，然后进行 translate',
-  };
-}
-
-/**
- * 编辑器（pnpm view --serve）提交的子句：存盘形态（type 为展示码）→ 提交形态，再走 submitClauseAnalysis 的同一套校验。
- * 谓词范围改过的子句清空 verbPerson/verbStem，按词法重新回填。
- * 提交的节按连续段分批（submitClauseAnalysis 要求范围内每节都有子句），乐观锁的版本号也按段拆开。
- */
-export async function editClauseAnalysis(deps: Deps, bookName: string, chapter: number, entities: ClauseEntity[], expected: VersionExpectation) {
-  if (entities.length === 0) {
-    throw new Error('没有要保存的子句');
-  }
-  const bcvs = [...new Set(entities.map((clause) => parseClauseId(clause.id).bcv))].sort((a, b) => a - b);
-  if (bcvs.some((bcv) => chapterFromBcv(bcv) !== chapter)) {
-    throw new Error('只能提交同一章的子句');
-  }
-  const book = parseScriptureRange(`${bookName} ${chapter}`);
-  const testament = book.isOT ? 'OT' : 'NT';
-  const onDisk = new Map((await deps.store.readClauseEntities(book.bookName, chapter)).map((clause) => [clause.id, clause]));
-  const runs: number[][] = [];
-  for (const bcv of bcvs) {
-    const run = runs.at(-1);
-    if (run && run.at(-1)! + 1 === bcv) {
-      run.push(bcv);
-    } else {
-      runs.push([bcv]);
-    }
-  }
-  const submitRun = async (run: number[]) => {
-    const verses = new Set(run);
-    const raw = entities.filter((clause) => verses.has(parseClauseId(clause.id).bcv)).map(({ version: _version, ...clause }) => {
-      const verbChanged = onDisk.get(clause.id)?.verbRange !== clause.verbRange;
-      return {
-        ...clause,
-        type: basicClauseType(testament, clause.type) ?? clause.type,
-        verbPerson: verbChanged ? null : clause.verbPerson,
-        verbStem: verbChanged ? null : clause.verbStem,
-      };
-    });
-    const runExpected = new Map([...expected].filter(([id]) => verses.has(parseClauseId(id).bcv)));
-    const range = { ...book, startBcv: run[0], endBcv: run.at(-1)! };
-    return submitClauseAnalysis(deps, range, raw, { expected: runExpected });
-  };
-  // 段与段之间可能互相挂接（如前段的 parentId 指向后段新改名的子句）：失败的段在其他段写入后再试一次
-  const settled = [];
-  for (const run of runs) {
-    settled.push({ run, result: await submitRun(run) });
-  }
-  const failed = settled.filter((item) => item.result.errors.length > 0);
-  if (failed.length > 0 && failed.length < settled.length) {
-    for (const item of failed) {
-      item.result = await submitRun(item.run);
-    }
-  }
-  const results = settled.map((item) => item.result);
-  return {
-    writtenVerses: results.flatMap((result) => result.writtenVerses),
-    errors: results.flatMap((result) => result.errors),
-    needsReview: results.flatMap((result) => result.needsReview ?? []),
-    translatedVerses: results.flatMap((result) => (result.translatedVerses ? [result.translatedVerses] : [])),
+        : '可以进行 translate',
   };
 }
 
 // ---------------------------------------------------------------- translate
-
-function textViewClauses(entities: ClauseEntity[], texts: ClauseText[]): TextViewClause[] {
-  const byKey = new Map(texts.map((text) => [`${text.bcv}${text.sub}`, text]));
-  return entities.map((entity) => {
-    const text = byKey.get(entity.id);
-    return {
-      ...entity,
-      translation: text && text.translationSpan > 0 ? formattedMarkup(text.formatted) : null,
-      alternatives: text?.alternatives,
-    };
-  });
-}
 
 export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange, options: { disputes?: boolean } = {}) {
   const verses = rangeTokens(deps, range);
@@ -556,19 +478,12 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     .slice(-8)
     .map((text) => `${verseLabel(text.bcv)}${text.sub} ${formattedMarkup(text.formatted)}`);
 
-  const view = chapters.map((chapter) => {
-    const entities = (entitiesByChapter.get(chapter) ?? []).filter((clause) => inRange(parseClauseId(clause.id).bcv, range));
-    const words = allTokens.map((token) => ({ id: token.id, text: token.surface, after: token.after }));
-    return renderClausesText(textViewClauses(entities, existingTexts), words, { leftToRight: !range.isOT });
-  }).join('\n\n');
-
   const rules = (await deps.store.readRules()).filter((rule) => rule.task === 'translate');
   return {
     task: 'translate',
     range: `${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel([...verses.keys()].at(-1)!)}`,
     baseText: range.isOT ? undefined : na28Check(deps.criticalText, withDisputes),
     disputes: disputesBriefing(withDisputes),
-    clauseView: view,
     clauses: clauseLines,
     readings: readings.size > 0
       ? Object.fromEntries([...readings].map(([label, ids]) => [label, { clauses: ids, note: '这几句的同组可选读法要连起来才成立：各句都给 reading 相同的 alternative，连读要通' }]))
@@ -649,24 +564,11 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
       ? '未写入的节：按 errors 修正；consistency 中的用词要么统一为既有/术语表译法，要么在该 rendering 写 note 说明理由，然后整节重提'
       : consistency.length > 0
         ? '已全部写入。当前档位下 consistency 只作提示：与既有译法不同处，确认是有意为之即可；确定的新术语可用 upsert_glossary 固化'
-        : '已全部写入。确定的新术语可用 upsert_glossary 固化；用 view_clauses 查看',
+        : '已全部写入。确定的新术语可用 upsert_glossary 固化',
   };
 }
 
-// ---------------------------------------------------------------- 查看与用词统一
-
-export async function viewClauses(deps: Deps, range: ScriptureRange): Promise<string> {
-  const parts: string[] = [];
-  for (const view of await loadChapterViews(deps.db, deps.store, range)) {
-    if (view.clauses.length === 0) {
-      parts.push(`${view.bookName} ${view.chapter} 章：范围内还没有子句分析`);
-      continue;
-    }
-    const paragraphStarts = new Set(view.texts.filter((text) => text.paraTitle !== null).map((text) => `${text.bcv}${text.sub}`));
-    parts.push(`${view.bookName} ${view.chapter} 章`, renderClausesText(textViewClauses(view.clauses, view.texts), view.words, { leftToRight: !view.isOT, paragraphStarts }));
-  }
-  return parts.join('\n\n');
-}
+// ---------------------------------------------------------------- 用词统一
 
 export async function upsertGlossary(deps: Deps, rawEntries: unknown[]) {
   const entries = rawEntries.map((raw, index) => {
@@ -719,27 +621,6 @@ const REVIEW_MESSAGES_PER_VERSE = 8;
 const REVIEW_VERSE_LIMIT = 300;
 
 /** 审校报告：range 给出时只审该范围，否则审 books 中的书卷（不给则全部）。 */
-/** 单章的审校问题（编辑器在节号上标出需要重译的节）。 */
-export async function chapterReviewIssues(deps: Deps, bookName: string, chapter: number): Promise<ReviewIssue[]> {
-  const entities = await deps.store.readClauseEntities(bookName, chapter);
-  const texts = await deps.store.readClauseTexts(bookName, chapter);
-  if (texts.length === 0) {
-    return [];
-  }
-  const bcvs = [...entities.map((clause) => parseClauseId(clause.id).bcv), ...texts.map((text) => text.bcv)];
-  const [startBcv, endBcv] = [Math.min(...bcvs), Math.max(...bcvs)];
-  return reviewChapter({
-    bookName,
-    entities,
-    texts,
-    tokensByVerse: groupByVerse(deps.db.tokensInRange(startBcv, endBcv)),
-    variants: deps.db.variantsInRange(startBcv, endBcv),
-    glossary: await deps.store.readGlossary(),
-    level: await currentLevel(deps),
-    disputes: await disputesEnabled(deps),
-  }).issues;
-}
-
 export async function reviewReport(deps: Deps, target: { range?: ScriptureRange; books?: Set<string> }, options: { disputes?: boolean } = {}) {
   const { range } = target;
   const disputes = await disputesEnabled(deps, options.disputes);

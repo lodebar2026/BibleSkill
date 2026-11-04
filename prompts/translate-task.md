@@ -5,7 +5,7 @@
 ## 流程
 
 1. 调 `build_translation_briefing(range)` 一次。还没有子句分析的节会报错，先做 analyze。范围超过约 10 节时按自然段分批：每批取一次 briefing、提交一次。如果有能对比各英文译本分段的扩展工具，分批前先取一次全范围的分段对比，批次边界放在多数译本和原文共同认可的段首。
-2. 读 `approach`（档位）、`clauseView`（缩进结构）、`clauses`（带 `logic` 的是子句分析标出的逻辑关系，选连词“因为”“于是”“就”等时参照它）、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
+2. 读 `approach`（档位）、`clauses`（带 `logic` 的是子句分析标出的逻辑关系，选连词“因为”“于是”“就”等时参照它）、`tokens`、`terms`（每个实词义项的术语表条目与既有译法）、`precedingTranslations`（前文）。
 3. 逐子句翻译，组成 `translations` 数组提交。
 4. 若返回 `errors` 或 `consistency`，按提示修正后**整节**重提；已写入的节不要重提。
 5. 本段新确定的专名、术语，用 `upsert_glossary` 写入术语表。

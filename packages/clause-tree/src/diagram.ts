@@ -162,7 +162,10 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .ot .w .g { font-size: 24px; }
 .w .m, .w .z, .w .e { font-size: 11px; color: var(--muted); line-height: 1.35; white-space: nowrap; direction: ltr; }
 .w .z { color: var(--ink); font-size: 12px; }
-.w.target .g { text-decoration: underline 2px var(--wire); text-underline-offset: 5px; }
+/* 被修饰的词：下划线画在 ::after 上，紧挨的下一个词也是被修饰的词（并列的先行词）时伸过词间空白，连成一条 */
+.w.target .g { position: relative; }
+.w.target .g::after { content: ''; position: absolute; inset-inline: 0; bottom: -3px; height: 2px; background: var(--wire); }
+.w.target:has(+ .w.target) .g::after { inset-inline-end: -10px; }
 /* 嵌在句中的子句：占位符（虚线小框，标子句编号），点它跳到那个子句 */
 .w.slot { justify-content: center; }
 .w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent); border: 1.5px dashed var(--accent); border-radius: 5px; padding: 0 6px; direction: ltr; }

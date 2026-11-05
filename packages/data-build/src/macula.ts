@@ -112,7 +112,7 @@ export function processMacula(
   firstNodeId = 1,
 ): MaculaResult {
   const eligible = testament === 'NT'
-    ? tokens.filter((token) => token.editions?.split('+').includes('SBL'))
+    ? tokens.filter((token) => (token.slotEditions ?? token.editions)?.split('+').includes('SBL'))
     : tokens;
   const tokensByVerse = new Map<number, TokenRow[]>();
   for (const token of eligible) {

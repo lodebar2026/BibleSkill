@@ -82,6 +82,8 @@ export type TokenRow = {
   naBracket: boolean;
   /** 映射 Macula 时用的节号（旧约希伯来节号、新约 NA 节号）。 */
   maculaBcv: number;
+  /** 词行本身的版本（NA28 读法顶替进主干时与 editions 不同）；对齐 Macula（SBLGNT）看这个词位在不在 SBL。 */
+  slotEditions?: string;
 };
 
 export type VariantRow = {
@@ -300,6 +302,58 @@ function splitGreekCell(cell: string): { surface: string; after: string; transli
   return { surface: word, after: ' ', translit, opens, closes };
 }
 
+type GreekReading = { surface: string; translit: string; gloss: string; strong: string; morph: string; editions: string };
+
+const GREEK_READING_RE = /^(.*?)\s*\([A-Za-z]=([^)]*)\)\s*(.*?)\s+-\s+(G\d+\w*)=(\S+)\s+in:\s*(\S+)$/u;
+
+/** 意义异文列的各读法：`ὁδηγήσῃ (t=hodēgēsē) shall guide - G3594=V-AAS-3S in: NA28+TR+Byz`，多个以 ¦ 分隔。 */
+function parseGreekReadings(value: string): (GreekReading | string)[] {
+  return value.split('¦').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const match = part.match(GREEK_READING_RE);
+    return match
+      ? { surface: match[1], translit: match[2], gloss: match[3], strong: match[4], morph: match[5], editions: match[6] }
+      : part;
+  });
+}
+
+/**
+ * 词行本身不属 NA28、NA28 的读法只写在意义异文列里时（徒 8:31 ὁδηγήσει，NA28 作 ὁδηγήσῃ），
+ * 取出 NA28 读法顶替进主干，其余读法（含词行本身）记入 variantNote。
+ */
+function na28Alternative(meaningVar: string | undefined, main: string): { reading: GreekReading; note: string } | null {
+  if (!meaningVar?.includes('NA28')) {
+    return null;
+  }
+  const readings = parseGreekReadings(meaningVar);
+  const index = readings.findIndex((reading) => typeof reading !== 'string' && reading.editions.split('+').includes('NA28'));
+  if (index < 0) {
+    return null;
+  }
+  const others = readings.filter((_, other) => other !== index).map((reading) => typeof reading === 'string' ? reading : `${reading.surface} (${reading.translit}) ${reading.gloss} - ${reading.strong}=${reading.morph} in: ${reading.editions}`);
+  return { reading: readings[index] as GreekReading, note: [main, ...others].join(' ¦ ') };
+}
+
+/** 顶替进主干的 NA28 读法没有词条形：按同一 Strong 在主干其他词上的词条形补上。 */
+export function fillMissingLemmas(rows: TokenRow[], report: Report): void {
+  // 主干多用扩展 Strong（G1135G），异文列只给基本编号（G1135）：完全相同的找不到时按基本编号找
+  const lemmas = new Map<string, string>();
+  for (const row of rows) {
+    for (const key of [row.strong, row.strong.match(/^G\d+/)?.[0]]) {
+      if (row.lemma && key && !lemmas.has(key)) {
+        lemmas.set(key, row.lemma);
+      }
+    }
+  }
+  for (const row of rows) {
+    if (!row.lemma) {
+      row.lemma = lemmas.get(row.strong) ?? lemmas.get(row.strong.match(/^G\d+/)?.[0] ?? '') ?? '';
+      if (!row.lemma) {
+        report('nt-lemma-missing', row.ref, `${row.strong} 在主干里找不到词条形`);
+      }
+    }
+  }
+}
+
 export function parseTagnt(filePath: string, report: Report, onToken: (row: TokenRow) => void, onVariant: (row: VariantRow) => void): void {
   let currentBcv = 0;
   let ord = 0;
@@ -319,7 +373,9 @@ export function parseTagnt(filePath: string, report: Report, onToken: (row: Toke
       report('na-bracket', ref.raw, '双括号区段到书末未见 ]]，按书末收尾');
       inBracket = false;
     }
-    if (opens && editions.split('+').includes('NA28')) {
+    const inNa28 = editions.split('+').includes('NA28');
+    const alternative = inNa28 ? null : na28Alternative(meaningVar, `${surface} (${translit}) ${english.trim()} - ${strong.trim()}=${morph.trim()} in: ${editions}`);
+    if (opens && (inNa28 || alternative)) {
       inBracket = true;
       bracketBook = bookKey;
       report('na-bracket', ref.raw, 'NA28 双括号区段开始');
@@ -333,12 +389,15 @@ export function parseTagnt(filePath: string, report: Report, onToken: (row: Toke
       ord = 0;
       lastWord = 0;
     }
-    if (!editions.split('+').includes('NA28')) {
+    if (!inNa28) {
       onVariant({
         ref: ref.raw, bcv, wordNo: ref.word, posId: ntTokenId(ref.book, ref.chapter, ref.verse, anchorWord(ref.word)),
         significant: significantVariantWord(ref.type), surface, strong, morph, glossEn: english, editions, textType: ref.type,
       });
-      continue;
+      if (!alternative) {
+        continue;
+      }
+      report('nt-na28-alternative', ref.raw, `NA28 读法 ${alternative.reading.surface} 只在异文列，顶替 ${surface} 进主干`);
     }
     const wordNo = numbering.wordNo(bcv, ref);
     if (wordNo <= lastWord) {
@@ -346,23 +405,25 @@ export function parseTagnt(filePath: string, report: Report, onToken: (row: Toke
     }
     lastWord = wordNo;
     const maculaBcv = ref.alt?.bracket === '(' ? toBcv(ref.book, ref.alt.chapter, ref.alt.verse) : bcv;
+    const reading = alternative?.reading;
     onToken({
       id: ntTokenId(ref.book, ref.chapter, ref.verse, wordNo),
       ref: ref.raw,
       bcv,
       ord: ord++,
-      surface,
+      surface: reading?.surface ?? surface,
       after,
-      translit,
-      lemma: lemma.trim(),
-      strong: strong.trim(),
-      morph: morph.trim(),
-      glossEn: english.trim(),
+      translit: reading?.translit ?? translit,
+      lemma: reading && reading.strong !== strong.trim() ? '' : lemma.trim(),
+      strong: reading?.strong ?? strong.trim(),
+      morph: reading?.morph ?? morph.trim(),
+      glossEn: reading?.gloss ?? english.trim(),
       glossZh: null,
       sense: null,
-      editions,
+      editions: reading?.editions ?? editions,
+      slotEditions: reading ? editions : undefined,
       textType: ref.type,
-      variantNote: joinNotes(meaningVar, spellingVar),
+      variantNote: joinNotes(alternative?.note ?? meaningVar, spellingVar),
       significant: significantType(ref.type) || /\(T=/.test(meaningVar ?? ''),
       naBracket,
       maculaBcv,

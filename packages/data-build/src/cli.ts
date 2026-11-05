@@ -14,7 +14,7 @@ import { parseArgs } from 'node:util';
 import { SCHEMA_SQL, SCHEMA_VERSION } from '@bs/core';
 import { readMorphCodes, readStepLexicon, readUbsLexicon } from './lexicon.js';
 import { processMacula } from './macula.js';
-import { parseTagnt, parseTahot, type Report, type TokenRow, type VariantRow } from './stepbible.js';
+import { fillMissingLemmas, parseTagnt, parseTahot, type Report, type TokenRow, type VariantRow } from './stepbible.js';
 
 const { values } = parseArgs({
   options: {
@@ -71,6 +71,7 @@ for (const file of amalgamatedFiles('TAGNT')) {
   log(`读取 ${path.basename(file)}`);
   parseTagnt(file, report, (row) => ntTokens.push(row), (row) => variants.push(row));
 }
+fillMissingLemmas(ntTokens, report);
 
 function assertUniqueIds(rows: TokenRow[]): void {
   const seen = new Set<string>();

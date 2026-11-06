@@ -276,6 +276,12 @@ function variantOf(token: Token, isOT: boolean): string | null {
 }
 
 /** Macula 的成分角色；希伯来文的介词短语角色 pp 按状语显示。 */
+/** 充当母句论元的子句：标签与连线说明（新约，按 Macula 的 role）。 */
+const ARGUMENT_LABELS = {
+  o: { label: '宾语从句', role: '宾语' }, o2: { label: '宾语从句', role: '宾语' },
+  s: { label: '主语从句', role: '主语' }, p: { label: '表语从句', role: '表语' },
+} as const;
+
 const MACULA_ROLES: Record<string, ChipRole> = { s: 's', v: 'v', vc: 'v', o: 'o', o2: 'o2', io: 'io', adv: 'adv', pp: 'adv', p: 'p' };
 
 /** 连词：新约 CONJ，旧约 HC/Hc（含连续式 וַ）。 */
@@ -604,6 +610,22 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     .filter((slot) => slot.clauseIds.length > 0)]));
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
 
+  // 子句在母句里充当的论元（宾语、主语、表语）：取 Macula 短语树上本句谓词所在子句结点的 role，
+  // 且该结点的上一层子句就是母句谓词所在的子句（徒 8:30b αὐτοῦ ἀναγινώσκοντος … 是 30a ἤκουσεν 的宾语）
+  const argumentOf = (clause: ClauseEntity, parent: ClauseEntity): keyof typeof ARGUMENT_LABELS | null => {
+    const pathOf = (range: string | null, own: Token[]) => input.syntax?.get([...idsInRange(range, own)][0] ?? '')?.path;
+    const path = pathOf(clause.verbRange, wordsOf.get(clause.id) ?? []);
+    const parentPath = pathOf(parent.verbRange, wordsOf.get(parent.id) ?? []);
+    const at = path ? path.map((node) => node.cls).lastIndexOf('cl') : -1;
+    if (!path || !parentPath || at < 0) {
+      return null;
+    }
+    const role = path[at].role;
+    const above = path.slice(0, at).map((node) => node.cls).lastIndexOf('cl');
+    const governed = above >= 0 && parentPath.map((node) => node.cls).lastIndexOf('cl') === above && parentPath[above].id === path[above].id;
+    return governed && role && role in ARGUMENT_LABELS ? role as keyof typeof ARGUMENT_LABELS : null;
+  };
+
   const clauses = input.clauses.map((clause): DiagramClause => {
     const own = wordsOf.get(clause.id) ?? [];
     const parentId = clause.parentId && clauseIds.has(clause.parentId) ? clause.parentId : null;
@@ -657,11 +679,16 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
 
     const targetZh = target ? targetWordIds.map((id) => words[id]?.rendering ?? tokenById.get(id)?.glossZh ?? tokenById.get(id)?.surface ?? '').join('') : null;
+    const argument = parent && !isOT ? argumentOf(clause, parent) : null;
+    // 作宾语、前面以上点（·）引出的是直接引语（徒 8:29b λέγει… τῷ Φιλίππῳ· πρόσελθε）
+    const before = tokens[tokens.findIndex((token) => token.id === clause.firstWordId) - 1];
+    const quote = (argument === 'o' || argument === 'o2') && before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after);
     return {
       id: clause.id,
       parentId,
-      label: clause.parentId === null ? '主句' : target && isNominal(target, isOT) ? '定语从句' : '从句',
-      link: targetZh ? `修饰“${targetZh}”` : null,
+      label: clause.parentId === null ? '主句' : quote ? '引语' : argument ? ARGUMENT_LABELS[argument].label
+        : target && isNominal(target, isOT) ? '定语从句' : '从句',
+      link: !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,
       status: clause.status,
       type: clause.type,

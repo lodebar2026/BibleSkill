@@ -316,3 +316,27 @@ test('徒 8:28a 迂说结构：ἦν τε ὑποστρέφων καὶ καθή
   // καθήμενος 与它的介词短语之间、冠词之后都不是断点
   assert.ok(pauses[4] < pauses[2] && pauses[6] === PAUSE_JOINED);
 });
+
+test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … 是 30a ἤκουσεν 的宾语，标「宾语从句」；以上点引出的直接引语标「引语」', () => {
+  // 徒 8:30 προσδραμὼν δὲ ὁ Φίλιππος ἤκουσεν αὐτοῦ ἀναγινώσκοντος Ἠσαΐαν … καὶ εἶπεν· ἆρά γε γινώσκεις…（短语树照抄 Macula，略去无关成分）
+  const surfaces: Array<[string, string]> = [
+    ['ἤκουσεν', 'V-AAI-3S'], ['αὐτοῦ', 'P-GSM'], ['ἀναγινώσκοντος', 'V-PAP-GSM'], ['καὶ', 'CONJ'], ['εἶπεν·', 'V-2AAI-3S'], ['γινώσκεις', 'V-PAI-2S'],
+  ];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const heard = node(1, 'cl', null, 'ADV-S-V-O');
+  const reading = node(2, 'cl', 'o', 'S-V-O');
+  const said = node(3, 'cl', null, 'ClCl');
+  const question = node(4, 'cl', 'o', 'V-O');
+  const syntax = syntaxOf([[1, 'v', [heard]], [2, 's', [heard, reading]], [3, 'v', [heard, reading]], [4, null, []], [5, 'v', [said]], [6, 'v', [said, question]]]);
+  const texts: ClauseText[] = [{ bcv: 44007018, sub: 'a', translationSpan: 1, formatted: JSON.stringify([{ text: '听见' }]), paraTitle: null,
+    renderings: [{ tokens: 'n44007018001', zh: '听见' }, { tokens: 'n44007018005', zh: '说' }], alternatives: [], sources: ['ai'], version: 0, literalness: 3 }];
+  const data = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, syntax, texts, clauses: [
+    clause('44007018a', 1, 1, { verbRange: 'n44007018001' }),
+    clause('44007018b', 2, 3, { parentId: '44007018a', modifies: 'n44007018001', verbRange: 'n44007018003', subjectRange: 'n44007018002' }),
+    clause('44007018c', 4, 5, { verbRange: 'n44007018005' }),
+    clause('44007018d', 6, 6, { parentId: '44007018c', modifies: 'n44007018005', verbRange: 'n44007018006' }),
+  ] });
+  const show = (id: string) => { const c = data.clauses.find((item) => item.id === id)!; return `${c.label}|${c.link}`; };
+  assert.equal(show('44007018b'), '宾语从句|作“听见”的宾语');
+  assert.equal(show('44007018d'), '引语|“说”的内容');
+});

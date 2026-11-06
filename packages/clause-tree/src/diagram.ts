@@ -880,8 +880,7 @@ ${D.narrative ? `
     type Wire = { candidates: Array<Array<[number, number]>>; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null; clause: string };
     const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
-    const argumentLines: Array<{ text: string; line: Array<[number, number]> }> = [];
-    const labelled = new Set<string>();
+    const argumentLines: Array<{ key: string; text: string; lines: Array<Array<[number, number]>> }> = [];
     // 画逻辑虚线的方框（起点与关联的子句）
     const logicBoxes = new Set(D.clauses.flatMap((clause) => (clause.logic && clause.logic.targetIds.length > 0 ? [clause.id, clause.logic.targetIds[0]] : [])));
     const visible = allBoxes.filter((box) => !box.hidden).map((box) => {
@@ -1134,11 +1133,16 @@ ${D.narrative ? `
       }
       hitArea(best, wire.clause);
       const wireLabel = byId.get(wire.clause)?.wireLabel;
-      // 几条线指向同一个词（汇成一条主干）、标签又相同时只标一次
-      const labelKey = `${wire.group}|${wireLabel}`;
-      if (wireLabel && !labelled.has(labelKey)) {
-        labelled.add(labelKey);
-        argumentLines.push({ text: wireLabel, line: wire.into === null ? best : [...best, [best.at(-1)![0], wire.into]] });
+      // 几条线指向同一个词（汇成一条主干）、标签又相同时只标一次，放在它们共用的那段上（见下）
+      if (wireLabel) {
+        const labelKey = `${wire.group}|${wireLabel}`;
+        const line: Array<[number, number]> = wire.into === null ? best : [...best, [best.at(-1)![0], wire.into]];
+        const entry = argumentLines.find((item) => item.key === labelKey);
+        if (entry) {
+          entry.lines.push(line);
+        } else {
+          argumentLines.push({ key: labelKey, text: wireLabel, lines: [line] });
+        }
       }
       if (wire.into === null) {
         arrow(svg, best, '', hops);
@@ -1199,7 +1203,33 @@ ${D.narrative ? `
     const overlapsLabel = (x: number, y: number, w: number, h: number) => placed.some((other) => Math.abs(other.x - x) < (other.w + w) / 2
       && Math.abs(other.y - y) < (other.h + h) / 2);
     const MARGIN = 10;
-    for (const { text, line } of argumentLines) {
+    // 一组线从箭头往回共用的那段（到分叉为止）：标签放在这里，表示整串子句（如 8:32c–33b 这段引文）共同的作用，不落在某一条分支上
+    const sharedPart = (lines: Array<Array<[number, number]>>): Array<[number, number]> => {
+      const back = lines.map((line) => [...line].reverse());
+      const same = (a: [number, number], b: [number, number]) => Math.abs(a[0] - b[0]) < 0.5 && Math.abs(a[1] - b[1]) < 0.5;
+      const shared: Array<[number, number]> = [back[0][0]];
+      for (let k = 0; ; k += 1) {
+        const nexts = back.map((line) => line[k + 1]);
+        if (nexts.some((point) => !point) || !back.every((line) => same(line[k], shared.at(-1)!))) {
+          break;
+        }
+        if (nexts.every((point) => same(point, nexts[0]))) {
+          shared.push(nexts[0]);
+          continue;
+        }
+        // 方向相同、在不同处拐弯：共用到最近的拐点
+        const from = shared.at(-1)!;
+        const dir = (point: [number, number]) => [Math.sign(point[0] - from[0]), Math.sign(point[1] - from[1])].join();
+        if (nexts.every((point) => dir(point) === dir(nexts[0]))) {
+          shared.push(nexts.reduce((near, point) => (Math.abs(point[0] - from[0]) + Math.abs(point[1] - from[1])
+            < Math.abs(near[0] - from[0]) + Math.abs(near[1] - from[1]) ? point : near)));
+        }
+        break;
+      }
+      return shared.length > 1 ? shared.reverse() : lines[0];
+    };
+    for (const { text, lines } of argumentLines) {
+      const line = sharedPart(lines);
       const label = document.createElement('div');
       label.className = 'll al';
       label.textContent = text;

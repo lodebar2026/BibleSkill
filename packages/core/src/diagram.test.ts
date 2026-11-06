@@ -345,7 +345,7 @@ test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … �
   assert.equal(data.clauses.find((item) => item.id === '44007018a')!.wireLabel, null);
 });
 
-test('定语：徒 8:32b ἣν ἀνεγίνωσκεν 在名词短语里，连线上标「定语」；8:32c ὡς πρόβατον … ἤχθη 指向代词 αὕτη、与 32a 并列，不标；冠词开头而谓词不是分词的（33b τὴν γενεὰν … διηγήσεται）也不标', () => {
+test('定语与引文：徒 8:32b ἣν ἀνεγίνωσκεν 在名词短语里，标「定语」；αὕτη· 引出的经文 32c ὡς πρόβατον … ἤχθη 标「引语」，同一主干上的后续句（33b τὴν γενεὰν … διηγήσεται）也是引语，不算定语', () => {
   // 徒 8:32 ἡ δὲ περιοχὴ τῆς γραφῆς ἣν ἀνεγίνωσκεν ἦν αὕτη· ὡς πρόβατον … ἤχθη …；33b τὴν γενεὰν αὐτοῦ τίς διηγήσεται（短语树照抄 Macula，略去无关成分）
   const surfaces: Array<[string, string]> = [
     ['περιοχὴ', 'N-NSF'], ['γραφῆς', 'N-GSF'], ['ἣν', 'R-ASF'], ['ἀνεγίνωσκεν', 'V-IAI-3S'], ['ἦν', 'V-IAI-3S'], ['αὕτη·', 'D-NSF'],
@@ -372,7 +372,7 @@ test('定语：徒 8:32b ἣν ἀνεγίνωσκεν 在名词短语里，连�
   ] });
   const wire = (id: string) => data.clauses.find((item) => item.id === id)!.wireLabel;
   assert.equal(wire('44007018b'), '定语');
-  assert.equal(wire('44007018c'), null);
-  assert.equal(wire('44007018d'), null);
+  assert.equal(wire('44007018c'), '引语');
+  assert.equal(wire('44007018d'), '引语');
   assert.ok(data.clauses.every((item) => item.label === '主句' || item.label === '从句'));
 });

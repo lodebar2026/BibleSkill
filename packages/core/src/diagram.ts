@@ -706,7 +706,12 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const argument = parent && !isOT ? argumentOf(clause, parent) : null;
     // 作宾语、前面以上点（·）引出的是直接引语（徒 8:29b λέγει… τῷ Φιλίππῳ· πρόσελθε）
     const before = tokens[tokens.findIndex((token) => token.id === clause.firstWordId) - 1];
-    const quote = (argument === 'o' || argument === 'o2') && before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after);
+    // 上点引出、指向上点前那个词的（8:32c αὕτη· 后面引的经文）也是引语
+    // 以关系代词开头的是定语从句（7:46a ὃς εὗρεν χάριν 指 Δαυίδ），前一个词带上点也不算
+    const lead = own.find((word) => !isConjunction(word, isOT));
+    const quote = before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after)
+      && !(lead && /^R-/.test(lead.morph))
+      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id));
     return {
       id: clause.id,
       parentId,
@@ -730,6 +735,18 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       records,
     };
   });
+
+  // 引语往往有好几句（8:32c–33b、8:34b–c），各自挂在同一个词下、汇成一条主干：引语之后同一母句、指向同一个词的子句也算引语
+  const quoteOf = new Map<string, DiagramClause>();
+  for (const clause of clauses) {
+    const key = `${clause.parentId}|${clause.targetWordId}`;
+    if (clause.wireLabel === '引语') {
+      quoteOf.set(key, clause);
+    } else if (clause.parentId && clause.wireLabel === null && quoteOf.has(key)) {
+      clause.wireLabel = '引语';
+      clause.link = quoteOf.get(key)!.link;
+    }
+  }
 
   const verses: DiagramVerse[] = [];
   for (const token of tokens) {

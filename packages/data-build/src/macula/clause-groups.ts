@@ -24,6 +24,45 @@ export function isClauseGroup(node: Node): node is GroupNode {
   return node.tag === 'wg' && attr(node, 'class')?.toLowerCase() === 'cl';
 }
 
+function isParticiple(word: WordNode): boolean {
+  return attr(word, 'mood')?.toLowerCase() === 'participle';
+}
+
+/**
+ * 迂说结构里的分词小句：Macula 用 `BeVerb` 动词短语标出 εἰμί + 分词，分词带了补语时成为其中的 `cl`
+ * （徒 8:28 `ἦν τε ὑποστρέφων καὶ [καθήμενος ἐπὶ τοῦ ἅρματος αὐτοῦ]`）。它只是 εἰμί 谓语的一部分，
+ * 不另立子句，词并进 εἰμί 所在的子句。
+ *
+ * 条件：从该子句往上，只经过无句法角色的动词短语 / 并列组 / 同样并入的子句，就到 `BeVerb`；
+ * 子句自己无句法角色，谓词是分词或没有谓词（并列的包裹层）。带角色的子句（如 `λέγων` 的引语、宾语从句）
+ * 是真正的从属子句，照旧单列，挂到 εἰμί 所在的子句下。
+ */
+export function isPeriphrasticPart(clause: GroupNode): boolean {
+  if (attr(clause, 'role')) {
+    return false;
+  }
+  // 只看子句严格自身的词（不并入下层），免得与 directWords 互相递归
+  const predicate = strictWords(clause).find((word) => attr(word, 'class')?.toLowerCase() === 'verb');
+  if (predicate && !isParticiple(predicate)) {
+    return false;
+  }
+  let current = clause.parent;
+  while (current && current.tag === 'wg') {
+    if (attr(current, 'rule') === 'BeVerb') {
+      return true;
+    }
+    if (isClauseGroup(current)) {
+      return isPeriphrasticPart(current);
+    }
+    const className = attr(current, 'class')?.toLowerCase() ?? '';
+    if (attr(current, 'role') || (className !== '' && className !== 'vp')) {
+      return false;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
 /** 名词性/形容词性/副词性短语——子句嵌在其中即为该短语的定语，不是并列的分句。 */
 const CONSTITUENT_CLASSES = new Set(['np', 'adjp', 'advp']);
 
@@ -59,7 +98,11 @@ export type ClauseSite = {
 
 /** 该子句自身（不含嵌套子句）的谓词中心：先限定/系动词 role，再动词词类，最后无动词句的述语。 */
 export function directPredicateWord(clause: GroupNode): WordNode | undefined {
-  const own = directWords(clause);
+  // 先在严格自身的词里找，迂说结构的谓词才是 εἰμί 而不是并进来的分词
+  return predicateAmong(strictWords(clause)) ?? predicateAmong(directWords(clause));
+}
+
+function predicateAmong(own: WordNode[]): WordNode | undefined {
   return own.find((word) => {
     const role = attr(word, 'role')?.toLowerCase();
     return role === 'v' || role === 'vc';
@@ -72,7 +115,14 @@ export function directPredicateWord(clause: GroupNode): WordNode | undefined {
 }
 
 
-/** 该子句自身的词——不含嵌套子句里的词。 */
+function strictWords(clause: GroupNode): WordNode[] {
+  const walk = (current: Node): WordNode[] => current.tag === 'w'
+    ? [current]
+    : isClauseGroup(current) && current !== clause ? [] : current.children.flatMap(walk);
+  return walk(clause);
+}
+
+/** 该子句自身的词——不含嵌套子句里的词；并入的迂说分词小句（见 isPeriphrasticPart）算自身的词。 */
 export function directWords(clause: GroupNode): WordNode[] {
   const found: WordNode[] = [];
   const walk = (current: Node) => {
@@ -80,7 +130,7 @@ export function directWords(clause: GroupNode): WordNode[] {
       found.push(current);
       return;
     }
-    if (isClauseGroup(current) && current !== clause) {
+    if (isClauseGroup(current) && current !== clause && !isPeriphrasticPart(current)) {
       return;
     }
     for (const child of current.children) {
@@ -104,7 +154,7 @@ export function collectClauseGroups(node: Node): ClauseSite[] {
       return;
     }
     const className = current.tag === 'wg' ? attr(current, 'class')?.toLowerCase() ?? '' : '';
-    if (current.tag === 'wg' && className === 'cl') {
+    if (current.tag === 'wg' && className === 'cl' && !isPeriphrasticPart(current)) {
       // 定语身份沿子句链下传：定语子句还会再套一层子句（DetCL > VC-P-ADV），
       // 内层若重新算作独立子句就会把边界切回来，等于白抑制。
       const isAttributive = attributive

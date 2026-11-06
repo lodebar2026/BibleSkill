@@ -776,9 +776,17 @@ ${D.narrative ? `
     tips.innerHTML = '';
     const hits = $<SVGSVGElement>('#hits');
     hits.innerHTML = '';
-    for (const layer of [svg, tips, hits]) {
-      layer.setAttribute('width', String(canvas.scrollWidth));
-      layer.setAttribute('height', String(canvas.scrollHeight));
+    // 先把三层缩成 0 再量画布：否则 scrollHeight 会把上一次的 SVG 尺寸算进去，收起分支、字体载入、窗口变宽后
+    // SVG 只增不减，伸出画布底部，让 .scroller（overflow-x:auto 连带纵向也 auto）多出一条内层纵向滚动条
+    const layers = [svg, tips, hits];
+    for (const layer of layers) {
+      layer.setAttribute('width', '0');
+      layer.setAttribute('height', '0');
+    }
+    const [canvasWidth, canvasHeight] = [canvas.scrollWidth, canvas.scrollHeight];
+    for (const layer of layers) {
+      layer.setAttribute('width', String(canvasWidth));
+      layer.setAttribute('height', String(canvasHeight));
     }
     if (matchMedia('(max-width: 760px)').matches) {
       return;

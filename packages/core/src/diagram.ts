@@ -175,6 +175,8 @@ export type DiagramClause = {
   /** 嵌在母句中间时，连线指向母句里的占位符（DiagramSlot.id）。 */
   targetSlot: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
+  /** 充当母句的什么（宾语、主语、表语、引语）：结构图标在连线上；修饰性的从句为 null。 */
+  argument: string | null;
   logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
   /** 叙事主线的人工判断（覆盖按动词形式的默认）；没有判断时为 null。 */
   mainline: boolean | null;
@@ -688,6 +690,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       parentId,
       label: clause.parentId === null ? '主句' : quote ? '引语' : argument ? ARGUMENT_LABELS[argument].label
         : target && isNominal(target, isOT) ? '定语从句' : '从句',
+      argument: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : null,
       link: !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,
       status: clause.status,

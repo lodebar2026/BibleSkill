@@ -209,7 +209,9 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 #wires path.logic { stroke: var(--logic); stroke-dasharray: 6 4; }
 #tips path.logic-tip { fill: var(--logic); stroke: none; }
 .ll { position: absolute; z-index: 4; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--logic); background: var(--panel); border: 1.5px dashed var(--logic); border-radius: 999px; padding: 0 7px; white-space: nowrap; pointer-events: none; direction: ltr; }
-.hide-logic .ll { display: none; }
+.hide-logic .ll:not(.al) { display: none; }
+/* 论元子句（宾语、主语、表语、引语）：标签画在句法连线上 */
+.ll.al { color: var(--wire); border: 1.5px solid var(--wire); font-weight: 500; z-index: 4; }
 .up .lg { color: var(--logic); }
 @media (max-width: 760px) {
   .forest { gap: 12px; }
@@ -874,6 +876,7 @@ ${D.narrative ? `
     type Wire = { candidates: Array<Array<[number, number]>>; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null; clause: string };
     const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
+    const argumentLines: Array<{ text: string; line: Array<[number, number]> }> = [];
     // 画逻辑虚线的方框（起点与关联的子句）
     const logicBoxes = new Set(D.clauses.flatMap((clause) => (clause.logic && clause.logic.targetIds.length > 0 ? [clause.id, clause.logic.targetIds[0]] : [])));
     const visible = allBoxes.filter((box) => !box.hidden).map((box) => {
@@ -1125,6 +1128,10 @@ ${D.narrative ? `
         verticals.push({ x: seg.x1, top: Math.min(seg.y1, seg.y2), bottom: Math.max(seg.y1, seg.y2) });
       }
       hitArea(best, wire.clause);
+      const argument = byId.get(wire.clause)?.argument;
+      if (argument) {
+        argumentLines.push({ text: argument, line: wire.into === null ? best : [...best, [best.at(-1)![0], wire.into]] });
+      }
       if (wire.into === null) {
         arrow(svg, best, '', hops);
       } else {
@@ -1176,6 +1183,36 @@ ${D.narrative ? `
       };
       walk(0, 0);
       group.forEach((wire, d) => commit(wire, wire.candidates[bestPick[d]]));
+    }
+
+    // ---- 论元子句的连线上标「宾语」「引语」等：放在最长的一段上，靠近箭头那头；与已放的标签重叠就沿线挪开 ----
+    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
+    const overlapsLabel = (x: number, y: number, w: number, h: number) => placed.some((other) => Math.abs(other.x - x) < (other.w + w) / 2
+      && Math.abs(other.y - y) < (other.h + h) / 2);
+    for (const { text, line } of argumentLines) {
+      const label = document.createElement('div');
+      label.className = 'll al';
+      label.textContent = text;
+      canvas.append(label);
+      const width = label.offsetWidth + 6;
+      const height = label.offsetHeight + 4;
+      const segments = line.slice(1).map((point, i) => [line[i], point] as const)
+        .map(([a, b], i) => ({ a, b, i, size: Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]) }));
+      // 段长够放下标签的里取最长的（同长取靠箭头的）；都不够就取最长的一段
+      const fits = segments.filter(({ a, b, size }) => size >= (a[1] === b[1] ? width : height) + 8);
+      const pool = fits.length > 0 ? fits : segments;
+      const seg = pool.reduce((best, item) => (item.size > best.size || (item.size === best.size && item.i > best.i) ? item : best));
+      // 从段的中点往两头试，避开已放好的标签
+      let spot: [number, number] = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
+      const horizontal = seg.a[1] === seg.b[1];
+      for (let k = 0; k < 20 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
+        const step = (k % 2 === 0 ? 1 : -1) * Math.ceil((k + 1) / 2) * (horizontal ? width / 2 : height / 2);
+        const [mx, my] = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
+        spot = horizontal ? [mx + step, my] : [mx, my + step];
+      }
+      placed.push({ x: spot[0], y: spot[1], w: width, h: height });
+      label.style.left = `${spot[0]}px`;
+      label.style.top = `${spot[1]}px`;
     }
 
     // ---- 叙事主线：主线上的顶层句用短横线接到最外侧的脊线（不画圆点，前置看框头标签）；离线句不接，脊线只连主线句 ----
@@ -1302,9 +1339,6 @@ ${D.narrative ? `
     }
     // 标签放在这条线独有的横段上（几条竖道并排时，放在竖线上看不出归属）：挑最长的横段，避开横穿它的竖线和已放好的标签；
     // 横段都放不下时才放在竖线中点，与已放好的标签重叠就往下挪
-    const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
-    const overlapsLabel = (x: number, y: number, w: number, h: number) => placed.some((other) => Math.abs(other.x - x) < (other.w + w) / 2
-      && Math.abs(other.y - y) < (other.h + h) / 2);
     for (const { label, line, lane } of labels) {
       const width = label.offsetWidth + 8;
       const height = label.offsetHeight + 4;

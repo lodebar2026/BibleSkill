@@ -336,7 +336,9 @@ test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … �
     clause('44007018c', 4, 5, { verbRange: 'n44007018005' }),
     clause('44007018d', 6, 6, { parentId: '44007018c', modifies: 'n44007018005', verbRange: 'n44007018006' }),
   ] });
-  const show = (id: string) => { const c = data.clauses.find((item) => item.id === id)!; return `${c.label}|${c.link}`; };
-  assert.equal(show('44007018b'), '宾语从句|作“听见”的宾语');
-  assert.equal(show('44007018d'), '引语|“说”的内容');
+  // 框头标签|说明行|连线上的标签
+  const show = (id: string) => { const c = data.clauses.find((item) => item.id === id)!; return `${c.label}|${c.link}|${c.argument}`; };
+  assert.equal(show('44007018b'), '宾语从句|作“听见”的宾语|宾语');
+  assert.equal(show('44007018d'), '引语|“说”的内容|引语');
+  assert.equal(data.clauses.find((item) => item.id === '44007018a')!.argument, null);
 });

@@ -280,6 +280,9 @@ const MACULA_ROLES: Record<string, ChipRole> = { s: 's', v: 'v', vc: 'v', o: 'o'
 
 /** 连词：新约 CONJ，旧约 HC/Hc（含连续式 וַ）。 */
 const isConjunction = (token: Token, isOT: boolean) => (isOT ? /^[HA][Cc]$/.test(token.morph) : token.morph === 'CONJ');
+/** 后置连词（ἦν τε ὑποστρέφων）不在句首，它前面不是并列的断点。 */
+const POSTPOSITIVE = new Set(['γάρ', 'δέ', 'τε', 'οὖν', 'μέν'].map((lemma) => lemma.normalize('NFC')));
+const isPostpositive = (token: Token, isOT: boolean) => !isOT && POSTPOSITIVE.has(token.lemma.normalize('NFC'));
 
 /** 短语树：每个结点覆盖范围内的哪些词（判断一个短语是否整个落在子句里）。 */
 function nodeWords(syntax: Map<string, TokenSyntax>): Map<number, Set<string>> {
@@ -392,7 +395,7 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
       }
     }
     chipWords.forEach((word, i) => {
-      if (i > 0 && isConjunction(word, isOT) && pauses[i - 1] !== PAUSE_JOINED) {
+      if (i > 0 && isConjunction(word, isOT) && !isPostpositive(word, isOT) && pauses[i - 1] !== PAUSE_JOINED) {
         pauses[i - 1] = boost(i - 1, PAUSE_COORD);
       }
     });
@@ -411,6 +414,9 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
       groups[index] = before;
     }
   });
+  // 谓语所在成分里、不在 verbRange 的词（迂说结构中分词带的补语：徒 8:28 ἦν … καθήμενος ἐπὶ τοῦ ἅρματος αὐτοῦ）
+  // 留在谓语块里，块内按短语树缩进，看得出它跟着哪个分词，而不是另成一个像全句状语的块
+  const verbKeys = new Set(words.flatMap((word, index) => (verb.has(word.id) && groups?.[index]?.role === 'v' ? [groups[index]!.key] : [])));
   let leading = true;
   const chips: Array<DiagramChip & { key?: string }> = [];
   words.forEach((word, index) => {
@@ -420,7 +426,8 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
     // 分析给了主语、谓语时以分析为准，Macula 在别处标的主语、谓语不再算
     const tree = group?.role === 's' && subject.size > 0 ? null : group?.role === 'v' && verb.size > 0 ? null : group?.role ?? null;
     const lone = groups && isConjunction(word, isOT) && group?.key === `w${word.id}`;
-    const role: ChipRole | null = subject.has(word.id) ? 's' : verb.has(word.id) ? 'v' : leading || lone ? 'conj' : tree;
+    const withVerb = group?.role === 'v' && verbKeys.has(group.key);
+    const role: ChipRole | null = subject.has(word.id) ? 's' : verb.has(word.id) ? 'v' : leading || lone ? 'conj' : withVerb ? 'v' : tree;
     const key = groups && role !== 's' && role !== 'v' && role !== 'conj' ? group!.key : undefined;
     const last = chips.at(-1);
     // 同一成分的词合成一块；不属于任何成分的零散词（אֵת אֲשֶׁר、句首冠词）相邻的也合成一块

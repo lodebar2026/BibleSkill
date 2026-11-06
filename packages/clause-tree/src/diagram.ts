@@ -141,6 +141,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .chip > .ws { display: flex; flex-wrap: wrap; }
 .chip > .ws > .lb { flex-basis: 100%; height: 4px; }
 .chip.r-v { --c: var(--r-v); } .chip.r-s { --c: var(--r-s); }
+/* 同位语：主语色、虚线框，看得出是补说主语的 */
+.chip.r-appos { --c: var(--r-s); border-style: dashed; border-top-style: solid; }
 .chip.r-o, .chip.r-o2, .chip.r-io, .chip.r-adv, .chip.r-p { --c: var(--muted); }
 .chip > .ws > .w.ind { margin-inline-start: calc(var(--ind) * 28px); }
 .canvas:not(.hide-case) .w[data-case="nom"] .g { font-weight: 700; }
@@ -248,7 +250,7 @@ function diagramClient(D: DiagramData, subtitle: string): void {
   const esc = (value: unknown) => String(value ?? '').replace(/[&<>"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[char]!);
   /** 文字里的希腊文、希伯来文换原文字体。 */
   const orig = (value: string) => esc(value).replace(/[Ͱ-Ͽἀ-῿֐-׿][Ͱ-Ͽἀ-῿֐-׿̀-ͯʼ’᾽ ]*/g, (run) => `<span class="o">${run}</span>`);
-  const ROLE_ZH: Record<string, string> = { s: '主语', v: '谓语', o: '宾语', o2: '宾补', io: '间接宾语', adv: '状语', p: '表语', conj: '连接词' };
+  const ROLE_ZH: Record<string, string> = { s: '主语', v: '谓语', o: '宾语', o2: '宾补', io: '间接宾语', adv: '状语', p: '表语', conj: '连接词', appos: '同位语' };
   const TENSE_ZH: Record<string, string> = { pres: '现在', impf: '未完成', fut: '将来', aor: '不定过去', perf: '完成', plpf: '过去完成' };
   const MOOD_ZH: Record<string, string> = { ind: '直说', subj: '虚拟', opt: '祈愿', impv: '祈使', inf: '不定式', ptcp: '分词' };
   const words = D.words;
@@ -295,7 +297,7 @@ function diagramClient(D: DiagramData, subtitle: string): void {
       </div>
     </div>
     <div class="legend">
-      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
+      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-s)">同位语（虚线框）</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
       <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
     </div>${D.isOT ? `
     <div class="forms-legend">

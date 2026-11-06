@@ -376,3 +376,23 @@ test('定语与引文：徒 8:32b ἣν ἀνεγίνωσκεν 在名词短语�
   assert.equal(wire('44007018d'), '引语');
   assert.ok(data.clauses.every((item) => item.label === '主句' || item.label === '从句'));
 });
+
+test('同位语：徒 8:38c 主语是 ἀμφότεροι，Macula 另标作主语的 ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος 显示为同位语；与主语同一成分里没标进主语的词不算', () => {
+  // κατέβησαν ἀμφότεροι εἰς τὸ ὕδωρ, ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος（短语树照抄 Macula：ἀμφότεροι 是 adv，句末一串是 s）
+  const surfaces: Array<[string, string]> = [
+    ['κατέβησαν', 'V-2AAI-3P'], ['ἀμφότεροι', 'A-NPM'], ['εἰς', 'PREP'], ['τὸ', 'T-ASN'], ['ὕδωρ,', 'N-ASN'],
+    ['ὅ', 'T-NSM'], ['τε', 'CONJ'], ['Φίλιππος', 'N-NSM-P'], ['καὶ', 'CONJ'], ['ὁ', 'T-NSM'], ['εὐνοῦχος', 'N-NSM'],
+  ];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const c = node(1, 'cl', null, 'V-ADV-ADV-S');
+  const pp = node(2, 'pp', 'adv', 'PrepNp');
+  const both = node(3, 'np', 's', 'aNpaNp');
+  const syntax = syntaxOf([[1, 'v', [c]], [2, 'adv', [c]], [3, null, [c, pp]], [4, null, [c, pp]], [5, null, [c, pp]],
+    ...[6, 7, 8, 9, 10, 11].map((n): [number, string | null, SyntaxNode[]] => [n, null, [c, both]])]);
+  const run = (subjectRange: string) => buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, syntax, texts: [],
+    clauses: [clause('44007018a', 1, 11, { verbRange: 'n44007018001', subjectRange })] }).clauses[0].chips
+    .map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`);
+  assert.deepEqual(run('n44007018002'), ['v:1', 's:2', 'adv:3,4,5', 'appos:6,7,8,9,10,11']);
+  // 主语只标了 Φίλιππος 这类与 Macula 主语同一成分的情形：其余词不当同位语
+  assert.ok(!run('n44007018008').some((chip) => chip.startsWith('appos')));
+});

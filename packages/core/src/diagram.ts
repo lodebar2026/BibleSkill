@@ -90,7 +90,7 @@ export function greekMorph(morph: string): { gcase: GreekCase | null; tense: Gre
  * slots：嵌在本句中间的子句的占位符，插在 wordIds[at] 之前（at = wordIds.length 时在块末）；
  * id 供连线定位，pause 是占位符之后的停顿（占位符前面的词与它相连，不断开）。
  */
-export type ChipRole = 's' | 'v' | 'o' | 'o2' | 'io' | 'adv' | 'p' | 'conj';
+export type ChipRole = 's' | 'v' | 'o' | 'o2' | 'io' | 'adv' | 'p' | 'conj' | 'appos';
 export type DiagramSlot = { id: string; at: number; clauseIds: string[]; pause?: number };
 /** fronted：旧约里排在谓语之前的实词成分（宾语、状语、主语前置），多为焦点、对比或话题。 */
 export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[]; slots?: DiagramSlot[]; fronted?: true };
@@ -422,6 +422,13 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
   // 谓语所在成分里、不在 verbRange 的词（迂说结构中分词带的补语：徒 8:28 ἦν … καθήμενος ἐπὶ τοῦ ἅρματος αὐτοῦ）
   // 留在谓语块里，块内按短语树缩进，看得出它跟着哪个分词，而不是另成一个像全句状语的块
   const verbKeys = new Set(words.flatMap((word, index) => (verb.has(word.id) && groups?.[index]?.role === 'v' ? [groups[index]!.key] : [])));
+  // 同位语：分析给的主语之外 Macula 另标作主语、与分析的主语不沾边的主格成分（徒 8:38c κατέβησαν ἀμφότεροι … ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος，
+  // 主语是 ἀμφότεροι，句末一串是它的同位语）。与分析的主语共用一个成分的（主语只标了中心词）不算
+  const subjectKeys = new Set(words.flatMap((word, index) => (subject.has(word.id) && groups?.[index] ? [groups[index]!.key] : [])));
+  const apposKeys = new Set(words.flatMap((word, index) => {
+    const group = groups?.[index];
+    return group?.role === 's' && !subjectKeys.has(group.key) && !subject.has(word.id) && /^[NATRPDKFQ]-N/.test(isOT ? '' : word.morph) ? [group.key] : [];
+  }));
   let leading = true;
   const chips: Array<DiagramChip & { key?: string }> = [];
   words.forEach((word, index) => {
@@ -429,7 +436,8 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
     leading = leading && (isConnector(word, words[index + 1], isOT) || afterPreposition);
     const group = groups?.[index];
     // 分析给了主语、谓语时以分析为准，Macula 在别处标的主语、谓语不再算
-    const tree = group?.role === 's' && subject.size > 0 ? null : group?.role === 'v' && verb.size > 0 ? null : group?.role ?? null;
+    const tree = group?.role === 's' && subject.size > 0 ? (apposKeys.has(group.key) ? 'appos' : null)
+      : group?.role === 'v' && verb.size > 0 ? null : group?.role ?? null;
     const lone = groups && isConjunction(word, isOT) && group?.key === `w${word.id}`;
     const withVerb = group?.role === 'v' && verbKeys.has(group.key);
     const role: ChipRole | null = subject.has(word.id) ? 's' : verb.has(word.id) ? 'v' : leading || lone ? 'conj' : withVerb ? 'v' : tree;

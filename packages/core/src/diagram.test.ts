@@ -283,3 +283,36 @@ test('旧约同根不定式强调：不定式独立形与同根限定动词，�
   assert.deepEqual(cognateInfinitive([w('a', 'H0398', 'HVqcc'), w('b', 'H0398', 'HVqi2ms')]), []);
   assert.deepEqual(cognateInfinitive([w('a', 'H4191', 'HVqaa'), w('b', 'H1058', 'HVqi3fs')]), []);
 });
+
+test('徒 8:28a 迂说结构：ἦν τε ὑποστρέφων καὶ καθήμενος ἐπὶ τοῦ ἅρματος αὐτοῦ 整个是一个谓语块，介词短语跟着 καθήμενος，只在 καί 前折行', () => {
+  // 短语树照抄 Macula（syntax_node 390727…390752）；改分块、折行逻辑时这一句的展示不能变
+  const surfaces: Array<[string, string, string]> = [
+    ['ἦν', 'V-IAI-3S', 'εἰμί'], ['τε', 'CONJ', 'τε'], ['ὑποστρέφων', 'V-PAP-NSM', 'ὑποστρέφω'], ['καὶ', 'CONJ', 'καί'],
+    ['καθήμενος', 'V-PNP-NSM', 'κάθημαι'], ['ἐπὶ', 'PREP', 'ἐπί'], ['τοῦ', 'T-GSN', 'ὁ'], ['ἅρματος', 'N-GSN', 'ἅρμα'], ['αὐτοῦ', 'P-GSM', 'αὐτός'],
+  ];
+  const tokens = surfaces.map(([surface, morph, lemma], i) => token(i + 1, surface, morph, { lemma }));
+  const top = [node(1, 'cl', null, 'Conj-CL'), node(2, 'cl', null, 'ClCl2'), node(3, 'cl', null, 'S-V')];
+  const beVerb = [...top, node(4, 'vp', 'v', 'BeVerb')];
+  const either = [...beVerb, node(5, 'vp', null, 'EitherOrVp')];
+  const first = [...either, node(6, null)];
+  const second = [...either, node(7, null)];
+  const sitting = [...second, node(8, 'cl', null, 'V-ADV')];
+  const pp = [...sitting, node(9, 'pp', 'adv', 'PrepNp')];
+  const det = [...pp, node(10, 'np', null, 'DetNP')];
+  const ofNp = [...det, node(11, 'np', null, 'NPofNP')];
+  const syntax = syntaxOf([
+    [1, null, beVerb], [2, null, first], [3, null, first], [4, null, second], [5, 'v', sitting],
+    [6, null, pp], [7, null, det], [8, null, ofNp], [9, null, ofNp],
+  ]);
+  const data = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, syntax, texts: [],
+    clauses: [clause('44007018a', 1, 9, { verbRange: 'n44007018001-n44007018005' })] });
+  const chips = data.clauses[0].chips;
+  assert.deepEqual(chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`), ['v:1,2,3,4,5,6,7,8,9']);
+  // 块太宽要折行时，最强的断点只有 καί 之前一处：ἦν τε ὑποστρέφων ｜ καὶ καθήμενος ἐπὶ τοῦ ἅρματος αὐτοῦ（后置的 τε 前不断）
+  const pauses = chips[0].pauses!;
+  const strongest = Math.max(...pauses.slice(0, -1));
+  assert.deepEqual(pauses.slice(0, -1).flatMap((pause, i) => (pause === strongest ? [surfaces[i + 1][0]] : [])), ['καὶ']);
+  assert.ok(pauses.every((pause) => pause < PAUSE_FORCED));
+  // καθήμενος 与它的介词短语之间、冠词之后都不是断点
+  assert.ok(pauses[4] < pauses[2] && pauses[6] === PAUSE_JOINED);
+});

@@ -51,10 +51,11 @@ export function isPeriphrasticPart(clause: GroupNode): boolean {
     if (attr(current, 'rule') === 'BeVerb') {
       return true;
     }
-    if (isClauseGroup(current)) {
+    // 不用 isClauseGroup：它是类型守卫，否定分支会把 current 收窄成 never
+    const className = attr(current, 'class')?.toLowerCase() ?? '';
+    if (className === 'cl') {
       return isPeriphrasticPart(current);
     }
-    const className = attr(current, 'class')?.toLowerCase() ?? '';
     if (attr(current, 'role') || (className !== '' && className !== 'vp')) {
       return false;
     }

@@ -5,7 +5,8 @@
   "private": true,
   "main": "./dist/cli.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/macula/*.test.js"
   },
   "dependencies": {
     "@bs/core": "workspace:*"

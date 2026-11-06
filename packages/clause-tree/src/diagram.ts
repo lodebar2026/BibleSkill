@@ -1185,10 +1185,12 @@ ${D.narrative ? `
       group.forEach((wire, d) => commit(wire, wire.candidates[bestPick[d]]));
     }
 
-    // ---- 论元子句的连线上标「宾语」「引语」等：放在最长的一段上，靠近箭头那头；与已放的标签重叠就沿线挪开 ----
+    // ---- 论元子句的连线上标「宾语」「引语」等：压在最长的一段上，标签两头各留出至少 14px 的线；
+    // 没有这么长的段（如两框之间只隔一小段竖线，徒 8:30b）就放在线旁，不遮线。与已放的标签重叠就沿线挪开 ----
     const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
     const overlapsLabel = (x: number, y: number, w: number, h: number) => placed.some((other) => Math.abs(other.x - x) < (other.w + w) / 2
       && Math.abs(other.y - y) < (other.h + h) / 2);
+    const MARGIN = 14;
     for (const { text, line } of argumentLines) {
       const label = document.createElement('div');
       label.className = 'll al';
@@ -1196,19 +1198,36 @@ ${D.narrative ? `
       canvas.append(label);
       const width = label.offsetWidth + 6;
       const height = label.offsetHeight + 4;
-      const segments = line.slice(1).map((point, i) => [line[i], point] as const)
-        .map(([a, b], i) => ({ a, b, i, size: Math.abs(b[0] - a[0]) + Math.abs(b[1] - a[1]) }));
-      // 段长够放下标签的里取最长的（同长取靠箭头的）；都不够就取最长的一段
-      const fits = segments.filter(({ a, b, size }) => size >= (a[1] === b[1] ? width : height) + 8);
-      const pool = fits.length > 0 ? fits : segments;
-      const seg = pool.reduce((best, item) => (item.size > best.size || (item.size === best.size && item.i > best.i) ? item : best));
-      // 从段的中点往两头试，避开已放好的标签
-      let spot: [number, number] = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
-      const horizontal = seg.a[1] === seg.b[1];
-      for (let k = 0; k < 20 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
-        const step = (k % 2 === 0 ? 1 : -1) * Math.ceil((k + 1) / 2) * (horizontal ? width / 2 : height / 2);
+      const segments = line.slice(1).map((point, i) => ({ a: line[i], b: point, i }))
+        .map((seg) => ({ ...seg, horizontal: seg.a[1] === seg.b[1], size: Math.abs(seg.b[0] - seg.a[0]) + Math.abs(seg.b[1] - seg.a[1]) }));
+      const longest = (list: typeof segments) => list.reduce((best, item) => (item.size > best.size || (item.size === best.size && item.i > best.i) ? item : best));
+      const fits = segments.filter((seg) => seg.size >= (seg.horizontal ? width : height) + 2 * MARGIN);
+      let spot: [number, number];
+      let along: [number, number];
+      if (fits.length > 0) {
+        const seg = longest(fits);
+        spot = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
+        along = seg.horizontal ? [width / 2, 0] : [0, height / 2];
+        // 沿线挪动不超出留白
+        const room = (seg.size - (seg.horizontal ? width : height)) / 2 - MARGIN;
+        const [mx, my] = spot;
+        for (let k = 1; k <= 20 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
+          const n = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2);
+          const shift = n * (seg.horizontal ? along[0] : along[1]);
+          if (Math.abs(shift) > room) {
+            continue;
+          }
+          spot = seg.horizontal ? [mx + shift, my] : [mx, my + shift];
+        }
+      } else {
+        // 放在线旁：竖段放在尾侧，横段放在上方
+        const upright = segments.filter((seg) => !seg.horizontal);
+        const seg = longest(upright.length > 0 ? upright : segments);
         const [mx, my] = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
-        spot = horizontal ? [mx + step, my] : [mx, my + step];
+        spot = seg.horizontal ? [mx, my - height / 2 - 2] : [mx + (rtl ? -1 : 1) * (width / 2 + 4), my];
+        for (let k = 1; k <= 6 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
+          spot = seg.horizontal ? [spot[0], spot[1] - height] : [mx + (rtl ? -1 : 1) * (width / 2 + 4 + k * width / 2), my];
+        }
       }
       placed.push({ x: spot[0], y: spot[1], w: width, h: height });
       label.style.left = `${spot[0]}px`;

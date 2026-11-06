@@ -278,11 +278,8 @@ function variantOf(token: Token, isOT: boolean): string | null {
 }
 
 /** Macula 的成分角色；希伯来文的介词短语角色 pp 按状语显示。 */
-/** 充当母句论元的子句：标签与连线说明（新约，按 Macula 的 role）。 */
-const ARGUMENT_LABELS = {
-  o: { label: '宾语从句', role: '宾语' }, o2: { label: '宾语从句', role: '宾语' },
-  s: { label: '主语从句', role: '主语' }, p: { label: '表语从句', role: '表语' },
-} as const;
+/** 充当母句论元的子句：连线上的标签与说明行（新约，按 Macula 的 role）。 */
+const ARGUMENT_LABELS = { o: { role: '宾语' }, o2: { role: '宾语' }, s: { role: '主语' }, p: { role: '表语' } } as const;
 
 const MACULA_ROLES: Record<string, ChipRole> = { s: 's', v: 'v', vc: 'v', o: 'o', o2: 'o2', io: 'io', adv: 'adv', pp: 'adv', p: 'p' };
 
@@ -688,8 +685,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return {
       id: clause.id,
       parentId,
-      label: clause.parentId === null ? '主句' : quote ? '引语' : argument ? ARGUMENT_LABELS[argument].label
-        : target && isNominal(target, isOT) ? '定语从句' : '从句',
+      // 论元子句（宾语、引语等）标在连线上，框头不再重复
+      label: clause.parentId === null ? '主句' : !quote && !argument && target && isNominal(target, isOT) ? '定语从句' : '从句',
       argument: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : null,
       link: !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,

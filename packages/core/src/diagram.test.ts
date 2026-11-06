@@ -317,7 +317,7 @@ test('徒 8:28a 迂说结构：ἦν τε ὑποστρέφων καὶ καθή
   assert.ok(pauses[4] < pauses[2] && pauses[6] === PAUSE_JOINED);
 });
 
-test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … 是 30a ἤκουσεν 的宾语，标「宾语从句」；以上点引出的直接引语标「引语」', () => {
+test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … 是 30a ἤκουσεν 的宾语，连线上标「宾语」；以上点引出的直接引语标「引语」；框头仍是「从句」', () => {
   // 徒 8:30 προσδραμὼν δὲ ὁ Φίλιππος ἤκουσεν αὐτοῦ ἀναγινώσκοντος Ἠσαΐαν … καὶ εἶπεν· ἆρά γε γινώσκεις…（短语树照抄 Macula，略去无关成分）
   const surfaces: Array<[string, string]> = [
     ['ἤκουσεν', 'V-AAI-3S'], ['αὐτοῦ', 'P-GSM'], ['ἀναγινώσκοντος', 'V-PAP-GSM'], ['καὶ', 'CONJ'], ['εἶπεν·', 'V-2AAI-3S'], ['γινώσκεις', 'V-PAI-2S'],
@@ -338,7 +338,7 @@ test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … �
   ] });
   // 框头标签|说明行|连线上的标签
   const show = (id: string) => { const c = data.clauses.find((item) => item.id === id)!; return `${c.label}|${c.link}|${c.argument}`; };
-  assert.equal(show('44007018b'), '宾语从句|作“听见”的宾语|宾语');
-  assert.equal(show('44007018d'), '引语|“说”的内容|引语');
+  assert.equal(show('44007018b'), '从句|作“听见”的宾语|宾语');
+  assert.equal(show('44007018d'), '从句|“说”的内容|引语');
   assert.equal(data.clauses.find((item) => item.id === '44007018a')!.argument, null);
 });

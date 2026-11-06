@@ -393,6 +393,25 @@ test('同位语：徒 8:38c 主语是 ἀμφότεροι，Macula 另标作主�
     clauses: [clause('44007018a', 1, 11, { verbRange: 'n44007018001', subjectRange })] }).clauses[0].chips
     .map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`);
   assert.deepEqual(run('n44007018002'), ['v:1', 's:2', 'adv:3,4,5', 'appos:6,7,8,9,10,11']);
+  // 同位语配给主语块（结构图用双线连起来）
+  const chips = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, syntax, texts: [],
+    clauses: [clause('44007018a', 1, 11, { verbRange: 'n44007018001', subjectRange: 'n44007018002' })] }).clauses[0].chips;
+  assert.equal(chips[3].apposOf, 1);
   // 主语只标了 Φίλιππος 这类与 Macula 主语同一成分的情形：其余词不当同位语
   assert.ok(!run('n44007018008').some((chip) => chip.startsWith('appos')));
+});
+
+test('同位语：一个成分整个是 Macula 的同位结构（Np-Appos）时拆开成对，徒 8:28 宾语 τὸν προφήτην ＝ Ἠσαΐαν；带冠词分词这类定语部分不拆', () => {
+  const surfaces: Array<[string, string]> = [['ἀνεγίνωσκεν', 'V-IAI-3S'], ['τὸν', 'T-ASM'], ['προφήτην', 'N-ASM'], ['Ἠσαΐαν', 'N-ASM-P']];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const c = node(1, 'cl', null, 'V-O');
+  const appos = node(2, 'np', 'o', 'Np-Appos');
+  const prophet = node(3, 'np', null, 'DetNP');
+  const run = (second: SyntaxNode) => buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, texts: [],
+    syntax: syntaxOf([[1, 'v', [c]], [2, null, [c, appos, prophet]], [3, null, [c, appos, prophet]], [4, null, [c, appos, second]]]),
+    clauses: [clause('44007018a', 1, 4, { verbRange: 'n44007018001' })] }).clauses[0].chips;
+  const chips = run(node(4, 'np', null, 'NP'));
+  assert.deepEqual(chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`), ['v:1', 'o:2,3', 'appos:4']);
+  assert.equal(chips[2].apposOf, 1);
+  assert.deepEqual(run(node(4, 'np', null, 'DetCL')).map((chip) => chip.role), ['v', 'o']);
 });

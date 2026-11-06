@@ -141,8 +141,11 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .chip > .ws { display: flex; flex-wrap: wrap; }
 .chip > .ws > .lb { flex-basis: 100%; height: 4px; }
 .chip.r-v { --c: var(--r-v); } .chip.r-s { --c: var(--r-s); }
-/* 同位语：主语色、虚线框，看得出是补说主语的 */
+/* 同位语：留在原位，虚线框、用所配成分的颜色，双线连到所配的成分（画在 #tips 层）；框底多留出画双线的地方 */
 .chip.r-appos { --c: var(--r-s); border-style: dashed; border-top-style: solid; }
+.box.has-appos { padding-bottom: 20px; }
+#tips path.appos { fill: none; stroke: var(--wire); stroke-width: 5; stroke-linejoin: round; }
+#tips path.appos-in { fill: none; stroke: var(--panel); stroke-width: 1.6; stroke-linejoin: round; }
 .chip.r-o, .chip.r-o2, .chip.r-io, .chip.r-adv, .chip.r-p { --c: var(--muted); }
 .chip > .ws > .w.ind { margin-inline-start: calc(var(--ind) * 28px); }
 .canvas:not(.hide-case) .w[data-case="nom"] .g { font-weight: 700; }
@@ -221,6 +224,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
   .forest { gap: 12px; }
   .box { margin-inline-start: calc(var(--depth, 0) * 14px); max-width: calc(100% - var(--depth, 0) * 14px); }
   #wires, #tips, #hits, #bfold, .ll { display: none; }
+  .box.has-appos { padding-bottom: 10px; }
   .forest > .box.wl { margin-top: 0; }
   .forest > .box.wl.vstart { margin-top: 14px; }
   .box > .up { display: block; }
@@ -297,7 +301,7 @@ function diagramClient(D: DiagramData, subtitle: string): void {
       </div>
     </div>
     <div class="legend">
-      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-s)">同位语（虚线框）</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
+      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-s)">同位语（虚线框，双线连到所配的成分）</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
       <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
     </div>${D.isOT ? `
     <div class="forms-legend">
@@ -438,14 +442,27 @@ ${D.narrative ? `
     box.innerHTML = `<div class="bh">${kids.has(clause.id) ? '<button type="button" class="fold" title="收起/展开这一句下面的所有分支">收起分支</button>' : ''}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button><span class="gist">${zh(clause.gist)}</span></div>`;
     const chips = document.createElement('div');
     chips.className = 'chips';
-    for (const chip of clause.chips) {
+    if (clause.chips.some((chip) => chip.role === 'appos')) {
+      box.classList.add('has-appos');
+    }
+    for (const [chipIndex, chip] of clause.chips.entries()) {
       const el = document.createElement('div');
       el.className = `chip${chip.role ? ` r-${chip.role}` : ''}${chip.fronted ? ' front' : ''}`;
+      el.dataset.ci = String(chipIndex);
+      if (chip.apposOf !== undefined) {
+        el.dataset.appos = String(chip.apposOf);
+      }
+      // 同位语用所配成分的颜色（虚线框）
+      const pair = chip.role === 'appos' && chip.apposOf !== undefined ? clause.chips[chip.apposOf]?.role : null;
+      if (pair && pair !== 's') {
+        el.style.setProperty('--c', pair === 'v' ? 'var(--r-v)' : 'var(--muted)');
+      }
       const frontLabel = chip.fronted ? `<span class="fr">${chip.role ? ' · ' : ''}前置</span>` : '';
       // 词干标签与成分名同一行，不另占行
       const stems = [...new Map(chip.wordIds.map((id) => words[id].stem).filter((stem) => stem !== null).map((stem) => [stem.name, stem])).values()];
       const stemTags = stems.map((stem) => `<span class="sb${stem.passive ? ' pass' : ''}" data-stem="${stem.family}" title="${esc(stem.name)}">${esc(STEM_TAG[stem.name] ?? stem.name.slice(0, 3))}</span>`).join('');
-      el.innerHTML = `<span class="rl"><span class="rn">${chip.role ? ROLE_ZH[chip.role] : ''}${frontLabel}</span>${stemTags}</span><span class="ws"></span>`;
+      const roleName = chip.role ? ROLE_ZH[chip.role] : '';
+      el.innerHTML = `<span class="rl"><span class="rn">${roleName}${frontLabel}</span>${stemTags}</span><span class="ws"></span>`;
       const ws = $('.ws', el);
       for (const [index, id] of chip.wordIds.entries()) {
         const word = words[id];
@@ -1256,6 +1273,37 @@ ${D.narrative ? `
       placed.push({ x: spot[0], y: spot[1], w: width, h: height });
       label.style.left = `${spot[0]}px`;
       label.style.top = `${spot[1]}px`;
+    }
+
+    // ---- 同位语：双线连到所配的成分。同一行时从两块底边往下、在块下方横过去（括号形）；
+    // 不在同一行时从上面那块的底边折到下面那块的顶边 ----
+    for (const el of $$<HTMLElement>('.chip[data-appos]', canvas)) {
+      const box = el.closest<HTMLElement>('.box');
+      const head = box?.querySelector<HTMLElement>(`.chip[data-ci="${el.dataset.appos}"]`);
+      if (!box || box.hidden || !head) {
+        continue;
+      }
+      const [a, h] = [head.getBoundingClientRect(), el.getBoundingClientRect()];
+      let points: Array<[number, number]>;
+      // 同一行：两端放在两块相对的内侧边附近（离边 12px），不压在块中间常有箭头进来的地方（27b ἀνήρ）
+      const sameRow = Math.abs(a.top - h.top) < 4;
+      const inner = (rect: DOMRect, toward: DOMRect) => Math.round((toward.left > rect.left ? rect.right - Math.min(12, rect.width / 3) : rect.left + Math.min(12, rect.width / 3)) - base.left);
+      const x1 = sameRow ? inner(a, h) : Math.round(a.left + a.width / 2 - base.left);
+      const x2 = sameRow ? inner(h, a) : Math.round(h.left + h.width / 2 - base.left);
+      if (sameRow) {
+        const y = Math.round(Math.max(a.bottom, h.bottom) - base.top + 9);
+        points = [[x1, a.bottom - base.top], [x1, y], [x2, y], [x2, h.bottom - base.top]];
+      } else {
+        const [upper, lower, xu, xl] = a.top < h.top ? [a, h, x1, x2] : [h, a, x2, x1];
+        const mid = Math.round((upper.bottom + lower.top) / 2 - base.top);
+        points = [[xu, upper.bottom - base.top], [xu, mid], [xl, mid], [xl, lower.top - base.top]];
+      }
+      for (const cls of ['appos', 'appos-in']) {
+        const path = document.createElementNS(SVG, 'path');
+        path.setAttribute('class', cls);
+        path.setAttribute('d', points.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${Math.round(y)}`).join(' '));
+        tips.append(path);
+      }
     }
 
     // ---- 叙事主线：主线上的顶层句用短横线接到最外侧的脊线（不画圆点，前置看框头标签）；离线句不接，脊线只连主线句 ----

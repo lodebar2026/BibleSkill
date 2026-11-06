@@ -93,7 +93,8 @@ export function greekMorph(morph: string): { gcase: GreekCase | null; tense: Gre
 export type ChipRole = 's' | 'v' | 'o' | 'o2' | 'io' | 'adv' | 'p' | 'conj' | 'appos';
 export type DiagramSlot = { id: string; at: number; clauseIds: string[]; pause?: number };
 /** fronted：旧约里排在谓语之前的实词成分（宾语、状语、主语前置），多为焦点、对比或话题。 */
-export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[]; slots?: DiagramSlot[]; fronted?: true };
+/** apposOf：同位语块所配对的成分块（同一子句 chips 里的下标）。 */
+export type DiagramChip = { role: ChipRole | null; wordIds: string[]; pauses?: number[]; indents?: number[]; slots?: DiagramSlot[]; fronted?: true; apposOf?: number };
 
 /** 词后不能断（词缀、maqqef 相连）。 */
 export const PAUSE_JOINED = -1;
@@ -408,6 +409,64 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
   return { pauses, indents };
 }
 
+/**
+ * 同位语成对标出（结构图留在原位，用双线连到所配的成分）：
+ * - 一个成分块整个是 Macula 的同位结构（Np-Appos）时，按它的直属部分拆开：第一部分保留原成分，其后的是它的同位语
+ *   （徒 8:28 宾语 Ἠσαΐαν ｜ 同位语 τὸν προφήτην）。带冠词的分词、关系从句这类部分是定语，不拆。
+ * - 与所配成分隔开的同位语（8:38c 主语 ἀμφότεροι … 同位语 ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος）配给主语块。
+ */
+function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, TokenSyntax>): T[] {
+  const out: T[] = [];
+  const headOf = new Map<T, T>();
+  for (const chip of chips) {
+    // 不在树上的词（NA28 有、SBL 没有，如 7:43 的 [ὑμῶν]）随前一个词
+    const paths = chip.wordIds.map((id) => syntax.get(id)?.path);
+    paths.forEach((path, i) => {
+      paths[i] = path ?? paths[i - 1] ?? paths.slice(i).find(Boolean);
+    });
+    const node = !['v', 'conj', 'appos'].includes(chip.role ?? '') && chip.wordIds.length > 1 && paths.every(Boolean)
+      ? paths[0]!.find((item) => item.rule === 'Np-Appos' && paths.every((path) => path!.some((other) => other.id === item.id)))
+      : undefined;
+    const parts: Array<{ key: string; ids: string[]; attributive: boolean }> = [];
+    if (node) {
+      chip.wordIds.forEach((id, i) => {
+        const path = paths[i]!;
+        const child = path[path.findIndex((item) => item.id === node.id) + 1];
+        const key = child ? `n${child.id}` : 'w';
+        const last = parts.at(-1);
+        if (last && last.key === key) {
+          last.ids.push(id);
+        } else {
+          parts.push({ key, ids: [id], attributive: !!child && (child.cls === 'cl' || child.rule === 'DetCL') });
+        }
+      });
+    }
+    const usable = parts.length > 1 && new Set(parts.map((part) => part.key)).size === parts.length && !parts.some((part) => part.attributive);
+    if (!usable) {
+      out.push(chip);
+      continue;
+    }
+    const head = { ...chip, wordIds: parts[0].ids };
+    out.push(head);
+    for (const part of parts.slice(1)) {
+      const appos = { ...chip, role: 'appos' as const, wordIds: part.ids, fronted: undefined };
+      delete appos.fronted;
+      out.push(appos);
+      headOf.set(appos, head);
+    }
+  }
+  const subjectChip = out.find((chip) => chip.role === 's');
+  out.forEach((chip) => {
+    if (chip.role === 'appos') {
+      const head = headOf.get(chip) ?? subjectChip;
+      if (head) {
+        chip.apposOf = out.indexOf(head);
+      }
+    }
+  });
+  return out;
+}
+
 function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: Map<string, TokenSyntax>, covered?: Map<number, Set<string>>): DiagramChip[] {
   const subject = idsInRange(clause.subjectRange, words);
   const verb = idsInRange(clause.verbRange, words);
@@ -451,6 +510,9 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
       chips.push({ role, wordIds: [word.id], key });
     }
   });
+  if (syntax && !isOT) {
+    chips.splice(0, chips.length, ...pairAppositives(chips, syntax));
+  }
   const manual = new Set((clause.br ?? '').split(',').map((id) => id.trim()).filter(Boolean));
   const byId = new Map(words.map((word) => [word.id, word]));
   for (const chip of chips) {
@@ -517,6 +579,8 @@ function markFronted(clause: ClauseEntity, chips: DiagramChip[], byId: Map<strin
 function placeSlots(chips: DiagramChip[], own: Token[], slots: Array<{ at: number; clauseIds: string[] }>, containerId: string,
   modifiesOf: (clauseId: string) => string | null): DiagramChip[] {
   const result = [...chips];
+  // 插入占位块会挪动下标：同位语配对的成分块按对象记下，最后重算
+  const heads = new Map(chips.flatMap((chip) => (chip.apposOf !== undefined ? [[chip, chips[chip.apposOf]] as const] : [])));
   for (const { at, clauseIds } of slots) {
     const [before, after] = [own[at - 1]?.id, own[at]?.id];
     const prev = result.findIndex((chip) => before !== undefined && chip.wordIds.includes(before));
@@ -542,6 +606,9 @@ function placeSlots(chips: DiagramChip[], own: Token[], slots: Array<{ at: numbe
       chip.pauses[slot.at - 1] = PAUSE_JOINED;
     }
     chip.slots = [...chip.slots ?? [], slot];
+  }
+  for (const [chip, head] of heads) {
+    chip.apposOf = result.indexOf(head);
   }
   return result;
 }

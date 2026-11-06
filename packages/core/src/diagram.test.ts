@@ -56,7 +56,7 @@ test('成分块：主语、谓语取自分析，句首“介词 + 关系代名�
   assert.deepEqual(show(relative.chips), ['s:8', '-:9', 'v:10', '-:11,12']);
 });
 
-test('挂接：连线从首词指到母句里被修饰的词；默认标签按被修饰词的词类，大意取译文（补词带标记与说明）', () => {
+test('挂接：连线从首词指到母句里被修饰的词；修饰名词的连线上标「定语」，大意取译文（补词带标记与说明）', () => {
   const data = build();
   const [main, relative] = data.clauses;
   assert.equal(main.parentId, null);
@@ -65,7 +65,9 @@ test('挂接：连线从首词指到母句里被修饰的词；默认标签按�
   assert.deepEqual(relative.gist, [{ text: '他', added: true, note: '补出主语' }, { text: '不认识约瑟。' }]);
   assert.equal(relative.parentId, '44007018a');
   assert.equal(relative.targetWordId, 'n44007018004');
-  assert.equal(relative.label, '定语从句');
+  assert.equal(relative.label, '从句');
+  assert.equal(relative.wireLabel, '定语');
+  assert.equal(main.wireLabel, null);
   assert.equal(relative.link, '修饰“王”');
   assert.deepEqual(relative.records.map((record) => record.tag), ['另一种分析', '其他译法·词义']);
   assert.equal(data.literalness, '第 3 档「平衡」');
@@ -337,8 +339,40 @@ test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … �
     clause('44007018d', 6, 6, { parentId: '44007018c', modifies: 'n44007018005', verbRange: 'n44007018006' }),
   ] });
   // 框头标签|说明行|连线上的标签
-  const show = (id: string) => { const c = data.clauses.find((item) => item.id === id)!; return `${c.label}|${c.link}|${c.argument}`; };
+  const show = (id: string) => { const c = data.clauses.find((item) => item.id === id)!; return `${c.label}|${c.link}|${c.wireLabel}`; };
   assert.equal(show('44007018b'), '从句|作“听见”的宾语|宾语');
   assert.equal(show('44007018d'), '从句|“说”的内容|引语');
-  assert.equal(data.clauses.find((item) => item.id === '44007018a')!.argument, null);
+  assert.equal(data.clauses.find((item) => item.id === '44007018a')!.wireLabel, null);
+});
+
+test('定语：徒 8:32b ἣν ἀνεγίνωσκεν 在名词短语里，连线上标「定语」；8:32c ὡς πρόβατον … ἤχθη 指向代词 αὕτη、与 32a 并列，不标；冠词开头而谓词不是分词的（33b τὴν γενεὰν … διηγήσεται）也不标', () => {
+  // 徒 8:32 ἡ δὲ περιοχὴ τῆς γραφῆς ἣν ἀνεγίνωσκεν ἦν αὕτη· ὡς πρόβατον … ἤχθη …；33b τὴν γενεὰν αὐτοῦ τίς διηγήσεται（短语树照抄 Macula，略去无关成分）
+  const surfaces: Array<[string, string]> = [
+    ['περιοχὴ', 'N-NSF'], ['γραφῆς', 'N-GSF'], ['ἣν', 'R-ASF'], ['ἀνεγίνωσκεν', 'V-IAI-3S'], ['ἦν', 'V-IAI-3S'], ['αὕτη·', 'D-NSF'],
+    ['ὡς', 'ADV'], ['ἤχθη', 'V-API-3S'], ['τὴν', 'T-ASF'], ['γενεὰν', 'N-ASF'], ['διηγήσεται', 'V-FDI-3S'],
+  ];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const top = node(1, 'cl', null, 'ClCl');
+  const main = node(2, 'cl', 'adv', 'S-VC-P');
+  const subject = node(3, 'np', 's', 'DetNP');
+  const npCl = node(4, 'np', null, 'NP-CL');
+  const relative = node(5, 'cl', null, 'O-V');
+  const sheep = node(6, 'cl', null, 'sub-CL');
+  const generation = node(7, 'cl', null, 'O-S-V');
+  const syntax = syntaxOf([
+    [1, null, [top, main, subject]], [2, null, [top, main, subject, npCl]], [3, 'o', [top, main, subject, npCl, relative]], [4, 'v', [top, main, subject, npCl, relative]],
+    [5, 'vc', [top, main]], [6, 'p', [top, main]], [7, null, [top, sheep]], [8, 'v', [top, sheep]],
+    [9, null, [generation]], [10, null, [generation]], [11, 'v', [generation]],
+  ]);
+  const data = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, syntax, texts: [], clauses: [
+    clause('44007018a', 1, 6, { verbRange: 'n44007018005' }),
+    clause('44007018b', 3, 4, { parentId: '44007018a', modifies: 'n44007018002', verbRange: 'n44007018004' }),
+    clause('44007018c', 7, 8, { parentId: '44007018a', modifies: 'n44007018006', verbRange: 'n44007018008' }),
+    clause('44007018d', 9, 11, { parentId: '44007018a', modifies: 'n44007018006', verbRange: 'n44007018011' }),
+  ] });
+  const wire = (id: string) => data.clauses.find((item) => item.id === id)!.wireLabel;
+  assert.equal(wire('44007018b'), '定语');
+  assert.equal(wire('44007018c'), null);
+  assert.equal(wire('44007018d'), null);
+  assert.ok(data.clauses.every((item) => item.label === '主句' || item.label === '从句'));
 });

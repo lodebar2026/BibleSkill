@@ -83,6 +83,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .forest .box.vstart:first-child { margin-top: 0; }
 .forest .row.vstart { margin-top: 14px; }
 .forest .row.vstart:first-child { margin-top: 0; }
+/* 连线上要标「宾语」「定语」等的从句框：上方多留空隙，紧挨母句时那段竖线也够长，标签两头还露得出线 */
+.forest > .box.wl { margin-top: 20px; }
 .box { position: relative; z-index: 2; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
 /* 方框宽度由原文成分与框头标签决定（标签不折行）；大意、说明、展开内容不参与宽度计算，在框内换行 */
 .box > .up, .box > .more, .bh .gist { contain: inline-size; }
@@ -210,13 +212,15 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 #tips path.logic-tip { fill: var(--logic); stroke: none; }
 .ll { position: absolute; z-index: 4; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--logic); background: var(--panel); border: 1.5px dashed var(--logic); border-radius: 999px; padding: 0 7px; white-space: nowrap; pointer-events: none; direction: ltr; }
 .hide-logic .ll:not(.al) { display: none; }
-/* 论元子句（宾语、主语、表语、引语）：标签画在句法连线上 */
+/* 从句在母句里的作用（宾语、主语、表语、引语、定语）：标签画在句法连线上 */
 .ll.al { color: var(--wire); border: 1.5px solid var(--wire); font-weight: 500; z-index: 4; }
 .up .lg { color: var(--logic); }
 @media (max-width: 760px) {
   .forest { gap: 12px; }
   .box { margin-inline-start: calc(var(--depth, 0) * 14px); max-width: calc(100% - var(--depth, 0) * 14px); }
   #wires, #tips, #hits, #bfold, .ll { display: none; }
+  .forest > .box.wl { margin-top: 0; }
+  .forest > .box.wl.vstart { margin-top: 14px; }
   .box > .up { display: block; }
   .more .up { display: none; }
 }
@@ -411,7 +415,7 @@ ${D.narrative ? `
   function renderBox(clause: (typeof D.clauses)[number], forest: HTMLElement, verseStart: boolean): HTMLElement {
     const depth = depthOf(clause);
     const box = document.createElement('div');
-    box.className = `box${depth === 0 ? ' root' : ''}${clause.status === 'ambiguous' ? ' ambiguous' : ''}${verseStart ? ' vstart' : ''}`;
+    box.className = `box${depth === 0 ? ' root' : ''}${clause.status === 'ambiguous' ? ' ambiguous' : ''}${verseStart ? ' vstart' : ''}${clause.wireLabel ? ' wl' : ''}`;
     box.dataset.box = clause.id;
     box.style.setProperty('--depth', String(depth));
     const form = formOf(clause);
@@ -877,6 +881,7 @@ ${D.narrative ? `
     const showLogic = !canvas.classList.contains('hide-logic');
     const wires: Wire[] = [];
     const argumentLines: Array<{ text: string; line: Array<[number, number]> }> = [];
+    const labelled = new Set<string>();
     // 画逻辑虚线的方框（起点与关联的子句）
     const logicBoxes = new Set(D.clauses.flatMap((clause) => (clause.logic && clause.logic.targetIds.length > 0 ? [clause.id, clause.logic.targetIds[0]] : [])));
     const visible = allBoxes.filter((box) => !box.hidden).map((box) => {
@@ -1128,9 +1133,12 @@ ${D.narrative ? `
         verticals.push({ x: seg.x1, top: Math.min(seg.y1, seg.y2), bottom: Math.max(seg.y1, seg.y2) });
       }
       hitArea(best, wire.clause);
-      const argument = byId.get(wire.clause)?.argument;
-      if (argument) {
-        argumentLines.push({ text: argument, line: wire.into === null ? best : [...best, [best.at(-1)![0], wire.into]] });
+      const wireLabel = byId.get(wire.clause)?.wireLabel;
+      // 几条线指向同一个词（汇成一条主干）、标签又相同时只标一次
+      const labelKey = `${wire.group}|${wireLabel}`;
+      if (wireLabel && !labelled.has(labelKey)) {
+        labelled.add(labelKey);
+        argumentLines.push({ text: wireLabel, line: wire.into === null ? best : [...best, [best.at(-1)![0], wire.into]] });
       }
       if (wire.into === null) {
         arrow(svg, best, '', hops);
@@ -1185,12 +1193,12 @@ ${D.narrative ? `
       group.forEach((wire, d) => commit(wire, wire.candidates[bestPick[d]]));
     }
 
-    // ---- 论元子句的连线上标「宾语」「引语」等：压在最长的一段上，标签两头各留出至少 14px 的线；
-    // 没有这么长的段（如两框之间只隔一小段竖线，徒 8:30b）就放在线旁，不遮线。与已放的标签重叠就沿线挪开 ----
+    // ---- 从句的连线上标「宾语」「引语」「定语」等：标签骑在线上，放在最长的一段，两头尽量各露出 10px 的线
+    // （带标签的从句框上方多留了空隙，紧挨母句的短竖线也放得下）；与已放的标签重叠就沿线挪开 ----
     const placed: Array<{ x: number; y: number; w: number; h: number }> = [];
     const overlapsLabel = (x: number, y: number, w: number, h: number) => placed.some((other) => Math.abs(other.x - x) < (other.w + w) / 2
       && Math.abs(other.y - y) < (other.h + h) / 2);
-    const MARGIN = 14;
+    const MARGIN = 10;
     for (const { text, line } of argumentLines) {
       const label = document.createElement('div');
       label.className = 'll al';
@@ -1200,33 +1208,17 @@ ${D.narrative ? `
       const height = label.offsetHeight + 4;
       const segments = line.slice(1).map((point, i) => ({ a: line[i], b: point, i }))
         .map((seg) => ({ ...seg, horizontal: seg.a[1] === seg.b[1], size: Math.abs(seg.b[0] - seg.a[0]) + Math.abs(seg.b[1] - seg.a[1]) }));
+      const extent = (seg: (typeof segments)[number]) => (seg.horizontal ? width : height);
       const longest = (list: typeof segments) => list.reduce((best, item) => (item.size > best.size || (item.size === best.size && item.i > best.i) ? item : best));
-      const fits = segments.filter((seg) => seg.size >= (seg.horizontal ? width : height) + 2 * MARGIN);
-      let spot: [number, number];
-      let along: [number, number];
-      if (fits.length > 0) {
-        const seg = longest(fits);
-        spot = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
-        along = seg.horizontal ? [width / 2, 0] : [0, height / 2];
-        // 沿线挪动不超出留白
-        const room = (seg.size - (seg.horizontal ? width : height)) / 2 - MARGIN;
-        const [mx, my] = spot;
-        for (let k = 1; k <= 20 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
-          const n = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2);
-          const shift = n * (seg.horizontal ? along[0] : along[1]);
-          if (Math.abs(shift) > room) {
-            continue;
-          }
+      const fits = segments.filter((seg) => seg.size >= extent(seg) + 2 * MARGIN);
+      const seg = longest(fits.length > 0 ? fits : segments);
+      const [mx, my] = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
+      const room = Math.max(0, (seg.size - extent(seg)) / 2 - MARGIN);
+      let spot: [number, number] = [mx, my];
+      for (let k = 1; k <= 20 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
+        const shift = (k % 2 === 1 ? 1 : -1) * Math.ceil(k / 2) * extent(seg) / 2;
+        if (Math.abs(shift) <= room) {
           spot = seg.horizontal ? [mx + shift, my] : [mx, my + shift];
-        }
-      } else {
-        // 放在线旁：竖段放在尾侧，横段放在上方
-        const upright = segments.filter((seg) => !seg.horizontal);
-        const seg = longest(upright.length > 0 ? upright : segments);
-        const [mx, my] = [(seg.a[0] + seg.b[0]) / 2, (seg.a[1] + seg.b[1]) / 2];
-        spot = seg.horizontal ? [mx, my - height / 2 - 2] : [mx + (rtl ? -1 : 1) * (width / 2 + 4), my];
-        for (let k = 1; k <= 6 && overlapsLabel(spot[0], spot[1], width, height); k += 1) {
-          spot = seg.horizontal ? [spot[0], spot[1] - height] : [mx + (rtl ? -1 : 1) * (width / 2 + 4 + k * width / 2), my];
         }
       }
       placed.push({ x: spot[0], y: spot[1], w: width, h: height });

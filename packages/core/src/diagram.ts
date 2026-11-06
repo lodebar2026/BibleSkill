@@ -175,8 +175,8 @@ export type DiagramClause = {
   /** 嵌在母句中间时，连线指向母句里的占位符（DiagramSlot.id）。 */
   targetSlot: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
-  /** 充当母句的什么（宾语、主语、表语、引语）：结构图标在连线上；修饰性的从句为 null。 */
-  argument: string | null;
+  /** 在母句里充当什么（宾语、主语、表语、引语、定语）：结构图标在连线上；状语等其余从句为 null。 */
+  wireLabel: string | null;
   logic: { relation: string; label: string; targetIds: string[]; targetText: string; note: string | null } | null;
   /** 叙事主线的人工判断（覆盖按动词形式的默认）；没有判断时为 null。 */
   mainline: boolean | null;
@@ -625,6 +625,31 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return governed && role && role in ARGUMENT_LABELS ? role as keyof typeof ARGUMENT_LABELS : null;
   };
 
+  // 定语：短语树上从本句的子句结点往上到母句的子句结点，中间经过名词短语（徒 8:32b ἣν ἀνεγίνωσκεν 在 περιοχὴ τῆς γραφῆς 之内；
+  // 8:26e τὴν καταβαίνουσαν 在 ὁδόν 的名词短语里，外面还套着不带谓词的 DetCL）。与母句只是并列、指向代词的（8:32c–e 是 αὕτη
+  // 所指的经文）不算。树上找不到母句时，冠词开头、谓词是分词（名词化分词）的算
+  const attributive = (clause: ClauseEntity, parent: ClauseEntity, target: Token | undefined): boolean => {
+    if (!target || !isNominal(target, isOT)) {
+      return false;
+    }
+    // 关系代词开头的（含跨节的 7:45a ἣν、8:10a ᾧ）都是定语
+    const lead = (wordsOf.get(clause.id) ?? []).find((word) => !isConjunction(word, isOT));
+    if (lead && (isOT ? /^[HA]Tr/.test(lead.morph) : /^R-/.test(lead.morph))) {
+      return true;
+    }
+    const pathOf = (item: ClauseEntity) => input.syntax?.get([...idsInRange(item.verbRange, wordsOf.get(item.id) ?? [])][0] ?? item.firstWordId)?.path;
+    const path = pathOf(clause);
+    const parentPath = pathOf(parent);
+    const parentNode = parentPath?.[parentPath.map((node) => node.cls).lastIndexOf('cl')];
+    const at = path ? path.map((node) => node.cls).lastIndexOf('cl') : -1;
+    const from = parentNode && path ? path.findIndex((node) => node.id === parentNode.id) : -1;
+    if (path && at > from && from >= 0) {
+      return path.slice(from + 1, at).some((node) => node.cls === 'np' || node.cls === 'adjp');
+    }
+    const verb = tokenById.get([...idsInRange(clause.verbRange, wordsOf.get(clause.id) ?? [])][0] ?? '');
+    return lead !== undefined && !isOT && lead.morph.startsWith('T-') && verb !== undefined && /^V-\w+P-/.test(verb.morph);
+  };
+
   const clauses = input.clauses.map((clause): DiagramClause => {
     const own = wordsOf.get(clause.id) ?? [];
     const parentId = clause.parentId && clauseIds.has(clause.parentId) ? clause.parentId : null;
@@ -685,9 +710,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return {
       id: clause.id,
       parentId,
-      // 论元子句（宾语、引语等）标在连线上，框头不再重复
-      label: clause.parentId === null ? '主句' : !quote && !argument && target && isNominal(target, isOT) ? '定语从句' : '从句',
-      argument: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : null,
+      // 子句在母句里的作用（宾语、引语、定语等）标在连线上，框头不再重复
+      label: clause.parentId === null ? '主句' : '从句',
+      wireLabel: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : parent && attributive(clause, parent, target) ? '定语' : null,
       link: !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,
       status: clause.status,

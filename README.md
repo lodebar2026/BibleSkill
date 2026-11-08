@@ -274,7 +274,9 @@ terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh,
 
 skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>` 安装（不传时自动读取 `~/.config/bibleskill/ext.json`），格式同 `.mcp.json`。每个扩展分到隔离目录 `<workdir>/.ext/<名字>/`，配置里的 `${EXT_DIR}` 会替换成这个目录：如果扩展自带写工作文件的工具，就让它写到这里。
 
-新约断句以 NA28/UBS 为准。ext.json 里可以用顶层字段 `"criticalText": {"server", "tool", "args"}` 声明哪个扩展工具能取 NA28 原文。声明后，新约 briefing 会点名让模型调用这个工具，按 NA28 断句；开启争议时还把校勘符号（`⸀ ⸂⸃ ⸋⸌ ˸` 等）当作争议线索。没有扩展的用户不受影响：模型按自己对 NA28/UBS 断句的了解判断。扩展里用不到的工具（写入、校验、扩展自己的工作流）可以列在 `"hideTools": {"<服务器>": [工具名…]}` 里，不放进模型上下文，省 token：agy 写成 `disabledTools`，Gemini 写成 `excludeTools`，`pnpm passage` 调 Claude Code 时转成 `--disallowedTools`。`--no-ext` 可以跳过自动读取扩展配置。如果环境里有其他 MCP 工具提供学术词典、注释书、交叉引用、引语层级、语法书检索等能力，skill 会用它们辅助判断，并在 `sources` 中记为 `ext:<能力>`。工作文件里只写结论，不写入受版权保护的原文。
+新约断句以 NA28/UBS 为准。ext.json 里可以用顶层字段 `"criticalText": {"server", "tool", "args"}` 声明哪个扩展工具能取 NA28 原文。声明后，新约 briefing 会点名让模型调用这个工具，按 NA28 断句；开启争议时还把校勘符号（`⸀ ⸂⸃ ⸋⸌ ˸` 等）当作争议线索。没有扩展的用户不受影响：模型按自己对 NA28/UBS 断句的了解判断。
+
+声明了 `criticalText` 时，数据库的新约正文也可以按 NA28 挑词。TAGNT 版本列里的“NA28”并不总是 NA28：马可福音、使徒行传等卷跟的是 ECM（徒 9:8 οὐδένα、可 1:2 ἐγώ），NA28 单括号里的词也常不算（徒 9:12 [ἐν ὁράματι]）。先用 `node scripts/fetch-critical-text.mjs` 逐章取 NA28 原文，存到 `data/critical-text.json`（受版权保护，已在 .gitignore 里，只留在本机），再在 `pnpm data:build` 后面加 `--critical-text data/critical-text.json`。构建时逐节拿 NA28 对 TAGNT 的词行（本行读法或异文列里的读法），改挑对得上的行进主干；NA28 原文本身不写进数据库。本节有词对不上，或者 NA28 把八个版本都有的词算在邻节（分节不同）时，这一节照 TAGNT。改了哪些节记在 `build_report`（`nt-critical-text`、`nt-critical-unmatched`）。扩展里用不到的工具（写入、校验、扩展自己的工作流）可以列在 `"hideTools": {"<服务器>": [工具名…]}` 里，不放进模型上下文，省 token：agy 写成 `disabledTools`，Gemini 写成 `excludeTools`，`pnpm passage` 调 Claude Code 时转成 `--disallowedTools`。`--no-ext` 可以跳过自动读取扩展配置。如果环境里有其他 MCP 工具提供学术词典、注释书、交叉引用、引语层级、语法书检索等能力，skill 会用它们辅助判断，并在 `sources` 中记为 `ext:<能力>`。工作文件里只写结论，不写入受版权保护的原文。
 
 ## 常见问题
 

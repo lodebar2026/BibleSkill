@@ -3,9 +3,11 @@
  * 从本地开放数据构建 data/bible.sqlite。
  *
  *   pnpm data:build --step <STEPBible-Data> --macula-hebrew <macula-hebrew> \
- *     --macula-greek <macula-greek> --ubs <ubs-open-license> [--out data/bible.sqlite]
+ *     --macula-greek <macula-greek> --ubs <ubs-open-license> [--out data/bible.sqlite] [--critical-text <na28.json>]
  *
  * 四个数据目录都必须显式给出；构建产物不进仓库、不分发。
+ * --critical-text：NA28 原文（scripts/fetch-critical-text.mjs 用扩展工具取来），新约主干按它挑 TAGNT 的词行（见 critical-text.ts）；
+ * 不给时照 TAGNT 版本列。
  */
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
@@ -14,6 +16,7 @@ import { parseArgs } from 'node:util';
 import { SCHEMA_SQL, SCHEMA_VERSION } from '@bs/core';
 import { readMorphCodes, readStepLexicon, readUbsLexicon } from './lexicon.js';
 import { processMacula } from './macula.js';
+import { loadCriticalText } from './critical-text.js';
 import { fillMissingLemmas, parseTagnt, parseTahot, type Report, type TokenRow, type VariantRow } from './stepbible.js';
 
 const { values } = parseArgs({
@@ -23,6 +26,7 @@ const { values } = parseArgs({
     'macula-greek': { type: 'string' },
     ubs: { type: 'string' },
     out: { type: 'string', default: 'data/bible.sqlite' },
+    'critical-text': { type: 'string' },
   },
 });
 
@@ -39,6 +43,11 @@ const maculaHebrewDir = requireDir('macula-hebrew');
 const maculaGreekDir = requireDir('macula-greek');
 const ubsDir = requireDir('ubs');
 const outPath = path.resolve(values.out ?? 'data/bible.sqlite');
+const criticalTextPath = values['critical-text'] ? path.resolve(values['critical-text']) : undefined;
+if (criticalTextPath && !existsSync(criticalTextPath)) {
+  throw new Error(`找不到 --critical-text 文件: ${criticalTextPath}`);
+}
+const criticalText = criticalTextPath ? loadCriticalText(criticalTextPath) : undefined;
 
 const reportRows: Array<[string, string, string]> = [];
 const report: Report = (kind, ref, detail) => {
@@ -69,7 +78,7 @@ for (const file of amalgamatedFiles('TAHOT')) {
 }
 for (const file of amalgamatedFiles('TAGNT')) {
   log(`读取 ${path.basename(file)}`);
-  parseTagnt(file, report, (row) => ntTokens.push(row), (row) => variants.push(row));
+  parseTagnt(file, report, (row) => ntTokens.push(row), (row) => variants.push(row), criticalText);
 }
 fillMissingLemmas(ntTokens, report);
 
@@ -106,7 +115,7 @@ db.exec('begin');
 const insertMeta = db.prepare('insert into meta (key, value) values (?, ?)');
 insertMeta.run('schema_version', String(SCHEMA_VERSION));
 insertMeta.run('built_at', new Date().toISOString());
-insertMeta.run('sources', JSON.stringify({ stepDir, maculaHebrewDir, maculaGreekDir, ubsDir }));
+insertMeta.run('sources', JSON.stringify({ stepDir, maculaHebrewDir, maculaGreekDir, ubsDir, criticalText: criticalTextPath ?? null }));
 
 const insertToken = db.prepare(`insert into token
   (id, ref, bcv, ord, surface, after, translit, lemma, strong, morph, gloss_en, gloss_zh, sense, editions, text_type, variant_note, significant, na_bracket)

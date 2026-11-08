@@ -7,6 +7,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { bookByStepCode, editionNames, ntTokenId, otTokenId, toBcv } from '@bs/core';
+import { type RowChoice, selectRows } from './critical-text.js';
 
 export type Report = (kind: string, ref: string, detail: string) => void;
 
@@ -284,7 +285,8 @@ export function parseTahot(filePath: string, report: Report, onToken: (row: Toke
 
 // ---------------------------------------------------------------- 新约
 
-const GREEK_TRAILING_PUNCT_RE = /([,.;·:;᾽’]+)$/u;
+// 上点有两种写法：U+00B7（中点）与 U+0387（希腊文上点，THGNT 用这个）
+const GREEK_TRAILING_PUNCT_RE = /([,.;··:;᾽’]+)$/u;
 
 /** `Βίβλος (Biblos)` → 词形 + 音译；词尾标点拆进 after。 */
 function splitGreekCell(cell: string): { surface: string; after: string; translit: string; opens: boolean; closes: boolean } {
@@ -354,49 +356,89 @@ export function fillMissingLemmas(rows: TokenRow[], report: Report): void {
   }
 }
 
-export function parseTagnt(filePath: string, report: Report, onToken: (row: TokenRow) => void, onVariant: (row: VariantRow) => void): void {
-  let currentBcv = 0;
+type TagntRow = {
+  ref: ParsedRef;
+  bcv: number;
+  english: string;
+  strong: string;
+  morph: string;
+  lemma: string;
+  editions: string;
+  meaningVar: string | undefined;
+  spellingVar: string | undefined;
+  inNa28: boolean;
+  alternative: ReturnType<typeof na28Alternative>;
+} & ReturnType<typeof splitGreekCell>;
+
+const ALL_EDITIONS = ['NA28', 'NA27', 'Tyn', 'SBL', 'WH', 'Treg', 'TR', 'Byz'];
+
+/**
+ * 一节里各行进不进主干、用哪个读法：默认按 TAGNT 版本列（本行属 NA28 用本行读法，否则用异文列里的 NA28 读法，都没有就记为异文）；
+ * 给了 NA28 原文（criticalText）时按它改挑，见 critical-text.ts。
+ */
+function chooseVerse(rows: TagntRow[], text: string | undefined, report: Report): RowChoice[] {
+  const fallback = rows.map((row): RowChoice => (row.inNa28 ? 'own' : row.alternative ? 'alt' : null));
+  if (text === undefined || rows.length === 0) {
+    return fallback;
+  }
+  const where = rows[0].ref.raw.replace(/#.*/, '');
+  const selection = selectRows(rows.map((row, i) => ({
+    own: row.surface,
+    alt: row.alternative?.reading.surface ?? null,
+    fallback: fallback[i],
+    universal: ALL_EDITIONS.every((edition) => editionNames(row.editions).includes(edition)),
+  })), text);
+  if (selection.kind === 'unmatched') {
+    report('nt-critical-unmatched', where, `NA28 有 ${selection.missing} 个词在 TAGNT 的词行里对不上（拼写、词序或分节不同），本节照 TAGNT`);
+  } else if (selection.kind === 'renumbered') {
+    report('nt-critical-unmatched', where, `NA28 本节没有八个版本都有的 ${selection.words.join(' ')}（分节不同），本节照 TAGNT`);
+  } else if (selection.kind === 'changed') {
+    const reading = (row: TagntRow, choice: RowChoice) => (choice === 'alt' ? row.alternative!.reading.surface : row.surface);
+    const changed = rows.map((row, i) => ({ row, from: fallback[i], to: selection.choices[i] })).filter(({ from, to }) => from !== to);
+    const added = changed.filter(({ to }) => to !== null).map(({ row, to }) => reading(row, to));
+    const removed = changed.filter(({ from }) => from !== null).map(({ row, from }) => reading(row, from));
+    report('nt-critical-text', where, `按 NA28 改挑：进 ${added.join(' ') || '—'}；出 ${removed.join(' ') || '—'}`);
+    return selection.choices;
+  }
+  return fallback;
+}
+
+/** criticalText：NA28 原文（bcv → 一节经文），有就按它挑主干的词行。 */
+export function parseTagnt(filePath: string, report: Report, onToken: (row: TokenRow) => void, onVariant: (row: VariantRow) => void,
+  criticalText?: Map<number, string>): void {
   let ord = 0;
   let lastWord = 0;
   const numbering = new VerseWordNumbering(report);
   // NA28 双括号区段；源数据里马可福音长结尾没有收尾的 ]]（它在书末结束），所以换书卷时强制关闭
   let inBracket = false;
   let bracketBook = 0;
-  for (const { ref, cols } of dataLines(filePath, report)) {
-    const bcv = toBcv(ref.book, ref.chapter, ref.verse);
-    const [, greek = '', english = '', strongGrammar = '', lemmaGloss = '', editions = '', meaningVar, spellingVar] = cols;
-    const [strong = '', morph = ''] = strongGrammar.split('=');
-    const [lemma = ''] = lemmaGloss.split('=');
-    const { surface, after, translit, opens, closes } = splitGreekCell(greek);
-    const bookKey = ref.book;
-    if (inBracket && bookKey !== bracketBook) {
+  const emit = (row: TagntRow, choice: RowChoice) => {
+    const { ref, bcv, english, strong, morph, lemma, editions, meaningVar, spellingVar, surface, after, translit, opens, closes } = row;
+    if (inBracket && ref.book !== bracketBook) {
       report('na-bracket', ref.raw, '双括号区段到书末未见 ]]，按书末收尾');
       inBracket = false;
     }
-    const inNa28 = editionNames(editions).includes('NA28');
-    const alternative = inNa28 ? null : na28Alternative(meaningVar, `${surface} (${translit}) ${english.trim()} - ${strong.trim()}=${morph.trim()} in: ${editions}`);
-    if (opens && (inNa28 || alternative)) {
+    if (opens && choice !== null) {
       inBracket = true;
-      bracketBook = bookKey;
+      bracketBook = ref.book;
       report('na-bracket', ref.raw, 'NA28 双括号区段开始');
     }
     const naBracket = inBracket;
     if (closes) {
       inBracket = false;
     }
-    if (bcv !== currentBcv) {
-      currentBcv = bcv;
-      ord = 0;
-      lastWord = 0;
-    }
-    if (!inNa28) {
+    // 本行读法不进主干的记为异文（用异文列里 NA28 读法顶替的，本行读法也记）
+    if (choice !== 'own') {
       onVariant({
         ref: ref.raw, bcv, wordNo: ref.word, posId: ntTokenId(ref.book, ref.chapter, ref.verse, anchorWord(ref.word)),
         significant: significantVariantWord(ref.type), surface, strong, morph, glossEn: english, editions, textType: ref.type,
       });
-      if (!alternative) {
-        continue;
-      }
+    }
+    if (choice === null) {
+      return;
+    }
+    const alternative = choice === 'alt' ? row.alternative! : null;
+    if (alternative) {
       report('nt-na28-alternative', ref.raw, `NA28 读法 ${alternative.reading.surface} 只在异文列，顶替 ${surface} 进主干`);
     }
     const wordNo = numbering.wordNo(bcv, ref);
@@ -414,9 +456,9 @@ export function parseTagnt(filePath: string, report: Report, onToken: (row: Toke
       surface: reading?.surface ?? surface,
       after,
       translit: reading?.translit ?? translit,
-      lemma: reading && reading.strong !== strong.trim() ? '' : lemma.trim(),
-      strong: reading?.strong ?? strong.trim(),
-      morph: reading?.morph ?? morph.trim(),
+      lemma: reading && reading.strong !== strong ? '' : lemma,
+      strong: reading?.strong ?? strong,
+      morph: reading?.morph ?? morph,
       glossEn: reading?.gloss ?? english.trim(),
       glossZh: null,
       sense: null,
@@ -428,5 +470,28 @@ export function parseTagnt(filePath: string, report: Report, onToken: (row: Toke
       naBracket,
       maculaBcv,
     });
+  };
+  let verse: TagntRow[] = [];
+  const flush = () => {
+    const choices = chooseVerse(verse, criticalText?.get(verse[0]?.bcv ?? 0), report);
+    ord = 0;
+    lastWord = 0;
+    verse.forEach((row, i) => emit(row, choices[i]));
+    verse = [];
+  };
+  for (const { ref, cols } of dataLines(filePath, report)) {
+    const bcv = toBcv(ref.book, ref.chapter, ref.verse);
+    if (verse.length > 0 && bcv !== verse[0].bcv) {
+      flush();
+    }
+    const [, greek = '', english = '', strongGrammar = '', lemmaGloss = '', editions = '', meaningVar, spellingVar] = cols;
+    const [strong = '', morph = ''] = strongGrammar.split('=');
+    const [lemma = ''] = lemmaGloss.split('=');
+    const cell = splitGreekCell(greek);
+    const inNa28 = editionNames(editions).includes('NA28');
+    const alternative = inNa28 ? null
+      : na28Alternative(meaningVar, `${cell.surface} (${cell.translit}) ${english.trim()} - ${strong.trim()}=${morph.trim()} in: ${editions}`);
+    verse.push({ ref, bcv, english, strong: strong.trim(), morph: morph.trim(), lemma: lemma.trim(), editions, meaningVar, spellingVar, inNa28, alternative, ...cell });
   }
+  flush();
 }

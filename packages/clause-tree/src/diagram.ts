@@ -1038,6 +1038,11 @@ ${D.narrative ? `
           gutter = rtl ? Math.max(gutter, (rtl ? item.right : item.left) + 10) : Math.min(gutter, item.left - 10);
         }
       }
+      // 目标词落在沟槽与子句起始边之间、或离沟槽不到 16px 时，竖道再往外挪到目标词外侧 16px：
+      // 否则分支只有贴着框的一小段横线（徒 9:5d→ὁ），或在横道上折出一个小台阶
+      if (rtl ? xT < gutter + 16 && xT >= start(c) : xT > gutter - 16 && xT <= start(c)) {
+        gutter = rtl ? xT + 16 : xT - 16;
+      }
       for (let k = 0; k < 6; k += 1) {
         const g = gutter + (rtl ? 1 : -1) * k * 6;
         startSide.add(candidates.length);

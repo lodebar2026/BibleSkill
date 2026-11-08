@@ -49,7 +49,7 @@ function build() {
   return buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: CLAUSES, texts: TEXTS, tokens: TOKENS, variants: [], morphExpansion: () => null });
 }
 
-test('成分块：主语、谓语取自分析，句首“介词 + 关系代名词”算连接词，其余相邻的词合成一块', () => {
+test('成分块：主语、谓语取自分析，句首“介词 + 关系代名词”算连词，其余相邻的词合成一块', () => {
   const [main, relative] = build().clauses;
   const show = (chips: typeof main.chips) => chips.map((chip) => `${chip.role ?? '-'}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`);
   assert.deepEqual(show(main.chips), ['conj:1,2', 'v:3', 's:4,5', '-:6,7']);
@@ -252,7 +252,7 @@ test('旧约词干：qal 主动不标，其余按词干类归并，被动另记'
   assert.equal(hebrewStem('V-AAI-3S'), null);
 });
 
-test('旧约前置：限定动词句里谓语前含名词性词的成分块标出；连接词、否定词、疑问代词、分词句不算；新约不标', () => {
+test('旧约前置：限定动词句里谓语前含名词性词的成分块标出；连词、否定词、疑问代词、分词句不算；新约不标', () => {
   const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
     ...token(word, surface, morph), id: `o01001001${String(word).padStart(3, '0')}1`, bcv: 1001001, after,
   });

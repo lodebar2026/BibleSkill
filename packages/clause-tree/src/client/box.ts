@@ -25,7 +25,7 @@ function header(clause: Clause, form: string | null): string {
 function wordEl(clause: Clause, chip: Clause['chips'][number], id: string, index: number): HTMLElement {
   const word = words[id];
   const w = document.createElement('span');
-  // 与下一个语素相连（同一词、maqqef）且下一个在同一块里时才去掉间距；跨块的（וַ 是连接词、动词在下一块）照常留边
+  // 与下一个语素相连（同一词、maqqef）且下一个在同一块里时才去掉间距；跨块的（וַ 是连词、动词在下一块）照常留边
   const joined = (word.after === '' || word.after === '־') && index < chip.wordIds.length - 1;
   w.className = `w${targets.has(id) ? ' target' : ''}${joined ? ' join' : ''}${clause.cognate.includes(id) ? ' cog' : ''}`;
   w.dataset.id = id;

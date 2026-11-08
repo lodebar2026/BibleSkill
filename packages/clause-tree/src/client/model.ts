@@ -30,7 +30,7 @@ export function initModel(data: DiagramData): void {
   multiChapter = new Set(D.clauses.map((clause) => chapterOf(clause.id))).size > 1;
 }
 
-export const ROLE_ZH: Record<string, string> = { s: '主语', v: '谓语', o: '宾语', o2: '宾补', io: '间接宾语', adv: '状语', p: '表语', conj: '连接词', appos: '同位语' };
+export const ROLE_ZH: Record<string, string> = { s: '主语', v: '谓语', o: '宾语', o2: '宾补', io: '间接宾语', adv: '状语', p: '表语', conj: '连词', appos: '同位语' };
 export const TENSE_ZH: Record<string, string> = { pres: '现在', impf: '未完成', fut: '将来', aor: '不定过去', perf: '完成', plpf: '过去完成' };
 export const MOOD_ZH: Record<string, string> = { ind: '直说', subj: '虚拟', opt: '祈愿', impv: '祈使', inf: '不定式', ptcp: '分词' };
 export const FORM_ZH: Record<string, string> = { wayyiqtol: 'wayyiqtol', qatal: 'qatal', weqatal: 'weqatal', yiqtol: 'yiqtol', participle: '分词', infinitive: '不定式', imperative: '祈使', nominal: '名词句' };

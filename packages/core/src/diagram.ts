@@ -83,7 +83,7 @@ export function greekMorph(morph: string): { gcase: GreekCase | null; tense: Gre
 }
 
 /**
- * 成分块：主语、谓语取自分析；句首连接词按词法认出。其余的词按 Macula 短语树分成宾语、间接宾语、状语、表语等，
+ * 成分块：主语、谓语取自分析；句首连词按词法认出。其余的词按 Macula 短语树分成宾语、间接宾语、状语、表语等，
  * 每个成分一块；谓语不在短语树上时，相邻的词合成一块，不标角色。
  * pauses：每个词之后能否换行、停顿多强（页面按实际排版宽度在停顿最强处切行）。
  * indents：某词起头的一行缩进几级（嵌入的分词短语、关系从句缩进一级），没有缩进时省略。
@@ -233,7 +233,7 @@ const KIND_ZH: Record<string, string> = { textual: '异文', punctuation: '断�
 /** 新约主干是 NA28 的词；这些版本没有这个词时提示（多为异文替换或省略）。 */
 const NT_EDITIONS = ['NA27', 'SBL', 'WH', 'Treg', 'TR', 'Byz'];
 
-/** 句首连接词：连词（希伯来含连续式的 וְ）、条件词、希伯来关系词；介词 + 关系代名词（ἄχρι οὗ、ἐν ᾧ）也算。 */
+/** 句首连词：连词本身（希伯来含连续式的 וְ），以及条件词、希伯来关系词；介词 + 关系代名词（ἄχρι οὗ、ἐν ᾧ）也算。 */
 function isConnector(token: Token, next: Token | undefined, isOT: boolean): boolean {
   if (isOT) {
     return /^[HA](C|c|Tr|Tc)$/.test(token.morph);
@@ -553,7 +553,7 @@ const FINITE_OT = /^(XQtl|QtlX|Qtl0|XYqt|YqtX|Yqt0|Impv|qatal|yiqtol|imperative)
 
 /**
  * 旧约限定动词句：谓语块之前、含名词性词（名词、形容词、代词、介词后缀）的成分块记为前置。
- * 疑问代词（מָה、מִי）本就居首，挂在否定词、小品词上的后缀（אֵינֶנּוּ）也不算；连接词不含名词性词，自然不算。新约暂不标。
+ * 疑问代词（מָה、מִי）本就居首，挂在否定词、小品词上的后缀（אֵינֶנּוּ）也不算；连词不含名词性词，自然不算。新约暂不标。
  */
 function markFronted(clause: ClauseEntity, chips: DiagramChip[], byId: Map<string, Token>, isOT: boolean): void {
   const verbAt = chips.findIndex((chip) => chip.role === 'v');

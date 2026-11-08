@@ -377,6 +377,24 @@ test('定语与引文：徒 8:32b ἣν ἀνεγίνωσκεν 在名词短语�
   assert.ok(data.clauses.every((item) => item.label === '主句' || item.label === '从句'));
 });
 
+test('引语：徒 9:5c ὁ δέ 省去说话动词换人说话，指向 ὁ 的 5d ἐγώ εἰμι Ἰησοῦς 与后续的 6a ἀλλὰ ἀνάστηθι 都标「引语」，没有上点也算；5e ὃν σὺ διώκεις 仍是定语', () => {
+  const surfaces: Array<[string, string]> = [
+    ['ὁ', 'T-NSM'], ['δέ', 'CONJ'], ['ἐγώ', 'P-1NS'], ['εἰμι', 'V-PAI-1S'], ['Ἰησοῦς', 'N-NSM-P'], ['ὃν', 'R-ASM'], ['σὺ', 'P-2NS'], ['διώκεις·', 'V-PAI-2S'],
+    ['ἀλλὰ', 'CONJ'], ['ἀνάστηθι', 'V-2AAM-2S'],
+  ];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const data = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, texts: [], clauses: [
+    clause('44007018a', 1, 2, { subjectRange: 'n44007018001' }),
+    clause('44007018b', 3, 5, { parentId: '44007018a', modifies: 'n44007018001', verbRange: 'n44007018004' }),
+    clause('44007018c', 6, 8, { parentId: '44007018b', modifies: 'n44007018005', verbRange: 'n44007018008' }),
+    clause('44007018d', 9, 10, { parentId: '44007018a', modifies: 'n44007018001', verbRange: 'n44007018010' }),
+  ] });
+  const wire = (id: string) => data.clauses.find((item) => item.id === id)!.wireLabel;
+  assert.equal(wire('44007018b'), '引语');
+  assert.equal(wire('44007018c'), '定语');
+  assert.equal(wire('44007018d'), '引语');
+});
+
 test('同位语：徒 8:38c 主语是 ἀμφότεροι，Macula 另标作主语的 ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος 显示为同位语；与主语同一成分里没标进主语的词不算', () => {
   // κατέβησαν ἀμφότεροι εἰς τὸ ὕδωρ, ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος（短语树照抄 Macula：ἀμφότεροι 是 adv，句末一串是 s）
   const surfaces: Array<[string, string]> = [

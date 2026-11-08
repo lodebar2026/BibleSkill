@@ -784,9 +784,12 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     // 上点引出、指向上点前那个词的（8:32c αὕτη· 后面引的经文）也是引语
     // 以关系代词开头的是定语从句（7:46a ὃς εὗρεν χάριν 指 Δαυίδ），前一个词带上点也不算
     const lead = own.find((word) => !isConjunction(word, isOT));
-    const quote = before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after)
-      && !(lead && /^R-/.test(lead.morph))
-      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id));
+    // \u7701\u53bb\u8bf4\u8bdd\u52a8\u8bcd\u3001\u53ea\u7528\u51a0\u8bcd\u52a0 \u03b4\u03ad \u6362\u4eba\u8bf4\u8bdd\u7684\uff089:5c \u1f41 \u03b4\u03ad\u00b7 \u1f10\u03b3\u03ce \u03b5\u1f30\u03bc\u03b9\u2026\uff09\uff1a\u6bcd\u53e5\u53ea\u6709\u51a0\u8bcd\u548c\u8fde\u8bcd\uff0c\u6307\u5411\u90a3\u4e2a\u51a0\u8bcd\u7684\u5c31\u662f\u5b83\u8bf4\u7684\u8bdd\u3002
+    // \u6807\u70b9\u6765\u81ea THGNT\uff0c\u8fd9\u91cc\u5e38\u6ca1\u6709\u4e0a\u70b9\uff0c\u4e0d\u80fd\u53ea\u770b\u6807\u70b9
+    const speakerOnly = !isOT && target !== undefined && target.morph.startsWith('T-')
+      && parentWords.every((word) => word.morph.startsWith('T-') || isConjunction(word, isOT));
+    const quote = !(lead && /^R-/.test(lead.morph)) && (speakerOnly || before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after)
+      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id)));
     return {
       id: clause.id,
       parentId,

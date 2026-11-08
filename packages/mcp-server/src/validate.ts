@@ -18,6 +18,7 @@ import {
   markupToSegments,
   parseClauseId,
   parseTokenRange,
+  containsRendering,
   resolveAlignment,
   DEFAULT_LITERALNESS,
   DISPUTE_KINDS,
@@ -63,7 +64,7 @@ const FORMAT_HINTS: Record<string, string> = {
   span: 'span 是整数，不是原文：不合并为 1；合并 N 个连续子句时首句写 N，其后各句写 0、text 为 ""',
   merge: 'merge 是合并理由（只写在 span>1 的首句上）：reorder（中文调换了语序）、constituent（断开会切在一个成分中间，note 写明切在哪两个成分之间）；第 4、5 档另可用 meaning（按意思合并）',
   tokens: 'tokens 是一个字符串：单个词 id（如 o010010010012、n40001001001）或连续范围「首id-末id」；不连续的几个词分成几条 rendering，不要用逗号或数组',
-  zh: 'zh 是这个（些）词在本行译文里的中文，必须原样出现在去掉 [ ] 的 text 中',
+  zh: 'zh 是这个（些）词在本行译文里的中文，必须原样出现在去掉 [ ] 的 text 中；被别的词隔开时用「…」连接各段（παθεῖν 在「受多少苦」里写「受…苦」）',
   kind: `kind 只能是 ${DISPUTE_KINDS.join('、')}`,
   firstWordId: 'firstWordId / lastWordId 是 briefing 里的词 id 字符串，如 o010010010011',
   lastWordId: 'firstWordId / lastWordId 是 briefing 里的词 id 字符串，如 o010010010011',
@@ -726,7 +727,7 @@ export function checkTranslations(
           if (!rendering.note && !isMeaningBased(level)) {
             fail(bcv, clause.id, `rendering ${rendering.tokens} 标为不译（∅）时必须写 note`);
           }
-        } else if (!plain.includes(rendering.zh)) {
+        } else if (!containsRendering(plain, rendering.zh)) {
           fail(bcv, clause.id, `rendering「${rendering.zh}」没有出现在译文里`);
         }
         hit.forEach((token) => renderedIds.add(token.id));

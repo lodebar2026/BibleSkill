@@ -6,6 +6,7 @@
  * 纯函数 buildDiagram 便于测试；loadDiagram 负责读库与工作文件。
  */
 import { HEBREW_STEMS } from './clause-type.js';
+import { renderingKey } from './align.js';
 import { clauseOfWord, clauseWords, containerOf, embedSlots } from './clause-words.js';
 import { editionNames, type BibleDb, type SyntaxNode, type Token, type TokenSyntax, type VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
@@ -648,7 +649,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       const [first, last] = parseTokenRange(rendering.tokens);
       for (const token of tokens) {
         if (token.id >= first && token.id <= last) {
-          renderings.set(token.id, renderings.has(token.id) ? `${renderings.get(token.id)}；${rendering.zh}` : rendering.zh);
+          renderings.set(token.id, renderings.has(token.id) ? `${renderings.get(token.id)}；${renderingKey(rendering.zh)}` : renderingKey(rendering.zh));
         }
       }
     }

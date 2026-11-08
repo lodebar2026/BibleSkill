@@ -14,6 +14,7 @@ import {
   segmentsText,
   formattedMarkup,
   strongMatches,
+  renderingKey,
   type BibleDb,
   type ClauseText,
   type HistoryEntry,
@@ -165,7 +166,7 @@ function renderingMap(text: ClauseText, tokens: Token[]): Map<string, { token: T
   for (const rendering of text.renderings) {
     const token = singleContentToken(rendering, tokens);
     if (token) {
-      map.set(token.id, { token, zh: rendering.zh });
+      map.set(token.id, { token, zh: renderingKey(rendering.zh) });
     }
   }
   return map;
@@ -291,7 +292,7 @@ function matchesTarget(token: Token, target: ReplaceTarget): boolean {
 export function replaceInClause(text: ClauseText, tokens: Token[], target: ReplaceTarget): { next: ClauseText; skipped?: string } | null {
   const hits = text.renderings
     .map((rendering, index) => ({ rendering, index, token: singleContentToken(rendering, tokens) }))
-    .filter(({ rendering, token }) => token && rendering.zh === target.from && matchesTarget(token, target));
+    .filter(({ rendering, token }) => token && renderingKey(rendering.zh) === target.from && matchesTarget(token, target));
   if (hits.length === 0) {
     return null;
   }

@@ -12,6 +12,7 @@ import {
   listBooks,
   parseTokenRange,
   senseKey,
+  renderingKey,
   type BibleDb,
   type ClauseText,
   type GlossaryEntry,
@@ -110,7 +111,7 @@ export class RenderingMemoryIndex {
       for (const rendering of text.renderings) {
         const token = singleContentToken(rendering, ordered);
         if (token) {
-          uses.push({ token, use: { zh: rendering.zh, clauseKey: `${text.bcv}${text.sub}`, note: rendering.note } });
+          uses.push({ token, use: { zh: renderingKey(rendering.zh), clauseKey: `${text.bcv}${text.sub}`, note: rendering.note } });
         }
       }
     }
@@ -186,21 +187,23 @@ export function checkRenderings(
       continue;
     }
     const key = tokenSenseKey(token);
-    const base = { tokenId: token.id, surface: token.surface, senseKey: key, zh: rendering.zh };
+    // 「受…苦」与「受苦」算同一译法
+    const zh = renderingKey(rendering.zh);
+    const base = { tokenId: token.id, surface: token.surface, senseKey: key, zh: zh };
     const entry = glossaryFor(token, bookName, glossary);
-    if (entry?.level === 'locked' && entry.zh !== rendering.zh) {
+    if (entry?.level === 'locked' && entry.zh !== zh) {
       issues.push({ ...base, severity: 'error', message: `术语表锁定译为「${entry.zh}」` });
       continue;
     }
     if (rendering.note) {
       continue;
     }
-    if (entry?.level === 'preferred' && entry.zh !== rendering.zh) {
+    if (entry?.level === 'preferred' && entry.zh !== zh) {
       issues.push({ ...base, severity: 'warning', message: `术语表默认译为「${entry.zh}」；若此处确需不同，在该 rendering 写 note 说明理由` });
       continue;
     }
     const distribution = renderingDistribution(memory.get(key));
-    if (!entry && distribution.length > 0 && !distribution.some((item) => item.zh === rendering.zh)) {
+    if (!entry && distribution.length > 0 && !distribution.some((item) => item.zh === zh)) {
       const summary = distribution.slice(0, 3).map((item) => `「${item.zh}」×${item.count}（${item.examples.join(',')}）`).join('、');
       issues.push({ ...base, severity: 'warning', message: `同一义项既有译法为 ${summary}；统一用既有译法，或在 note 说明为何不同` });
     }

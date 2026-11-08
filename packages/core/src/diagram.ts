@@ -7,7 +7,7 @@
  */
 import { HEBREW_STEMS } from './clause-type.js';
 import { clauseOfWord, clauseWords, containerOf, embedSlots } from './clause-words.js';
-import type { BibleDb, SyntaxNode, Token, TokenSyntax, VariantToken } from './db.js';
+import { editionNames, type BibleDb, type SyntaxNode, type Token, type TokenSyntax, type VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
 import { LOGIC_LABELS } from './logic.js';
@@ -266,7 +266,7 @@ function variantOf(token: Token, isOT: boolean): string | null {
   if (token.significant && token.variantNote) {
     parts.push(token.variantNote);
   } else if (!isOT) {
-    const editions = token.editions?.split('+') ?? [];
+    const editions = editionNames(token.editions);
     const missing = NT_EDITIONS.filter((edition) => !editions.includes(edition));
     if (missing.length > 0) {
       parts.push(`${missing.join('、')} 此处无此词`);

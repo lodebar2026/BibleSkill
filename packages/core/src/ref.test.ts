@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { bookByStepCode, parseScriptureRange } from './ref.js';
 import { otTokenId, ntTokenId, parseTokenId } from './ids.js';
 import { isContentWord } from './content-word.js';
+import { editionNames } from './db.js';
 import { BASIC_TYPES_OT, basicClauseType, displayClauseType, verbInfoFromMorph } from './clause-type.js';
 
 test('经文范围：中英文书名、整章从第 0 节起', () => {
@@ -52,4 +53,9 @@ test('展示码可反推基础句型', () => {
   assert.equal(basicClauseType('OT', 'wayyiqtol'), 'wayyiqtol');
   assert.equal(basicClauseType('OT', 'Aor0'), null);
   assert.equal(basicClauseType('NT', 'AorX'), '');
+});
+
+test('新约版本名：词序位移标记仍算有这个词', () => {
+  assert.deepEqual(editionNames('NA28»1+NA27«3+Tyn+SBL»1'), ['NA28', 'NA27', 'Tyn', 'SBL']);
+  assert.deepEqual(editionNames(null), []);
 });

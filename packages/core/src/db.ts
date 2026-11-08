@@ -27,6 +27,14 @@ export type Token = {
   naBracket: boolean;
 };
 
+/**
+ * 新约 editions 列里的版本名。词序不同的版本带位移标记（`NA28»1`、`TR«3`），
+ * 仍算有这个词，去掉标记再比较。
+ */
+export function editionNames(editions: string | null | undefined): string[] {
+  return editions ? editions.split('+').map((edition) => edition.replace(/[«»]\d+$/, '')) : [];
+}
+
 export type VariantToken = {
   ref: string;
   bcv: number;

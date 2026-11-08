@@ -6,7 +6,7 @@
  * 主干节号一律取括号外（NRSV/英文）的节号。
  */
 import { readFileSync } from 'node:fs';
-import { bookByStepCode, ntTokenId, otTokenId, toBcv } from '@bs/core';
+import { bookByStepCode, editionNames, ntTokenId, otTokenId, toBcv } from '@bs/core';
 
 export type Report = (kind: string, ref: string, detail: string) => void;
 
@@ -325,7 +325,7 @@ function na28Alternative(meaningVar: string | undefined, main: string): { readin
     return null;
   }
   const readings = parseGreekReadings(meaningVar);
-  const index = readings.findIndex((reading) => typeof reading !== 'string' && reading.editions.split('+').includes('NA28'));
+  const index = readings.findIndex((reading) => typeof reading !== 'string' && editionNames(reading.editions).includes('NA28'));
   if (index < 0) {
     return null;
   }
@@ -373,7 +373,7 @@ export function parseTagnt(filePath: string, report: Report, onToken: (row: Toke
       report('na-bracket', ref.raw, '双括号区段到书末未见 ]]，按书末收尾');
       inBracket = false;
     }
-    const inNa28 = editions.split('+').includes('NA28');
+    const inNa28 = editionNames(editions).includes('NA28');
     const alternative = inNa28 ? null : na28Alternative(meaningVar, `${surface} (${translit}) ${english.trim()} - ${strong.trim()}=${morph.trim()} in: ${editions}`);
     if (opens && (inNa28 || alternative)) {
       inBracket = true;

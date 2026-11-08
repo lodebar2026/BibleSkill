@@ -9,7 +9,7 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { bookByStepCode, toBcv } from '@bs/core';
+import { bookByStepCode, editionNames, toBcv } from '@bs/core';
 import { alignSequences, greekKey, hebrewConsonants, strongNumber } from './align.js';
 import { attr, collectClauseGroups, directPredicateWord, directWords, isClauseGroup } from './macula/clause-groups.js';
 import { collectWords, parseTree, type GroupNode, type Node, type WordNode } from './macula/lowfat-xml.js';
@@ -112,7 +112,7 @@ export function processMacula(
   firstNodeId = 1,
 ): MaculaResult {
   const eligible = testament === 'NT'
-    ? tokens.filter((token) => (token.slotEditions ?? token.editions)?.split('+').includes('SBL'))
+    ? tokens.filter((token) => editionNames(token.slotEditions ?? token.editions).includes('SBL'))
     : tokens;
   const tokensByVerse = new Map<number, TokenRow[]>();
   for (const token of eligible) {

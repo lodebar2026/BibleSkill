@@ -310,7 +310,7 @@ pnpm verify:passage            # 用真实 MCP client 在临时目录走一遍�
 |---|---|
 | `packages/core` | 经文引用、词 id、schema、工作文件存储、数据库读取 |
 | `packages/data-build` | 开放数据 → sqlite |
-| `packages/clause-tree` | 结构图页面（样式、骨架与脚本） |
+| `packages/clause-tree` | 结构图页面：`src/assets/` 样式与页面模板，`src/client/` 页面脚本（构建时用 esbuild 打包成一个 diagram.js） |
 | `packages/mcp-server` | MCP 工具与提交校验 |
 | `packages/viewer` | 命令行：生成结构图（`--diagram`）、导入修改历史、迁移译文分段 |
 | `skills/`、`prompts/` | skill 与规则文档（安装时把 prompts 复制进各 skill 的 `references/`） |

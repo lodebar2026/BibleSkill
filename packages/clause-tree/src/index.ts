@@ -1,1 +1,1 @@
-export * from './diagram.js';
+export * from './page.js';

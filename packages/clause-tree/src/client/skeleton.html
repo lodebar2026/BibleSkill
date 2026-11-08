@@ -1,0 +1,72 @@
+<header>
+  <h1>{{title}} · 原文结构</h1>
+  <div class="sub">{{subtitle}} · 按原文先后自上而下，缩进 = 从属，框头是子句编号 · 点「详情」看词义与分析、翻译记录，点「收起分支」收起下属子句，鼠标移到连线上可只收那一支，鼠标移到词上看词典</div>
+</header>
+<main>
+  <section class="card">
+    <h2>原文与译文 <span class="toolbar"><button id="theme" type="button">切换明暗</button></span></h2>
+    <div id="text" class="text-line o"></div>
+    <div id="trans" class="trans"></div>
+  </section>
+  <section class="card">
+    <h2>结构图
+      <span class="toolbar">
+        <button type="button" id="openAll">展开详情</button>
+        <button type="button" id="closeAll">收起详情</button>
+        <button type="button" id="foldAll" title="把所有分支收到主句，只看主线">只看主句</button>
+        <button type="button" id="unfoldAll">展开分支</button>
+        <button type="button" data-toggle="z" aria-pressed="true">中文</button>
+        <button type="button" data-toggle="m" aria-pressed="false">词法</button>
+        <button type="button" data-toggle="e" aria-pressed="false">英文</button>
+        <button type="button" data-toggle="roles" aria-pressed="true" title="成分块顶上的名称（主语、谓语、宾语……）；关掉后只留顶边色条">成分名</button>
+        <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>
+        <button type="button" data-if="ot" data-toggle="forms" aria-pressed="true">句型与主线</button>
+        <button type="button" data-if="ot" data-toggle="focus" aria-pressed="true" title="非 qal 词干的动词着色、动词前的实词成分（前置）加框">词干与前置</button>
+        <button type="button" data-if="nt" data-toggle="case" aria-pressed="true">格与时态</button>
+        <button type="button" data-if="nt narrative" data-toggle="forms" aria-pressed="true">时态与主线</button>
+        <button type="button" data-if="nt !narrative" data-toggle="forms" aria-pressed="true">时态标签</button>
+      </span>
+    </h2>
+    <div class="scroller">
+      <div id="canvas" class="canvas hide-m hide-e">
+        <div id="forest" class="forest"></div>
+        <svg id="wires"></svg>
+        <svg id="tips"></svg>
+        <svg id="hits"></svg>
+        <button type="button" id="bfold"></button>
+      </div>
+    </div>
+    <div class="legend">
+      <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-s)">同位语（虚线框，双线连到所配的成分）</span><span style="--c: var(--r-conj)">连接词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
+      <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
+    </div>
+    <div class="forms-legend" data-if="ot">
+      <span>边框颜色 = 动词形式：</span>
+      <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
+      <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
+      <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
+      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
+    </div>
+    <div class="forms-legend" data-if="ot">
+      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" data-stem="niphal">Ni</span></span>
+      <span class="o" style="color:var(--st-piel)">piel <span class="sb" data-stem="piel">Pi</span></span>
+      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" data-stem="hiphil">Hi</span></span>
+      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" data-stem="hithpael">Ht</span></span>
+      <span>（qal 不着色；被动如 pual <span class="sb pass" data-stem="piel">Pu</span>、hophal 用空心标签）</span>
+      <span>· <span class="front-key">前置</span> = 动词前的实词成分（X-动词语序），多为焦点、对比或话题；框头「前置」同义</span>
+      <span>· <span class="cog-key">同根强调</span> = 不定式独立形 + 同根动词（מוֹת תָּמוּת），强调动作本身</span>
+    </div>
+    <div class="forms-legend" data-if="nt narrative">
+      <span>框头标签 = 谓语动词的时态与语气 · 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用不定过去式直说语气（背景、历史现在式、评述），不接主线</span>
+    </div>
+    <div class="case-legend" data-if="nt">
+      <span>格：</span><span class="o"><b>主格</b></span><span class="o" style="color:var(--c-acc)">宾格</span><span class="o" style="color:var(--c-gen)">属格</span>
+      <span class="o" style="color:var(--c-dat)">与格</span><span class="o" style="color:var(--c-voc)">呼格</span>
+      <span>· 动词框色 = 时态：</span><span class="vt" style="--t:var(--t-aor)">不定过去</span><span class="vt" style="--t:var(--t-pres)">现在</span>
+      <span class="vt" style="--t:var(--t-impf)">未完成</span><span class="vt" style="--t:var(--t-fut)">将来</span><span class="vt" style="--t:var(--t-perf)">完成</span>
+      <span>· 底色 = 语气：</span><span class="vm" style="--m:var(--m-ind)">直说</span><span class="vm" style="--m:var(--m-impv)">祈使</span>
+      <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span class="vm" style="--m:var(--m-inf)">不定式</span><span>（分词无底色）</span>
+    </div>
+  </section>
+</main>
+<div id="pop"></div>

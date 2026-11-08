@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=Gentium+Book+Plus:wght@400;700&family=Noto+Serif+Hebrew:wght@400;600&display=swap');
+:root {
+  --bg: #f7f5f0; --panel: #ffffff; --ink: #1f1d1a; --muted: #6b665d; --line: #dcd6ca; --soft: #efebe2;
+  --accent: #8a4b16; --wire: #8a4b16; --logic: #0f766e;
+  --r-v: #b42318; --r-s: #1d4ed8; --r-conj: #6b665d; --r-none: #b8b0a2;
+  --hl: #fde68a; --amb: #fff1c7; --rev: #fde2e2;
+  --c-acc: rgb(42, 127, 255); --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: rgb(255, 102, 0);
+  --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #ff0000;
+  --m-ind: #f5f5dc; --m-impv: #ffc0c0; --m-subj: #ffe0ff; --m-opt: #e0ffe0; --m-inf: #e0e0e0;
+  --focus: #d97706; --st-qal: #6b665d; --st-niphal: #0369a1; --st-piel: #c2410c; --st-hiphil: #7e22ce; --st-hithpael: #15803d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171614; --panel: #201e1b; --ink: #ece7dd; --muted: #a39d92; --line: #3a3631; --soft: #2a2724;
+    --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
+    --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
+    --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
+    --c-acc: #6aa8ff; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
+    --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
+    --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
+    --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171614; --panel: #201e1b; --ink: #ece7dd; --muted: #a39d92; --line: #3a3631; --soft: #2a2724;
+  --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
+  --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
+  --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
+  --c-acc: #6aa8ff; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
+  --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
+  --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
+  --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, "PingFang SC", "Noto Sans SC", sans-serif; }
+.o { font-family: "Gentium Book Plus", "SBL BibLit", "SBL Greek", "SBL Hebrew", "Noto Serif Hebrew", "Times New Roman", serif; }
+.ot .o { font-family: "SBL Hebrew", "SBL BibLit", "Noto Serif Hebrew", "Ezra SIL", serif; }
+header { padding: 20px 16px 8px; max-width: 1400px; margin: 0 auto; }
+h1 { font-size: 20px; margin: 0 0 4px; }
+.sub { color: var(--muted); font-size: 13px; }
+main { max-width: 1400px; margin: 0 auto; padding: 0 16px 40px; }
+section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 16px; }
+section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 6px; flex-wrap: wrap; font-weight: normal; }
+.toolbar button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
+.toolbar button[aria-pressed="true"] { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.hint { font-size: 12px; color: var(--muted); }
+.text-line { font-size: 22px; line-height: 2; }
+.ot .text-line { direction: rtl; font-size: 26px; }
+.vn { font-size: 12px; color: var(--accent); vertical-align: super; margin: 0 2px 0 6px; font-family: sans-serif; }
+.trans { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 16px; }
+.trans .vn { font-size: 11px; }
+/* 补词：点状下划线 */
+.added { text-decoration: underline dotted var(--muted); text-decoration-thickness: 1.5px; text-underline-offset: 4px; cursor: help; }
+.tok { cursor: pointer; border-radius: 4px; padding: 0 1px; }
+.tok.var { text-decoration: underline dotted var(--accent); text-underline-offset: 4px; }
+
+.scroller { overflow-x: auto; padding-bottom: 6px; }
+.canvas { position: relative; }
+.forest { display: flex; flex-direction: column; align-items: flex-start; gap: 26px; padding: 4px 0; }
+.forest .box.vstart { margin-top: 14px; }
+.forest .box.vstart:first-child { margin-top: 0; }
+.forest .row.vstart { margin-top: 14px; }
+.forest .row.vstart:first-child { margin-top: 0; }
+/* 连线上要标「宾语」「定语」等的从句框：上方多留空隙，紧挨母句时那段竖线也够长，标签两头还露得出线 */
+.forest > .box.wl { margin-top: 20px; }
+.box { position: relative; z-index: 2; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
+/* 方框宽度由原文成分与框头标签决定（标签不折行）；大意、说明、展开内容不参与宽度计算，在框内换行 */
+.box > .up, .box > .more, .bh .gist { contain: inline-size; }
+.box.root { border: 2.5px solid var(--accent); box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent); }
+.box.ambiguous { background: color-mix(in srgb, var(--amb) 45%, var(--panel)); }
+.bh { display: flex; gap: 4px 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; user-select: none; direction: ltr; }
+/* 「详情」是标签那一排的最后一项，推到行尾：它的位置只算在标签那一排（框宽按“标签 + 详情”定），大意另起一行用满框宽 */
+.bh .det { margin-inline-start: auto; font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 999px; padding: 0 8px; cursor: pointer; }
+.box.open .bh .det { color: var(--ink); border-color: var(--muted); }
+.box[data-form] { border-color: var(--tc); border-width: 2px; }
+.box.root[data-form] { border-width: 3px; box-shadow: none; }
+.box[data-form="wayyiqtol"] { --tc: #F656B8; } .box[data-form="qatal"] { --tc: #FF0000; } .box[data-form="weqatal"] { --tc: #2A7FFF; }
+.box[data-form="yiqtol"] { --tc: #00CC00; } .box[data-form="participle"] { --tc: #9E5329; } .box[data-form="infinitive"] { --tc: #6B6B6B; }
+.box[data-form="imperative"] { --tc: #A449FF; } .box[data-form="nominal"] { --tc: #B8B0A2; }
+/* 新约方框不按时态着色（动词本身已有时态框），框头标签用中性色 */
+.box[data-nt-form] { --tc: var(--muted); }
+.bh .ty { font-size: 12px; font-weight: 700; color: var(--tc); border: 1.5px solid var(--tc); border-radius: 4px; padding: 0 5px; font-family: ui-monospace, Menlo, monospace; }
+.bh .mk { font-size: 11px; border-radius: 4px; padding: 0 5px; color: var(--ink); background: var(--soft); border: 1px dashed var(--muted); }
+.forest.ot-forms { padding-inline-start: 30px; }
+.hide-forms .box[data-form] { border-color: var(--line); border-width: 1.5px; }
+.hide-forms .box.root[data-form] { border-color: var(--accent); border-width: 2.5px; }
+.hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .spine { display: none; }
+#wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
+.forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.forms-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; border: 2px solid var(--tc); }
+.bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+.box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
+.bh .unfold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+/* 鼠标移到连线上：这一支加亮，旁边出现「收起」按钮 */
+#hits { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; overflow: visible; }
+#hits path.hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
+#hits path.lit { fill: none; stroke: var(--accent); stroke-width: 6; opacity: .45; pointer-events: none; }
+.box.lit { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+#bfold { position: absolute; z-index: 6; display: none; font: inherit; font-size: 12px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
+#bfold.on { display: block; }
+.box[hidden] { display: none; }
+/* 只有一个词的引语框架（εἰπόντες、לֵאמֹר）放在母句同一行的行尾，省竖向空间 */
+.row { display: flex; align-items: flex-start; gap: 10px 36px; flex-wrap: wrap; }
+.row > .box.side { margin-inline-start: 0; min-width: 250px; }
+.row[hidden] { display: none; }
+.bh .cid { font-size: 12px; font-weight: 700; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
+.bh .lab { font-size: 12px; font-weight: 600; color: var(--panel); background: var(--muted); border-radius: 4px; padding: 0 6px; }
+.box.root .bh .lab { background: var(--accent); }
+.bh .st { font-size: 11px; border-radius: 4px; padding: 0 5px; }
+.bh .st.ambiguous { background: var(--amb); color: var(--ink); border: 1px solid var(--accent); }
+.bh .st.needs-review { background: var(--rev); color: var(--ink); border: 1px solid var(--r-v); }
+.bh .gist { font-size: 14px; flex: 1 1 100%; min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
+.chip { display: flex; flex-direction: column; border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 6px; padding: 0 2px 2px; background: color-mix(in srgb, var(--c) 6%, var(--panel)); --c: var(--r-none); }
+.chip > .rl { font-size: 11px; color: var(--c); font-weight: 600; padding: 1px 4px 0; min-height: 1.4em; direction: ltr; }
+.hide-roles .chip > .rl:not(:has(.sb)), .hide-roles.hide-focus .chip > .rl, .hide-roles .chip > .rl .rn { display: none; }
+/* 隐藏成分名后块宽只剩字宽：给个最小宽度、内容居中，单个字母（וַ）的块不显得局促 */
+.hide-roles .chip { padding-top: 2px; min-width: 30px; align-items: center; }
+.chip > .ws { display: flex; flex-wrap: wrap; }
+.chip > .ws > .lb { flex-basis: 100%; height: 4px; }
+.chip.r-v { --c: var(--r-v); } .chip.r-s { --c: var(--r-s); }
+/* 同位语：留在原位，虚线框、用所配成分的颜色，双线连到所配的成分（画在 #tips 层）；框底多留出画双线的地方 */
+.chip.r-appos { --c: var(--r-s); border-style: dashed; border-top-style: solid; }
+.box.has-appos { padding-bottom: 20px; }
+#tips path.appos { fill: none; stroke: var(--wire); stroke-width: 5; stroke-linejoin: round; }
+#tips path.appos-in { fill: none; stroke: var(--panel); stroke-width: 1.6; stroke-linejoin: round; }
+.chip.r-o, .chip.r-o2, .chip.r-io, .chip.r-adv, .chip.r-p { --c: var(--muted); }
+.chip > .ws > .w.ind { margin-inline-start: calc(var(--ind) * 28px); }
+.canvas:not(.hide-case) .w[data-case="nom"] .g { font-weight: 700; }
+.canvas:not(.hide-case) .w[data-case="acc"] .g { color: var(--c-acc); } .canvas:not(.hide-case) .w[data-case="gen"] .g { color: var(--c-gen); }
+.canvas:not(.hide-case) .w[data-case="dat"] .g { color: var(--c-dat); } .canvas:not(.hide-case) .w[data-case="voc"] .g { color: var(--c-voc); }
+.canvas:not(.hide-case) .w[data-tense] .g { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 3px; background: var(--m, transparent); }
+.canvas:not(.hide-case) .w[data-tense="plpf"] .g { border-width: 2.5px; }
+.w[data-tense="pres"] { --t: var(--t-pres); } .w[data-tense="impf"] { --t: var(--t-impf); } .w[data-tense="fut"] { --t: var(--t-fut); }
+.w[data-tense="aor"] { --t: var(--t-aor); } .w[data-tense="perf"] { --t: var(--t-perf); } .w[data-tense="plpf"] { --t: var(--t-plpf); }
+.w[data-mood="ind"] { --m: var(--m-ind); } .w[data-mood="impv"] { --m: var(--m-impv); } .w[data-mood="subj"] { --m: var(--m-subj); } .w[data-mood="opt"] { --m: var(--m-opt); } .w[data-mood="inf"] { --m: var(--m-inf); }
+.case-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; align-items: baseline; }
+.case-legend .o { font-size: 15px; }
+.case-legend .vt { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 4px; }
+.case-legend .vm { background: var(--m); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.chip.r-conj { --c: var(--r-conj); border-style: dashed; border-top-style: solid; }
+.w { display: inline-flex; flex-direction: column; align-items: center; padding: 1px 4px 2px; border-radius: 5px; cursor: pointer; }
+/* 同一词的语素之间、maqqef（־）之后紧接下一个词，不留间距 */
+.w.join { padding-inline-end: 0; }
+.w.join + .w { padding-inline-start: 0; }
+.w .g { font-size: 20px; line-height: 1.3; white-space: nowrap; }
+.ot .w .g { font-size: 24px; }
+.w .m, .w .z, .w .e { font-size: 11px; color: var(--muted); line-height: 1.35; white-space: nowrap; direction: ltr; }
+.w .z { color: var(--ink); font-size: 12px; }
+/* 被修饰的词：下划线画在 ::after 上，紧挨的下一个词也是被修饰的词（并列的先行词）时伸过词间空白，连成一条 */
+.w.target .g { position: relative; }
+.w.target .g::after { content: ''; position: absolute; inset-inline: 0; bottom: -3px; height: 2px; background: var(--wire); }
+.w.target:has(+ .w.target) .g::after { inset-inline-end: -10px; }
+/* 嵌在句中的子句：占位符（虚线小框，标子句编号），点它跳到那个子句 */
+.w.slot { justify-content: center; }
+.w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent); border: 1.5px dashed var(--accent); border-radius: 5px; padding: 0 6px; direction: ltr; }
+.ot .w.slot .g { font-size: 13px; }
+.box.flash { box-shadow: 0 0 0 3px var(--hl); }
+/* 旧约词干：非 qal 的动词按词干类着色，标签放在成分名那一行；主动实心、被动空心 */
+[data-stem="qal"] { --st: var(--st-qal); } [data-stem="niphal"] { --st: var(--st-niphal); } [data-stem="piel"] { --st: var(--st-piel); }
+[data-stem="hiphil"] { --st: var(--st-hiphil); } [data-stem="hithpael"] { --st: var(--st-hithpael); }
+.canvas:not(.hide-focus) .w[data-stem] .g { color: var(--st); }
+.sb { font-size: 10px; font-weight: 700; color: var(--panel); background: var(--st); border: 1px solid var(--st); border-radius: 3px; padding: 0 3px; margin-inline-start: 4px; font-family: sans-serif; }
+.sb.pass { color: var(--st); background: transparent; }
+.hide-focus .sb { display: none; }
+/* 旧约：谓语前的实词成分（前置），多为焦点、对比或话题 */
+.canvas:not(.hide-focus) .chip.front { border: 2px solid var(--focus); border-top: 4px solid var(--c); background: color-mix(in srgb, var(--focus) 14%, var(--panel)); }
+.chip > .rl .fr { color: var(--focus); }
+.hide-focus .chip > .rl .fr, .hide-focus .bh .mk.front { display: none; }
+/* 同根不定式独立形强调动词：不定式与动词都加焦点色框 */
+.canvas:not(.hide-focus) .w.cog .g, .forms-legend .cog-key { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 4px; background: color-mix(in srgb, var(--focus) 14%, transparent); }
+.forms-legend .cog-key { padding: 0 4px; color: var(--ink); }
+.forms-legend .front-key { border: 2px solid var(--focus); border-radius: 4px; padding: 0 5px; background: color-mix(in srgb, var(--focus) 14%, var(--panel)); color: var(--ink); }
+.vb { font-size: 10px; color: var(--panel); background: var(--accent); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
+.box:not(.open) .w .m, .box:not(.open) .w .z, .box:not(.open) .w .e { display: none; }
+.hide-m .w .m, .hide-z .w .z, .hide-e .w .e { display: none !important; }
+.more { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 13px; max-width: 46em; direction: ltr; }
+.box.open .more { display: block; }
+.more ul { margin: 0; padding-left: 18px; }
+.more li { margin: 3px 0; }
+.more .o { font-size: 15px; }
+.more details { margin-top: 6px; }
+.more summary { cursor: pointer; color: var(--accent); }
+.more .tag { font-weight: 600; }
+.up { font-size: 12px; color: var(--accent); margin-top: 6px; direction: ltr; }
+#wires, #tips { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; overflow: visible; }
+#tips { z-index: 3; }
+#tips path { fill: none; stroke: var(--wire); stroke-width: 2; }
+/* 有连线时句法、逻辑说明放进「详情」，不挡箭头；窄屏不画线，留在框底 */
+.more .up { margin: 0 0 6px; }
+.box > .up { display: none; }
+#wires path { fill: none; stroke: var(--wire); stroke-width: 2; }
+#wires path.tip, #tips path.tip { fill: var(--wire); stroke: none; }
+#wires path.logic { stroke: var(--logic); stroke-dasharray: 6 4; }
+#tips path.logic-tip { fill: var(--logic); stroke: none; }
+.ll { position: absolute; z-index: 4; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--logic); background: var(--panel); border: 1.5px dashed var(--logic); border-radius: 999px; padding: 0 7px; white-space: nowrap; pointer-events: none; direction: ltr; }
+.hide-logic .ll:not(.al) { display: none; }
+/* 从句在母句里的作用（宾语、主语、表语、引语、定语）：标签画在句法连线上 */
+.ll.al { color: var(--wire); border: 1.5px solid var(--wire); font-weight: 500; z-index: 4; }
+.up .lg { color: var(--logic); }
+@media (max-width: 760px) {
+  .forest { gap: 12px; }
+  .box { margin-inline-start: calc(var(--depth, 0) * 14px); max-width: calc(100% - var(--depth, 0) * 14px); }
+  #wires, #tips, #hits, #bfold, .ll { display: none; }
+  .box.has-appos { padding-bottom: 10px; }
+  .forest > .box.wl { margin-top: 0; }
+  .forest > .box.wl.vstart { margin-top: 14px; }
+  .box > .up { display: block; }
+  .more .up { display: none; }
+}
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 12px; }
+.legend span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 4px; vertical-align: middle; background: var(--c); }
+.hl { background: var(--hl) !important; }
+.sel { outline: 2px solid var(--accent); }
+#pop { position: fixed; z-index: 10; width: min(380px, calc(100vw - 16px)); overflow: auto; box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); display: none; font-size: 13px; direction: ltr; }
+#pop.show { display: block; }
+#pop .lemma { font-size: 24px; }
+#pop .x { position: absolute; right: 8px; top: 4px; border: none; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }
+#pop dl { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 3px 8px; margin: 6px 0; }
+#pop dt { color: var(--muted); }
+#pop dd { margin: 0; }
+#pop .warn { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); border-left: 3px solid var(--accent); padding: 4px 8px; border-radius: 4px; margin: 6px 0; }
+#pop details { margin-top: 6px; }
+#pop summary { cursor: pointer; color: var(--accent); }
+#pop .def { white-space: pre-wrap; background: var(--soft); border-radius: 6px; padding: 8px; max-height: 220px; overflow: auto; margin-top: 4px; }

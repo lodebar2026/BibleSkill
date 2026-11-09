@@ -99,7 +99,7 @@ export function buildWires(L: Layout): Wire[] {
       const y = Math.round((word ? word.top + word.height / 2 : p.top + p.height / 2) - base.top);
       const points: Array<[number, number]> = [[start(c), y], [endOf(p) + (rtl ? -1 : 1), y]];
       segs.push(...polyline(points));
-      arrow(svg, points);
+      arrow(svg, points, '', [], clause.id);
       hitArea(points, clause.id);
       continue;
     }

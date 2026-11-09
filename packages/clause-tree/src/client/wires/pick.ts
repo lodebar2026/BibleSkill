@@ -58,13 +58,13 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
       }
     }
     if (wire.into === null) {
-      arrow(svg, best, '', hops);
+      arrow(svg, best, '', hops, wire.clause);
     } else {
       // 框外一段画在下层；伸进框里的一段画在母句框里的 svg.inner，压在成分块上、文字下
-      L.path(svg, pathD(best, hops));
+      L.path(svg, pathD(best, hops), '', wire.clause);
       const [x, y] = best.at(-1)!;
       const parentBox = $(`[data-box="${byId.get(wire.clause)!.parentId}"]`);
-      arrow(parentBox ? L.inner(parentBox) : tips, [[x, y], [x, wire.into]]);
+      arrow(parentBox ? L.inner(parentBox) : tips, [[x, y], [x, wire.into]], '', [], wire.clause);
     }
   };
   const minSpan = (group: Wire[]) => Math.min(...group.map((wire) => wire.span));

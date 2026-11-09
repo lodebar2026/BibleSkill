@@ -103,7 +103,9 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 /* 鼠标移到连线上：这一支加亮，旁边出现「收起」按钮 */
 #hits { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
 #hits path.hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
-#hits path.lit { fill: none; stroke: var(--accent); stroke-width: 6; opacity: .45; pointer-events: none; }
+/* 悬停的一支：连线各段（框外、框内、箭头尖）直接加粗换色 */
+#wires path.lit, svg.inner path.lit { stroke: var(--focus); stroke-width: 3.5; }
+#tips path.tip.lit, svg.inner path.tip.lit, #wires path.tip.lit { fill: var(--focus); stroke: none; }
 .box.lit { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 #bfold { position: absolute; display: none; font: inherit; font-size: 12px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
 #bfold.on { display: block; }

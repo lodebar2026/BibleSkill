@@ -66,17 +66,16 @@ function applyFolds(): void {
 }
 
 export function highlightBranch(id: string | null): void {
-  $$('#hits path.lit').forEach((path) => path.remove());
-  $$('.box.lit').forEach((box) => box.classList.remove('lit'));
+  // 直接改这一支连线各段（框外、框内、箭头尖）和方框的样式，不另画线
+  $$<Element>('#canvas .lit').forEach((item) => item.classList.remove('lit'));
   if (!id) {
     return;
   }
-  for (const hit of $$(`#hits path.hit[data-branch="${id}"]`)) {
-    const mark = hit.cloneNode() as SVGPathElement;
-    mark.setAttribute('class', 'lit');
-    mark.removeAttribute('data-branch');
-    hit.before(mark);
-  }
+  // 挪到所在图层的最后画，共用主干时不被同组别的线盖住
+  $$<Element>(`#canvas path[data-branch="${id}"]:not(.hit)`).forEach((path) => {
+    path.classList.add('lit');
+    path.parentNode!.appendChild(path);
+  });
   [id, ...descendants(id)].forEach((kid) => $(`[data-box="${kid}"]`)?.classList.add('lit'));
 }
 

@@ -8,6 +8,13 @@ import { type Point, type Seg, crosses, pathD, polyline } from './geometry.js';
 /** 箭头长度。 */
 const ARROW = 9;
 
+/** 句法连线的各段（框外、框内、箭头尖）都记下属于哪一支：悬停时整条一起改样式（folds.ts 的 highlightBranch）。 */
+const markBranch = (el: SVGElement, branch?: string) => {
+  if (branch) {
+    el.dataset.branch = branch;
+  }
+};
+
 export type BoxRect = { box: HTMLElement; left: number; right: number; top: number; bottom: number };
 
 export class Layout {
@@ -122,7 +129,7 @@ export class Layout {
    * 带箭头的线：线画在 layer，只画到箭头底边（线宽不会从箭头尖两侧露出来）；箭头是单独的三角形，
    * 画在 #tips，不被方框边框盖住，各处大小一样；伸进方框的箭头（layer 是方框里的 svg.inner）连尖一起画在那一层，不盖住文字。
    */
-  readonly arrow = (layer: SVGSVGElement, points: Point[], cls = '', hops: Point[] = []): void => {
+  readonly arrow = (layer: SVGSVGElement, points: Point[], cls = '', hops: Point[] = [], branch?: string): void => {
     const [tx, ty] = points.at(-1)!;
     const [px, py] = points.at(-2)!;
     const length = Math.hypot(tx - px, ty - py) || 1;
@@ -133,16 +140,19 @@ export class Layout {
       line.setAttribute('class', cls);
     }
     line.setAttribute('d', pathD([...points.slice(0, -1), [bx, by]], hops));
+    markBranch(line, branch);
     layer.append(line);
     const head = document.createElementNS(SVG, 'path');
     head.setAttribute('class', cls ? `${cls}-tip` : 'tip');
     head.setAttribute('d', `M${tx},${ty} L${bx - dy * 4.5},${by + dx * 4.5} L${bx + dy * 4.5},${by - dx * 4.5} z`);
+    markBranch(head, branch);
     (layer.classList.contains('inner') ? layer : this.tips).append(head);
   };
 
   /** 一段不带箭头的线。 */
-  readonly path = (layer: SVGSVGElement, d: string, cls = ''): SVGPathElement => {
+  readonly path = (layer: SVGSVGElement, d: string, cls = '', branch?: string): SVGPathElement => {
     const path = document.createElementNS(SVG, 'path');
+    markBranch(path, branch);
     if (cls) {
       path.setAttribute('class', cls);
     }

@@ -448,3 +448,18 @@ test('同位语：一个成分整个是 Macula 的同位结构（Np-Appos）时�
   assert.equal(chips[2].apposOf, 1);
   assert.deepEqual(run(node(4, 'np', null, 'DetCL')).map((chip) => chip.role), ['v', 'o']);
 });
+
+test('段落：节中段首（18b 起新段、带标题）——子句带 paragraph，页首原文从段首词断开、译文从对应的段断开', () => {
+  const texts: ClauseText[] = [
+    { ...TEXTS[0], paraTitle: '[]' },
+    { ...TEXTS[1], paraTitle: JSON.stringify([{ text: '新王' }]) },
+  ];
+  const data = buildDiagram({ title: '使徒行传 7:18', isOT: false, clauses: CLAUSES, texts, tokens: TOKENS, variants: [], morphExpansion: () => null });
+  assert.deepEqual(data.clauses.map((item) => item.paragraph), [{ title: null }, { title: '新王' }]);
+  assert.deepEqual(data.verses[0].paragraphs, [
+    { title: null, wordId: 'n44007018001', at: 0 },
+    { title: '新王', wordId: 'n44007018008', at: 1 },
+  ]);
+  assert.deepEqual(build().verses[0].paragraphs, []);
+  assert.equal(build().clauses[0].paragraph, null);
+});

@@ -2,7 +2,7 @@
  * data/bible.sqlite 的表结构。构建端（data-build）建表写入，读取端（core/db.ts）只读打开。
  * 改表结构要同时改 SCHEMA_VERSION，读取端会拒绝打开版本不符的库。
  */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const SCHEMA_SQL = `
 create table meta (key text primary key, value text not null);
@@ -84,6 +84,14 @@ create table token_syntax (
   node_id integer not null,
   role text
 );
+
+-- 新约分段（可选，构建时给 --paragraphs，如 UBS5）：段首的主干词与段前的小标题（英文原样，翻译时译成中文）
+create table paragraph (
+  token_id text primary key,    -- 段首词；一节可有多处分段（节中分段）
+  bcv integer not null,
+  heading text                  -- 没有小标题为 null
+);
+create index paragraph_bcv on paragraph(bcv);
 
 create table lexicon (
   strong text not null,         -- TBESH/TBESG 用扩展 Strong；UBS 用基础号（H0430/A0002/G0976）

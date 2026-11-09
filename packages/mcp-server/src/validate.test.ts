@@ -326,3 +326,47 @@ test('逻辑关系：target 要在本章找得到、首尾有序、不含本句�
   assert.match(run({ relation: 'cause', target: '1001001a-1001001b' }).errors[0].messages.join(), /不能包含本句/);
   assert.throws(() => run({ relation: 'because', target: '1001001a' }), /logic\.relation 只能是/);
 });
+
+test('段首：节中分段（1b 起新段、带小标题）——前句要收住，标题必给，非段首不给，span=0 不能作段首', () => {
+  const rendered = (a: string, b: string) => [
+    { clauseId: '1001001a', span: 1, text: a, renderings: [{ tokens: id(2), zh: '创造' }] },
+    { clauseId: '1001001b', span: 1, text: b, renderings: [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }], paraTitle: '神造大地' },
+  ];
+  const withHeading = new Map([['1001001b', { heading: 'God Makes the Earth', tokenId: id(3), exact: true }]]);
+  const ok = checkTranslations(rendered('他创造了。', '神与大地'), clausesByVerse, verses, undefined, { paragraphs: withHeading });
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.accepted[0].paraTitle, null);
+  assert.equal(ok.accepted[1].paraTitle, JSON.stringify([{ text: '神造大地' }]));
+
+  assert.match(checkTranslations(rendered('他创造了，', '神与大地'), clausesByVerse, verses, undefined, { paragraphs: withHeading }).errors[0].messages.join(), /收住句子/);
+  const noTitle = rendered('他创造了。', '神与大地').map((item) => ({ ...item, paraTitle: null }));
+  assert.match(checkTranslations(noTitle, clausesByVerse, verses, undefined, { paragraphs: withHeading }).errors[0].messages.join(), /God Makes the Earth/);
+  const titleOnA = [{ ...rendered('他创造了。', '神与大地')[0], paraTitle: '起初' }, rendered('他创造了。', '神与大地')[1]];
+  assert.match(checkTranslations(titleOnA, clausesByVerse, verses, undefined, { paragraphs: withHeading }).errors[0].messages.join(), /不是段首/);
+
+  // 无标题段首：存 "[]"，给了标题就报错
+  const untitled = new Map([['1001001b', { heading: null, tokenId: id(3), exact: true }]]);
+  const plain = rendered('他创造了。', '神与大地').map((item) => ({ ...item, paraTitle: null }));
+  assert.equal(checkTranslations(plain, clausesByVerse, verses, undefined, { paragraphs: untitled }).accepted[1].paraTitle, '[]');
+  assert.match(checkTranslations(rendered('他创造了。', '神与大地'), clausesByVerse, verses, undefined, { paragraphs: untitled }).errors[0].messages.join(), /没有小标题/);
+
+  // 合并跨过段首
+  const merged = [
+    { clauseId: '1001001a', span: 2, merge: 'reorder', text: '神创造了大地', renderings: allRendered },
+    { clauseId: '1001001b', span: 0, text: '' },
+  ];
+  assert.match(checkTranslations(merged, clausesByVerse, verses, undefined, { paragraphs: untitled }).errors[0].messages.join(), /span=0/);
+});
+
+test('段首：没有分段数据时 paraTitle 照旧可选；只查通用规则', () => {
+  const items = [
+    { clauseId: '1001001a', span: 1, text: '他创造了。', renderings: [{ tokens: id(2), zh: '创造' }], paraTitle: '起初' },
+    { clauseId: '1001001b', span: 1, text: '神与大地', renderings: [{ tokens: id(3), zh: '神' }, { tokens: id(4), zh: '大地' }] },
+  ];
+  const result = checkTranslations(items, clausesByVerse, verses);
+  assert.deepEqual(result.errors, []);
+  assert.equal(result.accepted[0].paraTitle, JSON.stringify([{ text: '起初' }]));
+  assert.equal(result.accepted[1].paraTitle, null);
+  const comma = [{ ...items[0], text: '他创造了，', paraTitle: null }, { ...items[1], paraTitle: '新段' }];
+  assert.match(checkTranslations(comma, clausesByVerse, verses).errors[0].messages.join(), /收住句子/);
+});

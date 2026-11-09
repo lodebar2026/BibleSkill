@@ -1,6 +1,6 @@
 /** 结构图：每个子句一行，按原文先后排，缩进 = 从属层级；引语框架、过渡句引出的从句排在母句那一行的行尾。 */
 import { renderBox } from './box.js';
-import { $ } from './dom.js';
+import { $, esc } from './dom.js';
 import { type Clause, D, byId, firstWord, formOf, kids, lastWord, mainline, words } from './model.js';
 
 // 词数：旧约一个词可能由几个语素组成（לֵ־אמֹר），语素之间 after 为空
@@ -52,7 +52,12 @@ export function renderForest(): void {
       }
       renderBox(clause, row, false).classList.add('side');
     } else {
-      renderBox(clause, forest, verse !== lastVerse);
+      // 段首：有小标题时先加标题行，没有时方框上方多留一点空
+      const paragraph = clause.paragraph ?? null;
+      if (paragraph?.title) {
+        forest.insertAdjacentHTML('beforeend', `<div class="ptitle">${esc(paragraph.title)}</div>`);
+      }
+      renderBox(clause, forest, verse !== lastVerse).classList.toggle('pstart', paragraph !== null && !paragraph.title);
     }
     lastVerse = verse;
   }

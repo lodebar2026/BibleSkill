@@ -4,10 +4,12 @@
  *
  *   pnpm data:build --step <STEPBible-Data> --macula-hebrew <macula-hebrew> \
  *     --macula-greek <macula-greek> --ubs <ubs-open-license> [--out data/bible.sqlite] [--critical-text <na28.json>]
+ *     [--paragraphs <paragraphs.json>]
  *
  * 四个数据目录都必须显式给出；构建产物不进仓库、不分发。
  * --critical-text：NA28 原文（scripts/fetch-critical-text.mjs 用扩展工具取来），新约主干按它挑 TAGNT 的词行（见 critical-text.ts）；
  * 不给时照 TAGNT 版本列。
+ * --paragraphs：新约分段与小标题（格式见 paragraphs.ts）；不给时 paragraph 表为空，分段由模型自拟。
  */
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
@@ -17,6 +19,7 @@ import { SCHEMA_SQL, SCHEMA_VERSION } from '@bs/core';
 import { readMorphCodes, readStepLexicon, readUbsLexicon } from './lexicon.js';
 import { processMacula } from './macula.js';
 import { loadCriticalText } from './critical-text.js';
+import { loadParagraphs, locateParagraphs } from './paragraphs.js';
 import { fillMissingLemmas, parseTagnt, parseTahot, type Report, type TokenRow, type VariantRow } from './stepbible.js';
 
 const { values } = parseArgs({
@@ -27,6 +30,7 @@ const { values } = parseArgs({
     ubs: { type: 'string' },
     out: { type: 'string', default: 'data/bible.sqlite' },
     'critical-text': { type: 'string' },
+    paragraphs: { type: 'string' },
   },
 });
 
@@ -48,6 +52,10 @@ if (criticalTextPath && !existsSync(criticalTextPath)) {
   throw new Error(`找不到 --critical-text 文件: ${criticalTextPath}`);
 }
 const criticalText = criticalTextPath ? loadCriticalText(criticalTextPath) : undefined;
+const paragraphsPath = values.paragraphs ? path.resolve(values.paragraphs) : undefined;
+if (paragraphsPath && !existsSync(paragraphsPath)) {
+  throw new Error(`找不到 --paragraphs 文件: ${paragraphsPath}`);
+}
 
 const reportRows: Array<[string, string, string]> = [];
 const report: Report = (kind, ref, detail) => {
@@ -81,6 +89,8 @@ for (const file of amalgamatedFiles('TAGNT')) {
   parseTagnt(file, report, (row) => ntTokens.push(row), (row) => variants.push(row), criticalText);
 }
 fillMissingLemmas(ntTokens, report);
+const paragraphSource = paragraphsPath ? loadParagraphs(paragraphsPath) : undefined;
+const paragraphs = paragraphSource ? locateParagraphs(ntTokens, paragraphSource.breaks, report) : [];
 
 function assertUniqueIds(rows: TokenRow[]): void {
   const seen = new Set<string>();
@@ -115,7 +125,10 @@ db.exec('begin');
 const insertMeta = db.prepare('insert into meta (key, value) values (?, ?)');
 insertMeta.run('schema_version', String(SCHEMA_VERSION));
 insertMeta.run('built_at', new Date().toISOString());
-insertMeta.run('sources', JSON.stringify({ stepDir, maculaHebrewDir, maculaGreekDir, ubsDir, criticalText: criticalTextPath ?? null }));
+insertMeta.run('sources', JSON.stringify({ stepDir, maculaHebrewDir, maculaGreekDir, ubsDir, criticalText: criticalTextPath ?? null, paragraphs: paragraphsPath ?? null }));
+if (paragraphSource) {
+  insertMeta.run('paragraph_source', paragraphSource.source);
+}
 
 const insertToken = db.prepare(`insert into token
   (id, ref, bcv, ord, surface, after, translit, lemma, strong, morph, gloss_en, gloss_zh, sense, editions, text_type, variant_note, significant, na_bracket)
@@ -153,6 +166,11 @@ for (const row of [...ot.tokenSyntax, ...nt.tokenSyntax]) {
   insertTokenSyntax.run(row.tokenId, row.nodeId, row.role);
 }
 
+const insertParagraph = db.prepare('insert into paragraph (token_id, bcv, heading) values (?, ?, ?)');
+for (const row of paragraphs) {
+  insertParagraph.run(row.tokenId, row.bcv, row.heading);
+}
+
 const insertLexicon = db.prepare('insert into lexicon (strong, source, lemma, translit, pos, gloss, definition) values (?, ?, ?, ?, ?, ?, ?)');
 for (const row of lexicon) {
   insertLexicon.run(row.strong, row.source, row.lemma, row.translit, row.pos, row.gloss, row.definition);
@@ -182,5 +200,8 @@ log('');
 log(`旧约主干 ${otTokens.length} 语素，映射 Macula ${percent(ot.stats.mappedTokens, ot.stats.baseTokens)}；Macula 词覆盖 ${percent(ot.stats.mappedWords, ot.stats.maculaWords)}；子句种子 ${ot.seeds.length}`);
 log(`新约主干 ${ntTokens.length} 词（含 SBL ${nt.stats.baseTokens}），映射 Macula ${percent(nt.stats.mappedTokens, nt.stats.baseTokens)}；Macula 词覆盖 ${percent(nt.stats.mappedWords, nt.stats.maculaWords)}；子句种子 ${nt.seeds.length}`);
 log(`短语树结点 旧约 ${ot.syntaxNodes.length}、新约 ${nt.syntaxNodes.length}；挂上短语树的主干词 旧约 ${percent(ot.tokenSyntax.length, otTokens.length)}、新约 ${percent(nt.tokenSyntax.length, ntTokens.length)}`);
+if (paragraphSource) {
+  log(`分段（${paragraphSource.source}）${paragraphs.length}/${paragraphSource.breaks.length}，带小标题 ${paragraphs.filter((row) => row.heading).length}`);
+}
 log(`异文词 ${variants.length}；词典条目 ${lexicon.length}；词法代码 ${morphCodes.length}`);
 log(`build_report: ${[...kinds].map(([kind, count]) => `${kind}=${count}`).join(', ')}`);

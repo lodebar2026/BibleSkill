@@ -79,6 +79,9 @@ export type LexiconEntry = {
   definition: string;
 };
 
+/** 段首：段首词与段前的小标题（没有为 null）。 */
+export type ParagraphBreak = { tokenId: string; bcv: number; heading: string | null };
+
 const TOKEN_COLUMNS = `id, ref, bcv, ord, surface, after, translit, lemma, strong, morph,
   gloss_en as glossEn, gloss_zh as glossZh, sense, editions, text_type as textType, variant_note as variantNote, significant,
   na_bracket as naBracket`;
@@ -183,6 +186,19 @@ export class BibleDb {
       .prepare(`select strong, source, lemma, translit, pos, gloss, definition from lexicon
         where strong in (${placeholders}) order by case source when 'UBS-zh' then 0 else 1 end, strong`)
       .all(...candidates) as LexiconEntry[];
+  }
+
+  /** 范围内的分段，按词序。 */
+  paragraphsInRange(startBcv: number, endBcv: number): ParagraphBreak[] {
+    return this.db
+      .prepare('select token_id as tokenId, bcv, heading from paragraph where bcv between ? and ? order by token_id')
+      .all(startBcv, endBcv) as ParagraphBreak[];
+  }
+
+  /** 这卷书有没有分段数据（构建时给了 --paragraphs，且是新约）。有才按它定段首，没有就由模型自拟。 */
+  hasParagraphs(bookId: number): boolean {
+    const low = bookId * 1_000_000;
+    return this.db.prepare('select 1 from paragraph where bcv between ? and ? limit 1').get(low, low + 999_999) !== undefined;
   }
 
   morphExpansion(code: string): string | null {

@@ -2,6 +2,10 @@
  * 提交校验。以"节"为单位：通过的节写盘，未通过的节在 errors 里返回 clauseIds，要求整节重提。
  */
 import {
+  chapterFromBcv,
+  paraTitleText,
+  segmentsText,
+  type ParagraphStart,
   ClauseAlternativeSchema,
   ClauseLogicSchema,
   LOGIC_RELATIONS,
@@ -592,6 +596,48 @@ function toParaTitle(value: string | null): string | null {
   return value.trim().startsWith('[') ? value : JSON.stringify([{ text: value.trim() }]);
 }
 
+/** 段首前一句要收住：以句末标点（可带后引号、括号）结尾。 */
+const SENTENCE_END = /[。！？：…—][”’」』）〛\]]*$/;
+
+/**
+ * 段首规则。rows 已按节、子句排好；paraTitle 此时是 toParaTitle 的结果（null、"[]" 或标题分段）。
+ * 有分段数据时先按数据改写 paraTitle：有标题的段首要有中文标题，无标题的段首存 "[]"，非段首不能给。
+ */
+function checkParagraphs(rowsByVerse: Map<number, ClauseText[]>, paragraphs: Map<string, ParagraphStart> | undefined, fail: (bcv: number, clauseId: string, message: string) => void): void {
+  let previous: ClauseText | undefined;
+  for (const [bcv, rows] of [...rowsByVerse].sort(([a], [b]) => a - b)) {
+    // 前一子句要在紧挨着的上一节（跨章时是本章第 1 节）才查；上一节不在这次提交里就不查
+    if (previous && previous.bcv !== bcv - 1 && !(bcv % 1000 === 1 && chapterFromBcv(previous.bcv) === chapterFromBcv(bcv) - 1)) {
+      previous = undefined;
+    }
+    for (const row of rows) {
+      const clauseId = `${row.bcv}${row.sub}`;
+      const title = paraTitleText(row.paraTitle);
+      if (paragraphs) {
+        const start = paragraphs.get(clauseId);
+        if (!start && title !== undefined) {
+          fail(bcv, clauseId, '这里不是段首（段首见 briefing 子句的 paragraph），不要给 paraTitle');
+        } else if (start?.heading && !title) {
+          fail(bcv, clauseId, `段首有小标题「${start.heading}」，paraTitle 给出它的中文译文（简短、不加句号，专名与术语照本段译文）`);
+        } else if (start && !start.heading && title) {
+          fail(bcv, clauseId, '这里分段但没有小标题，不要给 paraTitle');
+        }
+        row.paraTitle = !start ? null : start.heading && title ? JSON.stringify([{ text: title }]) : '[]';
+      }
+      if (row.paraTitle !== null) {
+        if (row.translationSpan === 0) {
+          fail(bcv, clauseId, '段首不能并进前一子句（span=0）：前一子句的合并范围不要跨过段首');
+        } else if (previous && previous.translationSpan > 0 && !SENTENCE_END.test(segmentsText(previous.formatted).trim())) {
+          fail(bcv, clauseId, `新段从这里开始，前一子句 ${previous.bcv}${previous.sub} 的译文要收住句子（以句号、问号、叹号等结尾）`);
+        }
+      }
+      if (row.translationSpan > 0) {
+        previous = row;
+      }
+    }
+  }
+}
+
 export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[]; readingWarnings: string[] };
 
 /**
@@ -599,7 +645,10 @@ export type TranslationCheck = { accepted: ClauseText[]; errors: VerseError[]; r
  * itemLevels：每条按它自带的 literalness 校验（编辑器改旧译文、审校复查时用，旧数据没有就按 2）。
  */
 /** disputes：是否检查争议（ambiguous、关联读法、异文是否处理），默认检查；工作目录关闭争议时传 false。 */
-export type TranslationCheckOptions = { level?: number; itemLevels?: boolean; disputes?: boolean };
+/**
+ * paragraphs：本书有分段数据时，按它定段首（见 core/paragraphs.ts）；不给时 paraTitle 由模型自拟，只查通用规则。
+ */
+export type TranslationCheckOptions = { level?: number; itemLevels?: boolean; disputes?: boolean; paragraphs?: Map<string, ParagraphStart> };
 
 /**
  * 译文结构校验（用词统一检查另在 consistency.ts）：
@@ -612,6 +661,8 @@ export type TranslationCheckOptions = { level?: number; itemLevels?: boolean; di
  * - 争议：子句分析为 ambiguous → 必须给 alternatives 并在 note 写主译理由；
  *   有影响翻译的经文异文 → 给 kind=textual 的 alternative，或在 note 说明为何不影响译文；
  *   options.disputes=false 时不查这几项
+ * - 段首（paraTitle 非 null）：不能是 span=0 的子句，前一子句的译文要收住句子；
+ *   有分段数据时段首由数据定：有小标题的段首必须给中文 paraTitle，无标题的段首存 "[]"，其他子句不给
  */
 export function checkTranslations(
   raw: unknown[],
@@ -649,7 +700,7 @@ export function checkTranslations(
     disputes = new Map();
   }
   const analysisGroups = checkDisputes ? readingGroups([...clausesByVerse.values()].flat()) : new Map<string, string[]>();
-  const accepted: ClauseText[] = [];
+  const rowsByVerse = new Map<number, ClauseText[]>();
   for (const [bcv, verse] of submitted) {
     const clauses = clausesByVerse.get(bcv) ?? [];
     const tokens = tokensByVerse.get(bcv) ?? [];
@@ -783,10 +834,10 @@ export function checkTranslations(
         literalness: level,
       });
     }
-    if (!errors.has(bcv)) {
-      accepted.push(...rows);
-    }
+    rowsByVerse.set(bcv, rows);
   }
+  checkParagraphs(rowsByVerse, options.paragraphs, fail);
+  const accepted = [...rowsByVerse].filter(([bcv]) => !errors.has(bcv)).flatMap(([, rows]) => rows);
   // 子句分析已成组的读法由上面的检查管；这里只提示译文里新起、却只标了一句的组
   const submittedGroups = readingGroups([...submitted.values()].flatMap((verse) => [...verse.values()].map((item) => ({ id: item.clauseId, alternatives: item.alternatives }))));
   const newGroups = new Map([...submittedGroups].filter(([label]) => !analysisGroups.has(label)));

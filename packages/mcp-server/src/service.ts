@@ -10,7 +10,9 @@ import {
   TermPreferenceSchema,
   bareLemma,
   bookById,
+  bookFromBcv,
   chapterFromBcv,
+  LAST_OT_BOOK_ID,
   clauseWords,
   DEFAULT_LITERALNESS,
   embedSlots,
@@ -22,8 +24,11 @@ import {
   parseSegments,
   suppliedNotes,
   parseClauseId,
+  paragraphStarts,
   strongMatches,
   type BibleDb,
+  type ParagraphBreak,
+  type ParagraphStart,
   type CriticalTextTool,
   type TaskModels,
   type ClauseEntity,
@@ -313,12 +318,34 @@ function textualVariantLines(deps: Deps, range: ScriptureRange, verses: Map<numb
   return lines.length > 0 ? lines : undefined;
 }
 
+/** 本书有分段数据（新约、构建时给了 --paragraphs）时，范围内的分段；没有为 undefined，段首由模型自拟。 */
+function paragraphBreaks(deps: Deps, range: Pick<ScriptureRange, 'isOT' | 'bookId' | 'startBcv' | 'endBcv'>): ParagraphBreak[] | undefined {
+  return range.isOT || !deps.db.hasParagraphs(range.bookId) ? undefined : deps.db.paragraphsInRange(range.startBcv, range.endBcv);
+}
+
+function paragraphStartsFor(deps: Deps, range: Pick<ScriptureRange, 'isOT' | 'bookId' | 'startBcv' | 'endBcv'>, clauses: ClauseEntity[]): Map<string, ParagraphStart> | undefined {
+  const breaks = paragraphBreaks(deps, range);
+  return breaks ? paragraphStarts(clauses, breaks) : undefined;
+}
+
+/** 节中的段首词（节首的段首本来就开新子句，不必列）。 */
+function midVerseBreaks(breaks: ParagraphBreak[], verses: Map<number, Token[]>): Array<ParagraphBreak & { token: Token }> {
+  return breaks.flatMap((item) => {
+    const words = verses.get(item.bcv) ?? [];
+    const index = words.findIndex((word) => word.id === item.tokenId);
+    return index > 0 ? [{ ...item, token: words[index] }] : [];
+  });
+}
+
+const paragraphLabel = (heading: string | null) => (heading ? `新段，小标题「${heading}」` : '新段');
+
 export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange, options: { disputes?: boolean } = {}) {
   const verses = rangeTokens(deps, range);
   const disputes = await disputesEnabled(deps, options.disputes);
   const chapters = chaptersBetween(range.startBcv, range.endBcv);
   const existing = [...(await chapterEntities(deps, range.bookName, chapters)).values()].flat().filter((clause) => inRange(parseClauseId(clause.id).bcv, range));
   const rules = (await deps.store.readRules()).filter((rule) => rule.task === 'analyze');
+  const midParagraphs = midVerseBreaks(paragraphBreaks(deps, range) ?? [], verses);
   return {
     task: 'analyze',
     range: `${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel([...verses.keys()].at(-1)!)}`,
@@ -330,11 +357,14 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange, o
     maculaSeeds: seedsTsv(deps.db.seedsInRange(range.startBcv, range.endBcv), verses),
     textualVariants: disputes ? textualVariantLines(deps, range, verses) : undefined,
     ambiguityHints: disputes ? ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)) : undefined,
+    paragraphStarts: midParagraphs.length > 0
+      ? midParagraphs.map((item) => `${verseLabel(item.bcv)} ${item.tokenId} ${item.token.surface}（${paragraphLabel(item.heading)}）`)
+      : undefined,
     existingClauses: existing.length > 0 ? existing : undefined,
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
     style: await styleBriefing(deps, 'analyze'),
-    submit: 'submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词，夹在句中的从句可嵌入（范围落在外层之内）；id 为 bcv+字母（如 1001001a）。',
+    submit: `submit_clause_analysis：range + clauses（JSON 数组）。每节子句首尾相接覆盖全部词，夹在句中的从句可嵌入（范围落在外层之内）；id 为 bcv+字母（如 1001001a）${midParagraphs.length > 0 ? '；paragraphStarts 里的段首词必须是某个子句的首词（段落界线不切在子句中间）' : ''}。`,
   };
 }
 
@@ -362,6 +392,19 @@ export async function submitClauseAnalysis(deps: Deps, range: ScriptureRange, ra
     const bcvs = [...chapterVerses.keys()];
     const seeds = deps.db.seedsInRange(Math.min(...bcvs), Math.max(...bcvs));
     const result = checkClauseAnalysis(chapterClauses, chapterVerses, outside, seeds);
+    // 段首词要开新子句；不符的节整节退回
+    const breaks = paragraphBreaks(deps, { ...range, startBcv: Math.min(...bcvs), endBcv: Math.max(...bcvs) }) ?? [];
+    const starts = new Set(result.accepted.map((clause) => clause.firstWordId));
+    const acceptedBcvs = new Set(result.accepted.map((clause) => parseClauseId(clause.id).bcv));
+    for (const item of breaks.filter((entry) => acceptedBcvs.has(entry.bcv) && !starts.has(entry.tokenId))) {
+      const word = chapterVerses.get(item.bcv)?.find((token) => token.id === item.tokenId);
+      result.errors.push({
+        bcv: item.bcv,
+        clauseIds: result.accepted.filter((clause) => parseClauseId(clause.id).bcv === item.bcv).map((clause) => clause.id),
+        messages: [`${item.tokenId} ${word?.surface ?? ''} 是段首词（${paragraphLabel(item.heading)}），要从它开一个新子句`],
+      });
+      result.accepted = result.accepted.filter((clause) => parseClauseId(clause.id).bcv !== item.bcv);
+    }
     errors.push(...result.errors);
     overrides.push(...result.overrides);
     readingWarnings.push(...result.readingWarnings);
@@ -421,6 +464,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
   const disputes = withDisputes ? collectDisputes(clauses, allTokens, deps.db.variantsInRange(range.startBcv, range.endBcv)) : new Map();
   const readings = withDisputes ? readingGroups(clauses) : new Map<string, string[]>();
   const ownWords = clauseWords(clauses, allTokens);
+  const paragraphs = paragraphStartsFor(deps, range, clauses);
   const clauseLines = clauses.map((clause) => {
     // 自身的词；嵌在中间的子句写成「⟨1030038b⟩」
     const tokens = ownWords.get(clause.id) ?? [];
@@ -441,6 +485,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       contentTokens: tokens.filter((token) => isContentWord(token.morph, token.strong)).map((token) => token.id).join(','),
       // 子句分析的其他读法已在 alternatives 里，这里只给异文
       disputes: disputes.get(clause.id)?.textual.length ? { textual: disputes.get(clause.id)!.textual } : undefined,
+      paragraph: paragraphs?.has(clause.id) ? (paragraphs.get(clause.id)!.heading ? { heading: paragraphs.get(clause.id)!.heading } : {}) : undefined,
     };
   });
 
@@ -510,7 +555,9 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
     rules: rules.length > 0 ? rules : undefined,
     approach: await approachBriefing(deps),
     style: await styleBriefing(deps, 'translate'),
-    submit: `submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering${withDisputes ? '；status 为 ambiguous 的子句须给 alternatives 并在 note 写主译理由，有 disputes.textual 的须给 textual alternative 或 note' : ''}。`,
+    submit: `submit_translation：translations（JSON 数组），每个子句一项 {clauseId, span, text, renderings:[{tokens, zh, note?}], alternatives?:[{text, kind, basis}], note?, supplied?:[{text, note}], paraTitle?}；按 approach 的档位翻译；${paragraphs
+      ? '段首由系统按原文分段设定（子句的 paragraph）：带 paragraph.heading 的子句必须给 paraTitle（小标题的中文译文），其余子句不给 paraTitle；段首前一子句的译文要收住句子；'
+      : 'paraTitle 可选，在自然段开头给出段落小标题；'}text 里补出的词用 [ ]（第 4、5 档不用），补词说明写进 supplied；renderings 的 zh 与 at 按去掉 [ ] 的译文算；contentTokens 里的每个实词都要有 rendering${withDisputes ? '；status 为 ambiguous 的子句须给 alternatives 并在 note 写主译理由，有 disputes.textual 的须给 textual alternative 或 note' : ''}。`,
   };
 }
 
@@ -529,7 +576,8 @@ export async function submitTranslation(deps: Deps, range: ScriptureRange, raw: 
   const disputes = withDisputes ? collectDisputes([...clausesByVerse.values()].flat(), [...verses.values()].flat(), deps.db.variantsInRange(range.startBcv, range.endBcv)) : new Map();
   const level = await currentLevel(deps);
   // 编辑器改旧译文时沿用它原来的档位，不因 style.md 换了档位就拒收
-  const structural = checkTranslations(raw, clausesByVerse, verses, disputes, { level, itemLevels: options.origin === 'human', disputes: withDisputes });
+  const paragraphs = paragraphStartsFor(deps, range, [...clausesByVerse.values()].flat());
+  const structural = checkTranslations(raw, clausesByVerse, verses, disputes, { level, itemLevels: options.origin === 'human', disputes: withDisputes, paragraphs });
   const submittedVerses = new Set(structural.accepted.map((text) => text.bcv));
   const glossary = await deps.store.readGlossary();
   const memory = await deps.memory.build({ books: new Set([range.bookName]), excludeVerses: submittedVerses });
@@ -654,6 +702,7 @@ export async function reviewReport(deps: Deps, target: { range?: ScriptureRange;
       glossary,
       level,
       disputes,
+      paragraphs: paragraphStartsFor(deps, { isOT: bookFromBcv(startBcv) <= LAST_OT_BOOK_ID, bookId: bookFromBcv(startBcv), startBcv, endBcv }, entities),
     });
     issues.push(...review.issues.map((issue) => ({ ...issue, bookName })));
     humanReview.push(...review.humanReview);

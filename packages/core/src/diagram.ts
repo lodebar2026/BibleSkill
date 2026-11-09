@@ -11,6 +11,7 @@ import { editionNames, type BibleDb, type SyntaxNode, type Token, type TokenSynt
 import { parseTokenRange } from './ids.js';
 import { chapterFromBcv, parseClauseId, toBcv, type ScriptureRange } from './ref.js';
 import { LOGIC_LABELS } from './logic.js';
+import { paraTitleText } from './paragraphs.js';
 import { LITERALNESS_LEVELS, type ClauseEntity, type ClauseText } from './schemas.js';
 import { ADDED_STYLE, clauseNote, parseFormatted, type Segment } from './segments.js';
 import type { WorkFileStore } from './store.js';
@@ -185,12 +186,26 @@ export type DiagramClause = {
   cognate: string[];
   /** 分析与译文里已有的备注、其他读法、异文。 */
   records: DiagramRecord[];
+  /** 本子句开始新段落（译文的 paraTitle）：title 为段前小标题，没有为 null；不是段首为 null。 */
+  paragraph: DiagramParagraph | null;
 };
+
+export type DiagramParagraph = { title: string | null };
 
 /** 带补词标记的中文：added 段是原文没有、译者补出的词，note 是补词说明。 */
 export type DiagramText = Array<{ text: string; added?: true; note?: string }>;
 
-export type DiagramVerse = { bcv: number; verse: number; wordIds: string[]; translation: DiagramText };
+/**
+ * 一节的原文与译文。paragraphs：本节里的段首（可在节中）：wordId 为段首子句的首词（原文从这里断段），
+ * at 为译文从 translation 的第几段起属于新段。
+ */
+export type DiagramVerse = {
+  bcv: number;
+  verse: number;
+  wordIds: string[];
+  translation: DiagramText;
+  paragraphs: Array<DiagramParagraph & { wordId: string; at: number }>;
+};
 
 /** 译文分段 → DiagramText：去掉换行，只留补词的说明（主译理由在详情的记录里）。 */
 function diagramText(segments: Segment[]): DiagramText {
@@ -758,6 +773,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     if (text) {
       gist = text.translationSpan === 0 ? [{ text: '（译文并入前句）' }] : [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）' }] : [])];
     }
+    const paraTitle = text ? paraTitleText(text.paraTitle) : undefined;
 
     const records: DiagramRecord[] = [];
     if (clause.note) {
@@ -806,6 +822,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       wireLabel: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : parent && attributive(clause, parent, target) ? '定语' : null,
       link: !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,
+      paragraph: paraTitle === undefined ? null : { title: paraTitle },
       status: clause.status,
       type: clause.type,
       ntForm: verbWord?.tense && verbWord.mood ? `${verbWord.tense}-${verbWord.mood}` : null,
@@ -838,8 +855,17 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
   for (const token of tokens) {
     let verse = verses.at(-1);
     if (!verse || verse.bcv !== token.bcv) {
-      const texts = input.texts.filter((text) => text.bcv === token.bcv && text.translationSpan > 0).sort((a, b) => a.sub.localeCompare(b.sub));
-      verse = { bcv: token.bcv, verse: token.bcv % 1000, wordIds: [], translation: texts.flatMap((text) => diagramText(parseFormatted(text.formatted))) };
+      const texts = input.texts.filter((text) => text.bcv === token.bcv && text.translationSpan > 0)
+        .sort((a, b) => a.sub.length - b.sub.length || a.sub.localeCompare(b.sub));
+      verse = { bcv: token.bcv, verse: token.bcv % 1000, wordIds: [], translation: [], paragraphs: [] };
+      for (const text of texts) {
+        const title = paraTitleText(text.paraTitle);
+        const clause = input.clauses.find((item) => item.id === `${text.bcv}${text.sub}`);
+        if (title !== undefined && clause) {
+          verse.paragraphs.push({ title, wordId: clause.firstWordId, at: verse.translation.length });
+        }
+        verse.translation.push(...diagramText(parseFormatted(text.formatted)));
+      }
       verses.push(verse);
     }
     verse.wordIds.push(token.id);

@@ -30,6 +30,7 @@
 
 - **新约**：以最新的 NA/UBS 为主要参考，主干是 TAGNT 中版本列含 NA28 的词，共 137,954 词（UBS5 正文与 NA28 相同）；词行本身不属 NA28、NA28 的读法只记在异文列的 64 处（如徒 8:31 ὁδηγήσῃ），取 NA28 读法顶替进主干，词行本身的读法进异文表。NA28 双括号 `[[ ]]` 内的经文（可 16:8 短结尾和 16:9-20 长结尾、路 22:43-44、路 23:34a、约 7:53–8:11）在主干内，并带有标记；译文用 `〚 〛` 标出，开启争议时另列为异文争议。数据里的标点来自 THGNT，断句以 NA28/UBS 为准。
 - **旧约**：TAHOT 的 L（列宁格勒抄本）、Q（读型，Qere）、R（恢复文本）。写型（Ketiv）、LXX 补入文本（X）以及插入的补文进异文表。
+- **分段**（可选）：新约可以按 UBS5 等原文版本分段、加小标题，见下文“新约分段与小标题”。没有分段数据时，分段与小标题由模型自拟。
 - **节号**：用英文（NRSV）节号体系，与和合本基本一致。原文节号保留在 `ref` 列，用于对齐 Macula。
 - **词 id**：定宽格式。旧约为 `o` + 书(2) 章(3) 节(3) 词(3) 语素(1)，新约为 `n` + 书(2) 章(3) 节(3) 词(3)，字典序即词序。格式与 Macula 相同，但编号不同；Macula 的 id 只出现在映射表里。
 
@@ -50,6 +51,8 @@ pnpm build
 pnpm data:build --step ../STEPBible-Data --macula-hebrew ../macula-hebrew \
   --macula-greek ../macula-greek --ubs ../ubs-open-license
 # 约 30 秒；输出各约映射率与 build_report 统计
+# 可选：--critical-text data/critical-text.json（见“扩展 MCP”）、--paragraphs data/paragraphs.json（见“新约分段与小标题”）
+# 数据库表结构升级后，旧库会被拒绝打开，重新运行这一步即可
 
 # 3. 安装到一个翻译工作目录
 ./scripts/install.sh ~/圣经翻译
@@ -277,6 +280,29 @@ skill 不依赖任何私有数据。私有扩展用 `install.sh --ext <ext.json>
 新约断句以 NA28/UBS 为准。ext.json 里可以用顶层字段 `"criticalText": {"server", "tool", "args"}` 声明哪个扩展工具能取 NA28 原文。声明后，新约 briefing 会点名让模型调用这个工具，按 NA28 断句；开启争议时还把校勘符号（`⸀ ⸂⸃ ⸋⸌ ˸` 等）当作争议线索。没有扩展的用户不受影响：模型按自己对 NA28/UBS 断句的了解判断。
 
 声明了 `criticalText` 时，数据库的新约正文也可以按 NA28 挑词。TAGNT 版本列里的“NA28”并不总是 NA28：马可福音、使徒行传等卷跟的是 ECM（徒 9:8 οὐδένα、可 1:2 ἐγώ），NA28 单括号里的词也常不算（徒 9:12 [ἐν ὁράματι]）。先用 `node scripts/fetch-critical-text.mjs` 逐章取 NA28 原文，存到 `data/critical-text.json`（受版权保护，已在 .gitignore 里，只留在本机），再在 `pnpm data:build` 后面加 `--critical-text data/critical-text.json`。构建时逐节拿 NA28 对 TAGNT 的词行（本行读法或异文列里的读法），改挑对得上的行进主干；NA28 原文本身不写进数据库。本节有词对不上，或者 NA28 把八个版本都有的词算在邻节（分节不同）时，这一节照 TAGNT。改了哪些节记在 `build_report`（`nt-critical-text`、`nt-critical-unmatched`）。扩展里用不到的工具（写入、校验、扩展自己的工作流）可以列在 `"hideTools": {"<服务器>": [工具名…]}` 里，不放进模型上下文，省 token：agy 写成 `disabledTools`，Gemini 写成 `excludeTools`，`pnpm passage` 调 Claude Code 时转成 `--disallowedTools`。`--no-ext` 可以跳过自动读取扩展配置。如果环境里有其他 MCP 工具提供学术词典、注释书、交叉引用、引语层级、语法书检索等能力，skill 会用它们辅助判断，并在 `sources` 中记为 `ext:<能力>`。工作文件里只写结论，不写入受版权保护的原文。
+
+## 新约分段与小标题
+
+译文的段落与小标题记在段首子句的 `paraTitle` 上（`null` 不是段首，`"[]"` 是段首但没有小标题），段首可以在一节中间。结构图的页首原文与译文按段落排，带小标题；结构图里段首子句的方框上方也显示小标题。
+
+构建时加 `--paragraphs <文件>`，新约就按文件里的分段（如 UBS5）定段首。文件受版权保护的话只留在本机（`data/paragraphs.json` 已在 .gitignore 里），需自备，格式：
+
+```json
+{ "source": "UBS5",
+  "breaks": [
+    { "book": 44, "chapter": 8, "verse": 1, "letters": 0 },
+    { "book": 44, "chapter": 8, "verse": 1, "letters": 36, "heading": "Saul Persecutes the Church" } ] }
+```
+
+`book` 是新教 66 卷序号，`chapter`、`verse` 用原文节号；`letters` 是本节在分段处之前的字母数（NFD 分解后只数字母，不计重音、标点、空格），`0` 即节首；`heading` 是段前的小标题，没有就省略。构建时按字母数落到主干词上，对不上的记进 `build_report`（`paragraph-unmatched`）。
+
+有分段数据时：
+
+- 分析 briefing 的 `paragraphStarts` 列出节中的段首词，段首词必须开新子句，否则该节被退回。
+- 翻译 briefing 里段首子句带 `paragraph`（含英文小标题）。模型把小标题译成中文写进 `paraTitle`，专名、术语照本段译文；段首由系统设定，模型不能增删。
+- 审校列出分段、小标题与数据不符的节，以及段首词落在子句中间、需要重做分析的节。
+
+没有分段数据（旧约，或构建时没给 `--paragraphs`）时，`paraTitle` 照旧可选，由模型在自然段开头给出。两种情况都要求：段首前一子句的译文以句末标点收住，段首不并进前一子句。
 
 ## 常见问题
 

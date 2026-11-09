@@ -18,6 +18,7 @@ import {
   type ClauseEntity,
   type ClauseText,
   type GlossaryEntry,
+  type ParagraphStart,
   type Token,
   type VariantToken,
 } from '@bs/core';
@@ -68,10 +69,11 @@ function translationMessages(
   tokens: Token[],
   disputes: ReturnType<typeof collectDisputes> | undefined,
   checkDisputes: boolean,
+  paragraphs: Map<string, ParagraphStart> | undefined,
 ): string[] {
   const bcv = texts[0].bcv;
   try {
-    return checkTranslations(texts.map(toSubmission), new Map([[bcv, clauses]]), new Map([[bcv, tokens]]), disputes, { itemLevels: true, disputes: checkDisputes })
+    return checkTranslations(texts.map(toSubmission), new Map([[bcv, clauses]]), new Map([[bcv, tokens]]), disputes, { itemLevels: true, disputes: checkDisputes, paragraphs })
       .errors.flatMap((error) => error.messages);
   } catch (error) {
     return [(error as Error).message];
@@ -89,6 +91,8 @@ export function reviewChapter(input: {
   level?: number;
   /** 是否复查争议（未处理的 ambiguous / 异文，人工复核列 ambiguous）；默认复查。 */
   disputes?: boolean;
+  /** 本书有分段数据时的段首（core/paragraphs.ts）；复查 paraTitle 是否与之相符。 */
+  paragraphs?: Map<string, ParagraphStart>;
 }): ChapterReview {
   const { bookName, entities, texts, tokensByVerse, variants, glossary } = input;
   const level = input.level ?? DEFAULT_LITERALNESS;
@@ -112,11 +116,11 @@ export function reviewChapter(input: {
     }
     const tokens = tokensByVerse.get(bcv) ?? [];
     // 不带争议跑一遍得出结构问题；带争议多出来的就是未处理的争议
-    const structural = translationMessages(verseTexts, clauses, tokens, undefined, checkDisputes);
+    const structural = translationMessages(verseTexts, clauses, tokens, undefined, checkDisputes, input.paragraphs);
     structural.forEach((message) => issues.push({ kind: 'structure', bcv, message }));
     if (checkDisputes) {
       const seen = new Set(structural);
-      const withDisputes = translationMessages(verseTexts, clauses, tokens, collectDisputes(clauses, tokens, variants.filter((variant) => variant.bcv === bcv)), true);
+      const withDisputes = translationMessages(verseTexts, clauses, tokens, collectDisputes(clauses, tokens, variants.filter((variant) => variant.bcv === bcv)), true, input.paragraphs);
       withDisputes.filter((message) => !seen.has(message)).forEach((message) => issues.push({ kind: 'dispute', bcv, message }));
     }
     for (const text of verseTexts) {
@@ -127,6 +131,13 @@ export function reviewChapter(input: {
         }
         issues.push({ kind: 'glossary', bcv, message: `${text.bcv}${text.sub}: ${issue.surface}（${issue.tokenId}）译作「${issue.zh}」，${issue.message}` });
       }
+    }
+  }
+
+  // 段首词落在子句中间：子句分析没按段首切，先重做分析
+  for (const [clauseId, start] of input.paragraphs ?? []) {
+    if (!start.exact) {
+      issues.push({ kind: 'structure', bcv: parseClauseId(clauseId).bcv, message: `${start.tokenId} 是段首词${start.heading ? `（小标题「${start.heading}」）` : ''}，却落在子句中间：先重做这一节的子句分析，在段首开新子句，再重译` });
     }
   }
 

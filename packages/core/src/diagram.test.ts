@@ -244,6 +244,20 @@ test('嵌入：修饰母句谓语的状语子句也放占位符（连同它下�
   assert.equal(data.clauses[1].targetWordId, 'n44007018003');
 });
 
+test('嵌入：紧挨在所修饰动词前面的分词句不放占位符，排在母句上方', () => {
+  const tokens = TOKENS.map((item) => (item.id === 'n44007018002' ? { ...item, morph: 'V-PAP-NSM' } : item));
+  const data = buildDiagram({
+    title: '测试', isOT: false, texts: [], tokens, variants: [], morphExpansion: () => null,
+    clauses: [
+      clause('44007018a', 1, 7, { verbRange: 'n44007018003', subjectRange: 'n44007018001' }),
+      clause('44007018b', 2, 2, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018002' }),
+    ],
+  });
+  assert.equal(data.clauses[0].chips.some((chip) => chip.slots?.length), false);
+  assert.equal(data.clauses[1].above, '44007018a');
+  assert.equal(data.clauses[0].above, null);
+});
+
 test('嵌入：母句中间已有嵌入子句时，紧接在母句后面的从句在母句末尾也放占位符', () => {
   const data = buildDiagram({
     title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,

@@ -37,7 +37,14 @@ const besideMarker = (clause: Clause) => {
 export function renderForest(): void {
   const forest = $('#forest');
   forest.classList.toggle('ot-forms', mainline && D.clauses.some((clause) => formOf(clause)));
-  const ordered = [...D.clauses].sort((a, b) => firstWord(a).localeCompare(firstWord(b)));
+  // 按原文先后；紧挨在所修饰动词前面的分词句（above）整组提到母句上方（徒 9:38c–d 排在 38b 之上）
+  const sorted = [...D.clauses].sort((a, b) => firstWord(a).localeCompare(firstWord(b)));
+  const ordered: Clause[] = [];
+  const emit = (clause: Clause): void => {
+    sorted.filter((item) => item.above === clause.id).forEach(emit);
+    ordered.push(clause);
+  };
+  sorted.filter((clause) => !clause.above).forEach(emit);
   // 原文里紧接着母句：两者之间的子句都嵌在母句里面（首词在母句末词之前，如 徒 8:7a 的 ⟨7b⟩），或已排在母句那一行。
   // 隔着别的子句时（如 徒 8:9d λέγων 前面是 9b、9c）照常另起一行，不打乱原文顺序
   const follows = (clause: Clause, parentBox: HTMLElement) => {

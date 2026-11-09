@@ -182,6 +182,8 @@ export type DiagramClause = {
   targetWordIds: string[];
   /** 嵌在母句中间时，连线指向母句里的占位符（DiagramSlot.id）。 */
   targetSlot: string | null;
+  /** 嵌在母句中间、紧挨在所修饰动词前面的分词句（连同它下面的从句）不放占位符，排在这个子句（母句）的上方；其余为 null。 */
+  above: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
   /** 在母句里充当什么（宾语、主语、表语、引语、定语）：结构图标在连线上；状语等其余从句为 null。 */
   wireLabel: string | null;
@@ -708,9 +710,6 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const [first, last] = clause.modifies ? parseTokenRange(clause.modifies) : [verbFirst, verbFirst];
     return first >= verbFirst && last <= verbLast;
   };
-  const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])]));
-  // 母句中间已有嵌入子句时，紧接在母句后面的从句（连同它们下面的从句）与母句之间隔着嵌入子句那几行，
-  // 在母句末尾也放占位符，标出它们接在哪里（徒 9:38b 末尾的 ⟨38e 38f⟩）
   const byFirst = [...input.clauses].sort((a, b) => a.firstWordId.localeCompare(b.firstWordId));
   const descends = (clause: ClauseEntity, ancestorId: string) => {
     for (let at: ClauseEntity | undefined = clause; at?.parentId; at = input.clauses.find((item) => item.id === at!.parentId)) {
@@ -720,6 +719,33 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
     return false;
   };
+  const isParticiple = (clause: ClauseEntity) => {
+    const morph = tokenById.get([...idsInRange(clause.verbRange, wordsOf.get(clause.id) ?? [])][0] ?? '')?.morph ?? '';
+    return isOT ? /^H?V[a-zA-Z][rs]/.test(morph) : greekMorph(morph).mood === 'ptcp';
+  };
+  // 修饰母句动词、紧挨着动词的分词句（徒 9:38c ἀκούσαντες… 紧接 ἀπέστειλαν 之前，8:25b）不放占位符：
+  // 在动词前面的整组（连同它下面的从句）排在母句上方，在动词后面的照常排在下方，靠上下位置看出原文顺序
+  const above = new Map<string, string>();
+  const slotsOf = new Map(input.clauses.map((clause) => {
+    const own = wordsOf.get(clause.id) ?? [];
+    const verbAt = clause.verbRange ? [...idsInRange(clause.verbRange, own)].map((id) => own.findIndex((word) => word.id === id)) : [];
+    const slots = embedSlots(clause, input.clauses, own).filter((slot) => {
+      const heads = slot.clauseIds.map((id) => input.clauses.find((item) => item.id === id)!).filter((item) => item.parentId === clause.id);
+      const adjacent = verbAt.length > 0 && (slot.at === Math.min(...verbAt) || slot.at === Math.max(...verbAt) + 1);
+      const participles = heads.length > 0 && heads.every((head) => isParticiple(head) && modifiesVerb(head.id, clause))
+        && slot.clauseIds.every((id) => heads.some((head) => head.id === id || descends(input.clauses.find((item) => item.id === id)!, head.id)));
+      if (!adjacent || !participles) {
+        return true;
+      }
+      if (slot.at === Math.min(...verbAt)) {
+        slot.clauseIds.forEach((id) => above.set(id, clause.id));
+      }
+      return false;
+    });
+    return [clause.id, slots];
+  }));
+  // 母句中间已有嵌入子句时，紧接在母句后面的从句（连同它们下面的从句）与母句之间隔着嵌入子句那几行，
+  // 在母句末尾也放占位符，标出它们接在哪里（徒 8:32a 末尾的 ⟨32c–33c⟩）
   for (const clause of input.clauses) {
     const slots = slotsOf.get(clause.id)!;
     if (slots.length === 0) {
@@ -864,6 +890,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       targetWordId,
       targetWordIds,
       targetSlot: slot ? `${container!.id}@${slot.at}` : null,
+      above: above.get(clause.id) ?? null,
       logic: logicOf(clause, input.clauses),
       mainline: clause.mainline ?? null,
       cognate: isOT ? cognateInfinitive(own) : [],

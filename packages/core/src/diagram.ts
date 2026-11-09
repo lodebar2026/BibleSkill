@@ -770,6 +770,22 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     if (tail.length > 0 && (slots.length > 0 || detached)) {
       slots.push({ at: (wordsOf.get(clause.id) ?? []).length, clauseIds: tail });
     }
+    // 母句开头同理：紧挨在母句前面、修饰母句动词的分词句（连同它下面的从句），与动词之间隔着别的词时，
+    // 在母句开头放占位符（9:40b ⟨40a⟩ ὁ Πέτρος … προσηύξατο）。独立属格修饰全句，与动词的位置无关，不标
+    const lead: string[] = [];
+    for (const item of byFirst.filter((other) => other.firstWordId < clause.firstWordId).reverse()) {
+      if (!descends(item, clause.id) || item.lastWordId > clause.firstWordId) {
+        break;
+      }
+      lead.unshift(item.id);
+    }
+    const leadHeads = lead.map((id) => input.clauses.find((item) => item.id === id)!).filter((item) => item.parentId === clause.id);
+    const genitive = (item: ClauseEntity) => greekMorph(tokenById.get([...idsInRange(item.verbRange, wordsOf.get(item.id) ?? [])][0] ?? '')?.morph ?? '').gcase === 'gen';
+    const leadDetached = leadHeads.some((item) => isParticiple(item) && !genitive(item) && modifiesVerb(item.id, clause))
+      && own.length > 0 && !verbIds.has(own[0].id);
+    if (lead.length > 0 && leadDetached) {
+      slots.unshift({ at: 0, clauseIds: lead });
+    }
   }
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
 

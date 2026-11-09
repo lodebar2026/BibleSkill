@@ -814,7 +814,7 @@ export function checkTranslations(
         if (!item.merge || !allowed.includes(item.merge)) {
           fail(bcv, clause.id, `span=${item.span} 要写 merge 说明合并理由：${allowed.join('、')}。中文顺序与原文相同、断开处也不在一个成分中间的，不合并，拆开各自 span=1`);
         } else if (item.merge === 'constituent' && !note) {
-          fail(bcv, clause.id, 'merge=constituent 时在 note 写明断开会切在哪两个成分之间（如动词与宾语从句之间）');
+          fail(bcv, clause.id, 'merge=constituent 时在 note 写明断开会切在哪两个成分之间（如主语从句与谓语之间；动词与宾语从句之间不算，拆开各自成句）');
         } else if (item.merge === 'reorder' && sameOrder(plain, item.renderings, positions, covered, span)) {
           fail(bcv, clause.id, `声明 merge=reorder，但合并后 ${item.span} 行与 ${covered.map((c) => c.id).join('、')} 一一对应、顺序和原文相同，没有调换语序：拆开各自 span=1；若断开会切在一个成分中间，改为 merge=constituent 并在 note 写明`);
         }

@@ -10,7 +10,7 @@ export function setupCopy(): void {
     }
     const text = words.map((w, i) => {
       const g = w.querySelector('.g')!.cloneNode(true) as HTMLElement;
-      g.querySelector('.vb')?.remove();
+      g.querySelectorAll('.vb, .vc').forEach((mark) => mark.remove());
       const previous = words[i - 1];
       const gap = !previous ? '' : previous.closest('.box') !== w.closest('.box') ? '\n' : previous.classList.contains('join') ? '' : ' ';
       return gap + g.textContent;

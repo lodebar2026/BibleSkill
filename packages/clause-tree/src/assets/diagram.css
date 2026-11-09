@@ -143,6 +143,10 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .canvas:not(.hide-case) .w[data-tense="plpf"] .g { border-width: 2.5px; }
 .w[data-tense="pres"] { --t: var(--t-pres); } .w[data-tense="impf"] { --t: var(--t-impf); } .w[data-tense="fut"] { --t: var(--t-fut); }
 .w[data-tense="aor"] { --t: var(--t-aor); } .w[data-tense="perf"] { --t: var(--t-perf); } .w[data-tense="plpf"] { --t: var(--t-plpf); }
+/* 语态：右上角小字，中间红、被动蓝（同 BibleCenter）；关掉格与时态着色时一起隐去 */
+.vc { font: 600 0.55em/1 -apple-system, "PingFang SC", sans-serif; vertical-align: super; margin-inline-start: 1px; }
+.vc.mid, .vc.midpass { color: var(--t-perf); } .vc.pass { color: var(--t-pres); }
+.canvas.hide-case .vc { display: none; }
 .w[data-mood="ind"] { --m: var(--m-ind); } .w[data-mood="impv"] { --m: var(--m-impv); } .w[data-mood="subj"] { --m: var(--m-subj); } .w[data-mood="opt"] { --m: var(--m-opt); } .w[data-mood="inf"] { --m: var(--m-inf); }
 .case-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; align-items: baseline; }
 .case-legend .o { font-size: 15px; }

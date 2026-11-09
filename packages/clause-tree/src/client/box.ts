@@ -22,6 +22,9 @@ function header(clause: Clause, form: string | null): string {
   return `<div class="bh">${fold}<span class="cid">${esc(clauseNo(clause.id))}</span>${typeBadge}<span class="lab">${esc(clause.label)}</span>${status}<button type="button" class="det" title="词义、要点与分析记录">详情 ▾</button><span class="gist">${zh(clause.gist)}</span></div>`;
 }
 
+// 语态右上角小字（同 BibleCenter）：主动不标，中间「中」，被动「被」，中被同形「中?」；异态动词照形式标
+const VOICE_MARK: Record<string, string> = { mid: '中', pass: '被', midpass: '中?' };
+
 function wordEl(clause: Clause, chip: Clause['chips'][number], id: string, index: number): HTMLElement {
   const word = words[id];
   const w = document.createElement('span');
@@ -40,7 +43,7 @@ function wordEl(clause: Clause, chip: Clause['chips'][number], id: string, index
   if (chip.indents) {
     w.dataset.indent = String(chip.indents[chip.wordIds.indexOf(id)]);
   }
-  w.innerHTML = `<span class="g o">${esc(word.text)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
+  w.innerHTML = `<span class="g o">${esc(word.text)}${word.voice ? `<sup class="vc ${word.voice}">${VOICE_MARK[word.voice]}</sup>` : ''}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
     + `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`;
   if (chip.pauses) {
     w.dataset.pause = String(chip.pauses[chip.wordIds.indexOf(id)]);

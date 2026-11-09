@@ -120,16 +120,19 @@ test('逻辑关系：结构图给出关系名与关联子句，一段时列出�
 });
 
 test('Robinson 词法：格、时态、语气', () => {
-  assert.deepEqual(greekMorph('N-DSF'), { gcase: 'dat', tense: null, mood: null });
-  assert.deepEqual(greekMorph('P-1GP'), { gcase: 'gen', tense: null, mood: null });
-  assert.deepEqual(greekMorph('S-1SGSN'), { gcase: 'gen', tense: null, mood: null });
-  assert.deepEqual(greekMorph('N-NSM-P'), { gcase: 'nom', tense: null, mood: null });
-  assert.deepEqual(greekMorph('A-NUI'), { gcase: null, tense: null, mood: null });
-  assert.deepEqual(greekMorph('V-2AAP-NSM'), { gcase: 'nom', tense: 'aor', mood: 'ptcp' });
-  assert.deepEqual(greekMorph('V-2AAI-3S'), { gcase: null, tense: 'aor', mood: 'ind' });
-  assert.deepEqual(greekMorph('V-2LAI-3S'), { gcase: null, tense: 'plpf', mood: 'ind' });
-  assert.deepEqual(greekMorph('V-AAM-2S'), { gcase: null, tense: 'aor', mood: 'impv' });
-  assert.deepEqual(greekMorph('V-PAN'), { gcase: null, tense: 'pres', mood: 'inf' });
+  assert.deepEqual(greekMorph('N-DSF'), { gcase: 'dat', tense: null, mood: null, voice: null });
+  assert.deepEqual(greekMorph('P-1GP'), { gcase: 'gen', tense: null, mood: null, voice: null });
+  assert.deepEqual(greekMorph('S-1SGSN'), { gcase: 'gen', tense: null, mood: null, voice: null });
+  assert.deepEqual(greekMorph('N-NSM-P'), { gcase: 'nom', tense: null, mood: null, voice: null });
+  assert.deepEqual(greekMorph('A-NUI'), { gcase: null, tense: null, mood: null, voice: null });
+  assert.deepEqual(greekMorph('V-2AAP-NSM'), { gcase: 'nom', tense: 'aor', mood: 'ptcp', voice: null });
+  assert.deepEqual(greekMorph('V-2AAI-3S'), { gcase: null, tense: 'aor', mood: 'ind', voice: null });
+  assert.deepEqual(greekMorph('V-2ADI-3S'), { gcase: null, tense: 'aor', mood: 'ind', voice: 'mid' });
+  assert.deepEqual(greekMorph('V-APP-NSM'), { gcase: 'nom', tense: 'aor', mood: 'ptcp', voice: 'pass' });
+  assert.deepEqual(greekMorph('V-PEI-3S'), { gcase: null, tense: 'pres', mood: 'ind', voice: 'midpass' });
+  assert.deepEqual(greekMorph('V-2LAI-3S'), { gcase: null, tense: 'plpf', mood: 'ind', voice: null });
+  assert.deepEqual(greekMorph('V-AAM-2S'), { gcase: null, tense: 'aor', mood: 'impv', voice: null });
+  assert.deepEqual(greekMorph('V-PAN'), { gcase: null, tense: 'pres', mood: 'inf', voice: null });
 });
 
 /** 手写的短语树：nodes 按从根到叶给出，词挂在最后一个结点下。 */

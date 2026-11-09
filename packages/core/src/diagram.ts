@@ -33,10 +33,11 @@ export type DiagramWord = {
   rendering: string | null;
   /** 异文、读型、NA28 双括号等提示。 */
   variant: string | null;
-  /** 新约：名词性词的格；动词的时态、语气（着色用）。 */
+  /** 新约：名词性词的格；动词的时态、语气、语态（着色用；主动语态为 null，不标）。 */
   gcase: GreekCase | null;
   tense: GreekTense | null;
   mood: GreekMood | null;
+  voice: GreekVoice | null;
   /** 旧约动词的词干（qal 主动为 null，不着色；新约一律 null）。 */
   stem: HebrewStem | null;
 };
@@ -64,23 +65,28 @@ export function hebrewStem(morph: string): HebrewStem | null {
 export type GreekCase = 'nom' | 'gen' | 'dat' | 'acc' | 'voc';
 export type GreekTense = 'pres' | 'impf' | 'fut' | 'aor' | 'perf' | 'plpf';
 export type GreekMood = 'ind' | 'subj' | 'opt' | 'impv' | 'inf' | 'ptcp';
+/** 语态按形式：异态动词也照形式标（D 中间异态 → mid，O 被动异态 → pass，N、E 中被同形 → midpass）。 */
+export type GreekVoice = 'mid' | 'pass' | 'midpass';
 
 const CASES: Record<string, GreekCase> = { N: 'nom', G: 'gen', D: 'dat', A: 'acc', V: 'voc' };
 const TENSES: Record<string, GreekTense> = { P: 'pres', I: 'impf', F: 'fut', A: 'aor', R: 'perf', L: 'plpf' };
 const MOODS: Record<string, GreekMood> = { I: 'ind', S: 'subj', O: 'opt', M: 'impv', N: 'inf', P: 'ptcp' };
+const VOICES: Record<string, GreekVoice> = { M: 'mid', D: 'mid', P: 'pass', O: 'pass', N: 'midpass', E: 'midpass' };
 
 /**
  * Robinson 词法码里的格、时态、语气：`N-DSF`、`P-1GP`（人称代词先写人称）、`S-1SGSN`（物主代词先写所有者的人称、数）、
  * `V-2AAP-NSM`（第二不定过去式分词，格在末段）。不变格的词（`A-NUI`）没有格。
  */
-export function greekMorph(morph: string): { gcase: GreekCase | null; tense: GreekTense | null; mood: GreekMood | null } {
-  const verb = morph.match(/^V-2?([PIFARL])[A-Z]([ISOMNP])(?:-([NGDAV])?)?/);
+export function greekMorph(morph: string): { gcase: GreekCase | null; tense: GreekTense | null; mood: GreekMood | null; voice: GreekVoice | null } {
+  const verb = morph.match(/^V-2?([PIFARL])([A-Z])([ISOMNP])(?:-([NGDAV])?)?/);
   if (verb) {
-    return { gcase: verb[2] === 'P' ? CASES[verb[3] ?? ''] ?? null : null, tense: TENSES[verb[1]], mood: MOODS[verb[2]] };
+    return {
+      gcase: verb[3] === 'P' ? CASES[verb[4] ?? ''] ?? null : null, tense: TENSES[verb[1]], mood: MOODS[verb[3]], voice: VOICES[verb[2]] ?? null,
+    };
   }
   const nominal = morph.match(/^[NARCDTKIXQFS]-(?:[123][SP](?=[NGDAV][SP]))?(?:[123](?=[NGDAV]))?([NGDAV])[SP][MFN]?(?:-|$)/)
     ?? morph.match(/^P-(?:[123])?([NGDAV])[SP]/);
-  return { gcase: nominal ? CASES[nominal[1]] : null, tense: null, mood: null };
+  return { gcase: nominal ? CASES[nominal[1]] : null, tense: null, mood: null, voice: null };
 }
 
 /**
@@ -683,7 +689,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       id: token.id, bcv: token.bcv, text: token.surface, after: token.after, lemma: token.lemma, translit: token.translit,
       strong: token.strong, morph: token.morph, morphExp: input.morphExpansion(token.morph), glossEn: token.glossEn,
       glossZh: token.glossZh, sense: token.sense, rendering: renderings.get(token.id) ?? null, variant: variantOf(token, isOT),
-      ...(isOT ? { gcase: null, tense: null, mood: null } : greekMorph(token.morph)),
+      ...(isOT ? { gcase: null, tense: null, mood: null, voice: null } : greekMorph(token.morph)),
       stem: isOT ? hebrewStem(token.morph) : null,
     };
   }

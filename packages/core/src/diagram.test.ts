@@ -229,15 +229,17 @@ test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就�
   assert.equal(split.clauses[0].chips[2].pauses?.at(-1), PAUSE_JOINED);
 });
 
-test('嵌入：修饰母句谓语的状语子句不放占位符，连线直接指到动词', () => {
+test('嵌入：修饰母句谓语的状语子句也放占位符（连同它下面的从句），连线直接指到动词', () => {
   const data = buildDiagram({
     title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,
     clauses: [
       clause('44007018a', 1, 12, { verbRange: 'n44007018003', subjectRange: 'n44007018004' }),
-      clause('44007018b', 8, 10, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018010' }),
+      clause('44007018b', 8, 8, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018008' }),
+      clause('44007018c', 9, 10, { parentId: '44007018b', modifies: 'n44007018008', verbRange: 'n44007018010' }),
     ],
   });
-  assert.equal(data.clauses[0].chips.some((chip) => chip.slots?.length), false);
+  const slots = data.clauses[0].chips.flatMap((chip) => chip.slots ?? []);
+  assert.deepEqual(slots.map((slot) => slot.clauseIds), [['44007018b', '44007018c']]);
   assert.equal(data.clauses[1].targetSlot, null);
   assert.equal(data.clauses[1].targetWordId, 'n44007018003');
 });

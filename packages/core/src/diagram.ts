@@ -697,8 +697,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
 
   const clauseIds = new Set(input.clauses.map((clause) => clause.id));
   const wordsOf = clauseWords(input.clauses, tokens);
-  // 嵌在母句中间、修饰母句谓语的子句（状语分词、状语从句，如徒 8:25b）不放占位符，连线直接指到动词；
-  // 修饰名词等其他成分的（关系从句夹在名词短语里）才放，标出它在母句里的位置
+  // 嵌在母句中间的子句一律放占位符，标出原文顺序，连同它下面的从句（徒 9:38b 的 ⟨38c 38d⟩）；
+  // 修饰母句谓语的（状语分词、状语从句，如徒 8:25b、9:38c）连线直接指到动词，修饰名词等的（关系从句夹在名词短语里）指到占位符
   const modifiesVerb = (clauseId: string, container: ClauseEntity) => {
     const clause = input.clauses.find((item) => item.id === clauseId);
     if (!clause || clause.parentId !== container.id || !container.verbRange) {
@@ -708,9 +708,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const [first, last] = clause.modifies ? parseTokenRange(clause.modifies) : [verbFirst, verbFirst];
     return first >= verbFirst && last <= verbLast;
   };
-  const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])
-    .map((slot) => ({ ...slot, clauseIds: slot.clauseIds.filter((id) => !modifiesVerb(id, clause)) }))
-    .filter((slot) => slot.clauseIds.length > 0)]));
+  const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])]));
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
 
   // 子句在母句里充当的论元（宾语、主语、表语）：取 Macula 短语树上本句谓词所在子句结点的 role，
@@ -768,9 +766,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
     const targetWordId = targetWordIds[0] ?? null;
     const target = targetWordId ? tokenById.get(targetWordId) : undefined;
-    // 嵌在母句中间：连线指向母句里的占位符
+    // 嵌在母句中间：连线指向母句里的占位符；修饰母句谓语的照常指到动词
     const container = parent ? containerOf(clause, input.clauses) : undefined;
-    const slot = container && container.id === parent!.id ? slotsOf.get(container.id)?.find((item) => item.clauseIds.includes(clause.id)) : undefined;
+    const slot = container && container.id === parent!.id && !modifiesVerb(clause.id, container) ? slotsOf.get(container.id)?.find((item) => item.clauseIds.includes(clause.id)) : undefined;
     const verbWord = words[[...idsInRange(clause.verbRange, own)][0] ?? ''];
 
     const text = textByKey.get(clause.id);

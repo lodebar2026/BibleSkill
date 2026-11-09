@@ -123,6 +123,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 /* 同位语：留在原位，虚线框、用所配成分的颜色，双线连到所配的成分（画在 #tips 层）；框底多留出画双线的地方 */
 .chip.r-appos { --c: var(--r-s); border-style: dashed; border-top-style: solid; }
 .box.has-appos { padding-bottom: 20px; }
+/* 双线走成分块上方时，框头与成分块之间留出画线的地方 */
+.box.appos-up .bh { margin-bottom: 16px; }
 #tips path.appos { fill: none; stroke: var(--wire); stroke-width: 5; stroke-linejoin: round; }
 #tips path.appos-in { fill: none; stroke: var(--panel); stroke-width: 1.6; stroke-linejoin: round; }
 .chip.r-o, .chip.r-o2, .chip.r-io, .chip.r-adv, .chip.r-p { --c: var(--muted); }

@@ -2,7 +2,7 @@
 import { $, $$, esc, orig, punct, zh } from './dom.js';
 import { toggleKids } from './folds.js';
 import {
-  type Clause, D, FORM_ZH, MOOD_ZH, ROLE_ZH, STEM_TAG, TENSE_ZH, clauseNo, depthOf, formOf, hasParent, kids, offline, offlineTitle, targets, words,
+  type Clause, D, FORM_ZH, MOOD_ZH, ROLE_ZH, STEM_TAG, TENSE_ZH, byId, clauseNo, depthOf, formOf, hasParent, kids, offline, offlineTitle, targets, words,
 } from './model.js';
 import { setOpen } from './toolbar.js';
 
@@ -76,15 +76,24 @@ function addSlots(chip: Clause['chips'][number], ws: HTMLElement): void {
 function chipsEl(clause: Clause, box: HTMLElement): HTMLElement {
   const chips = document.createElement('div');
   chips.className = 'chips';
-  if (clause.chips.some((chip) => chip.role === 'appos')) {
-    box.classList.add('has-appos');
-  }
+  // 下属子句的连线从下方伸进框里、指到同位语与所配成分之间的词时（徒 9:17e 17h、17i→ἀπέσταλκέν），
+  // 双线改走成分块上方，不与箭头交叉（从上方来的箭头停在框边，碰不到）
+  const kidClauses = (kids.get(clause.id) ?? []).map((id) => byId.get(id)!);
+  const incoming = new Set(kidClauses.flatMap((kid) => [...(kid.targetWordIds ?? (kid.targetWordId ? [kid.targetWordId] : [])), kid.targetSlot ?? '']));
+  const pointedInto = (chip: Clause['chips'][number]) => chip.wordIds.some((id) => incoming.has(id)) || (chip.slots ?? []).some((slot) => incoming.has(slot.id));
+  const upward = (index: number, head: number) => clause.chips.slice(Math.min(index, head) + 1, Math.max(index, head)).some(pointedInto);
   for (const [chipIndex, chip] of clause.chips.entries()) {
     const el = document.createElement('div');
     el.className = `chip${chip.role ? ` r-${chip.role}` : ''}${chip.fronted ? ' front' : ''}`;
     el.dataset.ci = String(chipIndex);
     if (chip.apposOf !== undefined) {
       el.dataset.appos = String(chip.apposOf);
+      if (upward(chipIndex, chip.apposOf)) {
+        el.dataset.apposUp = '';
+        box.classList.add('appos-up');
+      } else {
+        box.classList.add('has-appos');
+      }
     }
     // 同位语用所配成分的颜色（虚线框）
     const pair = chip.role === 'appos' && chip.apposOf !== undefined ? clause.chips[chip.apposOf]?.role : null;

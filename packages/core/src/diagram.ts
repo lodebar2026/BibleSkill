@@ -6,7 +6,6 @@
  * 纯函数 buildDiagram 便于测试；loadDiagram 负责读库与工作文件。
  */
 import { HEBREW_STEMS } from './clause-type.js';
-import { renderingKey } from './align.js';
 import { clauseOfWord, clauseWords, containerOf, embedSlots } from './clause-words.js';
 import { editionNames, type BibleDb, type SyntaxNode, type Token, type TokenSyntax, type VariantToken } from './db.js';
 import { parseTokenRange } from './ids.js';
@@ -484,10 +483,18 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
   const verbKeys = new Set(words.flatMap((word, index) => (verb.has(word.id) && groups?.[index]?.role === 'v' ? [groups[index]!.key] : [])));
   // 同位语：分析给的主语之外 Macula 另标作主语、与分析的主语不沾边的主格成分（徒 8:38c κατέβησαν ἀμφότεροι … ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος，
   // 主语是 ἀμφότεροι，句末一串是它的同位语）。与分析的主语共用一个成分的（主语只标了中心词）不算
-  const subjectKeys = new Set(words.flatMap((word, index) => (subject.has(word.id) && groups?.[index] ? [groups[index]!.key] : [])));
-  const apposKeys = new Set(words.flatMap((word, index) => {
+  // Macula 的主语成分本身是同位结构（Np-Appos）时按它的直属部分分：徒 9:17e ὁ κύριος ἀπέσταλκέν με, Ἰησοῦς … 被谓语隔开，
+  // Ἰησοῦς 与分析的主语 ὁ κύριος 在不同部分，是同位语
+  const partKeys = words.map((word, index) => {
     const group = groups?.[index];
-    return group?.role === 's' && !subjectKeys.has(group.key) && !subject.has(word.id) && /^[NATRPDKFQ]-N/.test(isOT ? '' : word.morph) ? [group.key] : [];
+    const path = syntax?.get(word.id)?.path;
+    const k = group && path ? path.findIndex((node) => `n${node.id}` === group.key) : -1;
+    return k >= 0 && path![k].rule === 'Np-Appos' && path![k + 1] ? `${group!.key}/n${path![k + 1].id}` : group?.key;
+  });
+  const subjectKeys = new Set(words.flatMap((word, index) => (subject.has(word.id) && partKeys[index] ? [partKeys[index]!] : [])));
+  const apposKeys = new Set(words.flatMap((word, index) => {
+    const key = partKeys[index];
+    return groups?.[index]?.role === 's' && key && !subjectKeys.has(key) && !subject.has(word.id) && /^[NATRPDKFQ]-N/.test(isOT ? '' : word.morph) ? [key] : [];
   }));
   let leading = true;
   const chips: Array<DiagramChip & { key?: string }> = [];
@@ -496,7 +503,7 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
     leading = leading && (isConnector(word, words[index + 1], isOT) || afterPreposition);
     const group = groups?.[index];
     // 分析给了主语、谓语时以分析为准，Macula 在别处标的主语、谓语不再算
-    const tree = group?.role === 's' && subject.size > 0 ? (apposKeys.has(group.key) ? 'appos' : null)
+    const tree = group?.role === 's' && subject.size > 0 ? (apposKeys.has(partKeys[index] ?? '') ? 'appos' : null)
       : group?.role === 'v' && verb.size > 0 ? null : group?.role ?? null;
     const lone = groups && isConjunction(word, isOT) && group?.key === `w${word.id}`;
     const withVerb = group?.role === 'v' && verbKeys.has(group.key);
@@ -649,7 +656,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       const [first, last] = parseTokenRange(rendering.tokens);
       for (const token of tokens) {
         if (token.id >= first && token.id <= last) {
-          renderings.set(token.id, renderings.has(token.id) ? `${renderings.get(token.id)}；${renderingKey(rendering.zh)}` : renderingKey(rendering.zh));
+          renderings.set(token.id, renderings.has(token.id) ? `${renderings.get(token.id)}；${rendering.zh}` : rendering.zh);
         }
       }
     }

@@ -24,7 +24,7 @@ export function renderingParts(zh: string): string[] {
   return zh.split(GAP).filter(Boolean);
 }
 
-/** 比较译法用的形式：去掉「…」（「受…苦」与「受苦」算同一译法）；显示也用它。 */
+/** 比较译法用的形式：去掉「…」（「受…苦」与「受苦」算同一译法）。显示时照原样带「…」。 */
 export function renderingKey(zh: string): string {
   return renderingParts(zh).join('');
 }

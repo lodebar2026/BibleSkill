@@ -419,6 +419,21 @@ test('同位语：徒 8:38c 主语是 ἀμφότεροι，Macula 另标作主�
   assert.ok(!run('n44007018008').some((chip) => chip.startsWith('appos')));
 });
 
+test('同位语：Macula 的主语成分是同位结构、两部分被谓语隔开（徒 9:17e ὁ κύριος ἀπέσταλκέν με, Ἰησοῦς），分析的主语之外那一部分是同位语，配给主语块', () => {
+  const surfaces: Array<[string, string]> = [['ὁ', 'T-NSM'], ['κύριος', 'N-NSM'], ['ἀπέσταλκέν', 'V-RAI-3S'], ['με', 'P-1AS'], ['Ἰησοῦς', 'N-NSM-P']];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const c = node(1, 'cl', null, 'S-V-O');
+  const subject = node(2, 'np', 's', 'Np-Appos');
+  const lord = node(3, 'np', null, 'DetNP');
+  const jesus = node(4, 'np', null, 'Np-Appos');
+  const object = node(5, 'np', 'o', null);
+  const syntax = syntaxOf([[1, null, [c, subject, lord]], [2, null, [c, subject, lord]], [3, 'v', [c]], [4, null, [c, object]], [5, null, [c, subject, jesus]]]);
+  const chips = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, syntax, texts: [],
+    clauses: [clause('44007018a', 1, 5, { verbRange: 'n44007018003', subjectRange: 'n44007018001-n44007018002' })] }).clauses[0].chips;
+  assert.deepEqual(chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`), ['s:1,2', 'v:3', 'o:4', 'appos:5']);
+  assert.equal(chips[3].apposOf, 0);
+});
+
 test('同位语：一个成分整个是 Macula 的同位结构（Np-Appos）时拆开成对，徒 8:28 宾语 τὸν προφήτην ＝ Ἠσαΐαν；带冠词分词这类定语部分不拆', () => {
   const surfaces: Array<[string, string]> = [['ἀνεγίνωσκεν', 'V-IAI-3S'], ['τὸν', 'T-ASM'], ['προφήτην', 'N-ASM'], ['Ἠσαΐαν', 'N-ASM-P']];
   const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));

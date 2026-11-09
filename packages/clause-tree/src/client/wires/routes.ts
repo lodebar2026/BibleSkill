@@ -1,9 +1,9 @@
 /**
  * 句法连线：每个从句连到母句里被修饰的词（或嵌入子句的占位符）。这里定出每条线的几种走法，挑选在 pick.ts。
- * 指向同一个词的线共用一条横道（汇成主干）；同一母句里指向不同词的，横道上下错开。
+ * 指向同一个词的并列从句共用一条横道（汇成主干）；其余的各占一条横道，上下错开。
  */
 import { $ } from '../dom.js';
-import { type Clause, D, byId } from '../model.js';
+import { type Clause, D, byId, firstWord, words } from '../model.js';
 import { candidatesFor } from './candidates.js';
 import { type Point, polyline } from './geometry.js';
 import type { Layout } from './layout.js';
@@ -13,6 +13,34 @@ import type { Layout } from './layout.js';
  * into：箭头伸进母句框、指到被修饰词的那一段（画在方框上层）；没有目标词时为 null，箭头停在框边。
  */
 export type Wire = { candidates: Point[][]; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null; clause: string };
+
+/**
+ * 主干：同一母句里指向同一个词的从句，只有并列的才汇成一条主干——后一句以 καί、τε、ἤ、וְ 开头，且紧接着前一句
+ * （徒 9:27d–f πῶς… καὶ ὅτι… καὶ πῶς…）。不并列的各走各的线（徒 9:38a 独立属格与 38c ἀκούσαντες 都修饰 ἀπέστειλαν）。
+ */
+const COORD = /^(G2532|G5037|G2228|H9002)/;
+const startsCoordinated = (clause: Clause) => {
+  const first = clause.chips.find((chip) => chip.wordIds.length > 0);
+  return Boolean(first && first.role === 'conj' && COORD.test(words[first.wordIds[0]].strong));
+};
+const trunks = new Map<string, string>();
+function trunkKey(clause: Clause): string {
+  if (trunks.size === 0) {
+    const groups = new Map<string, Clause[]>();
+    for (const item of D.clauses) {
+      const key = `${item.parentId}|${item.targetSlot ?? item.targetWordId ?? ''}`;
+      groups.set(key, [...groups.get(key) ?? [], item]);
+    }
+    for (const [key, siblings] of groups) {
+      let trunk = '';
+      siblings.sort((a, b) => firstWord(a).localeCompare(firstWord(b))).forEach((item, i) => {
+        trunk = i > 0 && startsCoordinated(item) ? trunk : `${key}|${item.id}`;
+        trunks.set(item.id, trunk);
+      });
+    }
+  }
+  return trunks.get(clause.id)!;
+}
 
 // 连线指到母句里的占位符（嵌入子句）或被修饰的词
 const targetOf = (clause: Clause, parentBox: HTMLElement) => clause.targetSlot
@@ -34,7 +62,7 @@ function laneOrder(): Map<string, Map<string, number>> {
     const p = parentBox.getBoundingClientRect();
     const below = c.top >= p.bottom;
     const key = `${clause.parentId}|${below ? 'b' : 'a'}`;
-    const targetKey = clause.targetSlot ?? clause.targetWordId ?? '';
+    const targetKey = trunkKey(clause);
     const spans = reach.get(key) ?? new Map<string, number>();
     spans.set(targetKey, Math.max(spans.get(targetKey) ?? 0, below ? c.top - p.bottom : p.top - c.bottom));
     reach.set(key, spans);
@@ -74,7 +102,7 @@ export function buildWires(L: Layout): Wire[] {
     const below = c.top >= p.bottom;
     const laneKey = `${clause.parentId}|${below ? 'b' : 'a'}`;
     const byTarget = lanes.get(laneKey) ?? new Map<string, number>();
-    const targetKey = clause.targetSlot ?? clause.targetWordId ?? '';
+    const targetKey = trunkKey(clause);
     if (!byTarget.has(targetKey)) {
       byTarget.set(targetKey, byTarget.size);
     }
@@ -91,7 +119,16 @@ export function buildWires(L: Layout): Wire[] {
     const tip = into !== null ? edge : below ? edge + 1 : edge - 1;
     // 横道离母句至少 13px：箭头（9px）前留一段竖线，折点不直接接在箭头上；多条横道相隔 4px，都在框间 26px 的空隙里
     const yLane = below ? edge + 13 + lane * 4 : edge - 13 - lane * 4;
-    const xT = t ? t.left + t.width / 2 - base.left : (c.left + c.right) / 2 - base.left;
+    // 几条不并列的主干指向同一个词时（徒 9:38a、38c → ἀπέστειλαν），箭头在词上错开：跨度大的（竖线在外圈、横道贴近母句）
+    // 落在沟槽一侧，免得横道穿过别的箭头
+    const prefix = targetKey.slice(0, targetKey.lastIndexOf('|') + 1);
+    const same = [...byTarget].filter(([key]) => key.startsWith(prefix)).sort((a, b) => a[1] - b[1]).map(([key]) => key);
+    const half = t ? Math.max(t.width / 2 - 4, 0) : 0;
+    const shift = same.length > 1 ? Math.max(-half, Math.min(half, (same.indexOf(targetKey) - (same.length - 1) / 2) * 14)) * (rtl ? -1 : 1) : 0;
+    // 修饰全句（独立属格）：箭头落在母句框起始一侧的框边，不指某个词
+    const xT = t ? t.left + t.width / 2 - base.left + shift
+      : clause.wholeClause ? (rtl ? p.right - 28 : p.left + 28) - base.left
+        : (c.left + c.right) / 2 - base.left;
     const { candidates, farSide, startSide, childEdge } = candidatesFor(L, { clause, c, skip, below, edge, tip, yLane, yChild, xT });
     wires.push({ candidates, farSide, startSide, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into, clause: clause.id });
   }

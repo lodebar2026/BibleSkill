@@ -182,6 +182,8 @@ export type DiagramClause = {
   targetWordIds: string[];
   /** 嵌在母句中间时，连线指向母句里的占位符（DiagramSlot.id）。 */
   targetSlot: string | null;
+  /** 修饰整个母句（独立属格）：连线指到母句框的起始一侧，不指某个词，targetWordId 为 null。 */
+  wholeClause: boolean;
   /** 嵌在母句中间、紧挨在所修饰动词前面的分词句（连同它下面的从句）不放占位符，排在这个子句（母句）的上方；其余为 null。 */
   above: string | null;
   /** 逻辑关系（与句法挂接分开画）：关系名与关联的子句（范围内的）。 */
@@ -811,7 +813,13 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const parent = parentId ? input.clauses.find((item) => item.id === parentId) : undefined;
     const parentWords = parent ? wordsOf.get(parent.id) ?? [] : [];
     let targetWordIds: string[] = [];
-    if (parent) {
+    const argument = parent && !isOT ? argumentOf(clause, parent) : null;
+    // 独立属格（属格分词作状语，徒 9:38a ἐγγὺς δὲ οὔσης Λύδδας）修饰整个母句：连线指到母句框，不指某个词。
+    // 作母句论元的属格分词（8:30b αὐτοῦ ἀναγινώσκοντος 是 ἤκουσεν 的宾语）不算
+    const verbMorph = greekMorph(tokenById.get([...idsInRange(clause.verbRange, own)][0] ?? '')?.morph ?? '');
+    const wholeClause = !isOT && parent !== undefined && !argument && verbMorph.mood === 'ptcp' && verbMorph.gcase === 'gen'
+      && modifiesVerb(clause.id, parent);
+    if (parent && !wholeClause) {
       targetWordIds = [...idsInRange(clause.modifies, parentWords)];
       if (!targetWordIds.length) {
         targetWordIds = [[...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId];
@@ -860,7 +868,6 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
 
     const targetZh = target ? targetWordIds.map((id) => words[id]?.rendering ?? tokenById.get(id)?.glossZh ?? tokenById.get(id)?.surface ?? '').join('') : null;
-    const argument = parent && !isOT ? argumentOf(clause, parent) : null;
     // 作宾语、前面以上点（·）引出的是直接引语（徒 8:29b λέγει… τῷ Φιλίππῳ· πρόσελθε）
     const before = tokens[tokens.findIndex((token) => token.id === clause.firstWordId) - 1];
     // 上点引出、指向上点前那个词的（8:32c αὕτη· 后面引的经文）也是引语
@@ -878,7 +885,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       // 子句在母句里的作用（宾语、引语、定语等）标在连线上，框头不再重复
       label: clause.parentId === null ? '主句' : '从句',
       wireLabel: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : parent && attributive(clause, parent, target) ? '定语' : null,
-      link: !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
+      wholeClause,
+      link: wholeClause ? '修饰全句' : !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,
       paragraph: paraTitle === undefined ? null : { title: paraTitle },
       status: clause.status,

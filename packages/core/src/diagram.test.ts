@@ -258,6 +258,24 @@ test('嵌入：紧挨在所修饰动词前面的分词句不放占位符，排�
   assert.equal(data.clauses[0].above, null);
 });
 
+test('独立属格修饰整个母句：不指某个词，连线标「修饰全句」；主格分词仍指动词', () => {
+  const build = (morph: string) => buildDiagram({
+    title: '测试', isOT: false, texts: [], variants: [], morphExpansion: () => null,
+    tokens: TOKENS.map((item) => (item.id === 'n44007018002' ? { ...item, morph } : item)),
+    clauses: [
+      clause('44007018a', 3, 7, { verbRange: 'n44007018003', subjectRange: 'n44007018004' }),
+      clause('44007018b', 1, 2, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018002' }),
+    ],
+  }).clauses[1];
+  const absolute = build('V-PAP-GSM');
+  assert.equal(absolute.wholeClause, true);
+  assert.equal(absolute.targetWordId, null);
+  assert.equal(absolute.link, '修饰全句');
+  const participle = build('V-PAP-NSM');
+  assert.equal(participle.wholeClause, false);
+  assert.equal(participle.targetWordId, 'n44007018003');
+});
+
 test('嵌入：母句中间已有嵌入子句时，紧接在母句后面的从句在母句末尾也放占位符', () => {
   const data = buildDiagram({
     title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,

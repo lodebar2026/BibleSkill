@@ -709,6 +709,33 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return first >= verbFirst && last <= verbLast;
   };
   const slotsOf = new Map(input.clauses.map((clause) => [clause.id, embedSlots(clause, input.clauses, wordsOf.get(clause.id) ?? [])]));
+  // 母句中间已有嵌入子句时，紧接在母句后面的从句（连同它们下面的从句）与母句之间隔着嵌入子句那几行，
+  // 在母句末尾也放占位符，标出它们接在哪里（徒 9:38b 末尾的 ⟨38e 38f⟩）
+  const byFirst = [...input.clauses].sort((a, b) => a.firstWordId.localeCompare(b.firstWordId));
+  const descends = (clause: ClauseEntity, ancestorId: string) => {
+    for (let at: ClauseEntity | undefined = clause; at?.parentId; at = input.clauses.find((item) => item.id === at!.parentId)) {
+      if (at.parentId === ancestorId) {
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const clause of input.clauses) {
+    const slots = slotsOf.get(clause.id)!;
+    if (slots.length === 0) {
+      continue;
+    }
+    const tail: string[] = [];
+    for (const item of byFirst.filter((other) => other.firstWordId > clause.lastWordId)) {
+      if (!descends(item, clause.id)) {
+        break;
+      }
+      tail.push(item.id);
+    }
+    if (tail.length > 0) {
+      slots.push({ at: (wordsOf.get(clause.id) ?? []).length, clauseIds: tail });
+    }
+  }
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
 
   // 子句在母句里充当的论元（宾语、主语、表语）：取 Macula 短语树上本句谓词所在子句结点的 role，

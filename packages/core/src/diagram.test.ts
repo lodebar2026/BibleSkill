@@ -244,6 +244,21 @@ test('嵌入：修饰母句谓语的状语子句也放占位符（连同它下�
   assert.equal(data.clauses[1].targetWordId, 'n44007018003');
 });
 
+test('嵌入：母句中间已有嵌入子句时，紧接在母句后面的从句在母句末尾也放占位符', () => {
+  const data = buildDiagram({
+    title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,
+    clauses: [
+      clause('44007018a', 1, 7, { verbRange: 'n44007018003', subjectRange: 'n44007018004' }),
+      clause('44007018b', 2, 2, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018002' }),
+      clause('44007018c', 8, 9, { parentId: '44007018a', modifies: 'n44007018003', verbRange: 'n44007018009' }),
+      clause('44007018d', 10, 12, { parentId: '44007018c', modifies: 'n44007018009', verbRange: 'n44007018010' }),
+    ],
+  });
+  const slots = data.clauses[0].chips.flatMap((chip) => chip.slots ?? []);
+  assert.deepEqual(slots.map((slot) => slot.clauseIds), [['44007018b'], ['44007018c', '44007018d']]);
+  assert.equal(data.clauses[2].targetSlot, null);
+});
+
 test('旧约词干：qal 主动不标，其余按词干类归并，被动另记', () => {
   assert.equal(hebrewStem('HVqp3ms'), null);
   assert.deepEqual(hebrewStem('HVpp3ms'), { name: 'piel', family: 'piel', passive: false });

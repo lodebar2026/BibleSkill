@@ -57,8 +57,10 @@ function addSlots(chip: Clause['chips'][number], ws: HTMLElement): void {
     const w = document.createElement('span');
     w.className = 'w slot';
     w.dataset.slot = slot.id;
-    w.title = `这里嵌着子句 ${slot.clauseIds.map(clauseNo).join('、')}，点击跳到那里`;
-    w.innerHTML = `<span class="g">⟨${esc(slot.clauseIds.map(clauseNo).join(' '))}⟩</span>`;
+    // 超过两个子句时写成范围（徒 8:32a 末尾的 ⟨32c–33c⟩），悬停看全部
+    const nos = slot.clauseIds.map(clauseNo);
+    w.title = `子句 ${nos.join('、')} 在原文这个位置，点击跳到那里`;
+    w.innerHTML = `<span class="g">⟨${esc(nos.length > 2 ? `${nos[0]}–${nos.at(-1)}` : nos.join(' '))}⟩</span>`;
     if (chip.pauses) {
       w.dataset.pause = String(slot.pause ?? 0);
     }

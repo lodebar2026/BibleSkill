@@ -13,10 +13,20 @@ const isSide = (clause: Clause) => {
   return Boolean(clause.parentId && byId.has(clause.parentId) && kids.has(clause.id))
     && wordCount(ids) === 1 && ids.some((id) => SPEECH.test(words[id].strong));
 };
-// 只有一个 הָיָה 的过渡句（וַיְהִי、וְהָיָה）：它引出的第一个从句（多为时间从句）排在它同一行的行尾
+// 过渡句：旧约只有一个 הָיָה（וַיְהִי、וְהָיָה），新约是 ἐγένετο（δέ）加不定式主语（徒 9:32a、43a），
+// 除连词、状语外没有别的成分，且不超过 3 个词（徒 9:37a 带 ἐν ταῖς ἡμέραις ἐκείναις 的照常单占一行）。
+// 它引出的第一个从句排在它同一行的行尾
 const isMarker = (clause: Clause) => {
-  const ids = clause.chips.flatMap((chip) => chip.wordIds);
-  return D.isOT && kids.has(clause.id) && wordCount(ids) === 1 && ids.some((id) => /^H1961/.test(words[id].strong));
+  if (!kids.has(clause.id)) {
+    return false;
+  }
+  if (D.isOT) {
+    const ids = clause.chips.flatMap((chip) => chip.wordIds);
+    return wordCount(ids) === 1 && ids.some((id) => /^H1961/.test(words[id].strong));
+  }
+  const verb = clause.chips.filter((chip) => chip.role === 'v');
+  return wordCount(clause.chips.flatMap((chip) => chip.wordIds)) <= 3 && verb.length === 1 && verb[0].wordIds.length === 1 && /^G1096/.test(words[verb[0].wordIds[0]].strong)
+    && clause.chips.every((chip) => chip.role === 'v' || chip.role === 'conj' || chip.role === 'adv');
 };
 const besideMarker = (clause: Clause) => {
   const parent = clause.parentId ? byId.get(clause.parentId) : undefined;

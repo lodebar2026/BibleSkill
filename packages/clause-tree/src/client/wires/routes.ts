@@ -62,7 +62,8 @@ export function buildWires(L: Layout): Wire[] {
     const p = parentBox.getBoundingClientRect();
     // 行尾的引语框架、过渡句引出的从句：一根横线从它的起始边指回母句的尾边，高度对着被修饰的词（排不下折到下一行时照常布线）
     if (childBox.classList.contains('side') && c.top < p.bottom) {
-      const word = targetOf(clause, parentBox)?.getBoundingClientRect();
+      // 过渡句一行两框竖向居中，连线放在中部；引语框架对着被修饰的词
+      const word = parentBox.parentElement!.classList.contains('marker') ? null : targetOf(clause, parentBox)?.getBoundingClientRect();
       const y = Math.round((word ? word.top + word.height / 2 : p.top + p.height / 2) - base.top);
       const points: Array<[number, number]> = [[start(c), y], [endOf(p) + (rtl ? -1 : 1), y]];
       segs.push(...polyline(points));

@@ -60,6 +60,8 @@ export function renderForest(): void {
         parentBox.replaceWith(row);
         row.append(parentBox);
       }
+      // 过渡句一行：两框竖向居中，连线走在中部（见 wires/routes.ts）
+      row.classList.toggle('marker', besideMarker(clause));
       renderBox(clause, row, false).classList.add('side');
     } else {
       // 段首：有小标题时先加标题行，没有时方框上方多留一点空

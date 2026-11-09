@@ -109,6 +109,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 /* 只有一个词的引语框架（εἰπόντες、לֵאמֹר）放在母句同一行的行尾，省竖向空间 */
 .row { display: flex; align-items: flex-start; gap: 10px 36px; flex-wrap: wrap; }
 .row > .box.side { margin-inline-start: 0; min-width: 250px; }
+.row.marker { align-items: center; }
 .row[hidden] { display: none; }
 .bh .cid { font-size: 12px; font-weight: 700; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
 .bh .lab { font-size: 12px; font-weight: 600; color: var(--panel); background: var(--muted); border-radius: 4px; padding: 0 6px; }

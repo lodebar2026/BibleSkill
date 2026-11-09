@@ -746,13 +746,13 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     });
     return [clause.id, slots];
   }));
-  // 母句中间已有嵌入子句时，紧接在母句后面的从句（连同它们下面的从句）与母句之间隔着嵌入子句那几行，
-  // 在母句末尾也放占位符，标出它们接在哪里（徒 8:32a 末尾的 ⟨32c–33c⟩）
+  // 母句末尾的占位符，标出紧接在母句后面的从句（连同它们下面的从句）接在哪里：
+  // 1) 母句中间已有嵌入子句，后接的从句与母句之间隔着那几行（徒 8:32a 末尾的 ⟨32c–33c⟩）；
+  // 2) 后接的第一句是修饰母句动词的分词句，却不紧跟动词、中间隔着别的词（9:38b ἀπέστειλαν δύο ἄνδρας πρὸς αὐτόν ⟨38e 38f⟩）。
+  //    只有一个说话动词的分词（λέγων）排在母句行尾，不用标
+  const SPEECH = /^(G3004|G2036|G5346|G0611|G2980)/;
   for (const clause of input.clauses) {
     const slots = slotsOf.get(clause.id)!;
-    if (slots.length === 0) {
-      continue;
-    }
     const tail: string[] = [];
     for (const item of byFirst.filter((other) => other.firstWordId > clause.lastWordId)) {
       if (!descends(item, clause.id)) {
@@ -760,7 +760,14 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       }
       tail.push(item.id);
     }
-    if (tail.length > 0) {
+    const head = tail.length > 0 ? input.clauses.find((item) => item.id === tail[0])! : undefined;
+    const own = wordsOf.get(clause.id) ?? [];
+    const verbIds = new Set(idsInRange(clause.verbRange, own));
+    const headWords = head ? wordsOf.get(head.id) ?? [] : [];
+    const detached = head !== undefined && head.parentId === clause.id && isParticiple(head) && modifiesVerb(head.id, clause)
+      && own.length > 0 && !verbIds.has(own[own.length - 1].id)
+      && !(headWords.length === 1 && SPEECH.test(headWords[0].strong));
+    if (tail.length > 0 && (slots.length > 0 || detached)) {
       slots.push({ at: (wordsOf.get(clause.id) ?? []).length, clauseIds: tail });
     }
   }

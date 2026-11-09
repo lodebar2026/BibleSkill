@@ -2,6 +2,7 @@
  * 从句的连线上标「宾语」「引语」「定语」等：标签骑在线上，放在最长的一段，两头尽量各露出 10px 的线
  * （带标签的从句框上方多留了空隙，紧挨母句的短竖线也放得下）；与已放的标签重叠就沿线挪开。
  */
+import { $ } from '../dom.js';
 import type { Point } from './geometry.js';
 import type { Layout } from './layout.js';
 import type { ArgumentLines } from './pick.js';
@@ -40,7 +41,8 @@ export function placeArgumentLabels(L: Layout, argumentLines: ArgumentLines): vo
     const label = document.createElement('div');
     label.className = 'll al';
     label.textContent = text;
-    canvas.append(label);
+    // 标签排在折叠按钮之前：按绘制顺序压在连线上、在按钮之下
+    canvas.insertBefore(label, $('#bfold', canvas));
     const width = label.offsetWidth + 6;
     const height = label.offsetHeight + 4;
     const segments = line.slice(1).map((point, i) => ({ a: line[i], b: point, i }))

@@ -12,7 +12,11 @@ import type { Layout } from './layout.js';
  * 一条线的候选走法（farSide、startSide 记下走尾侧、起始侧沟槽的是哪几种）；span 是子句与母句相隔多远，跨度短的先定。
  * into：箭头伸进母句框、指到被修饰词的那一段（画在方框上层）；没有目标词时为 null，箭头停在框边。
  */
-export type Wire = { candidates: Point[][]; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null; clause: string };
+export type Wire = {
+  candidates: Point[][]; farSide: Set<number>; startSide: Set<number>; span: number; group: string; into: number | null; clause: string;
+  /** 母句同一侧有几组不并列的连线时左右交替：跨度最大的走起始侧，下一组走尾侧，依此类推（徒 9:38a 左、38c 右）。 */
+  preferFar: boolean;
+};
 
 /**
  * 主干：同一母句里指向同一个词的从句，只有并列的才汇成一条主干——后一句以 καί、τε、ἤ、וְ 开头，且紧接着前一句
@@ -132,7 +136,8 @@ export function buildWires(L: Layout): Wire[] {
       : clause.wholeClause ? (rtl ? p.right - 28 : p.left + 28) - base.left
         : (c.left + c.right) / 2 - base.left;
     const { candidates, farSide, startSide, childEdge } = candidatesFor(L, { clause, c, skip, below, edge, tip, yLane, yChild, xT });
-    wires.push({ candidates, farSide, startSide, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into, clause: clause.id });
+    const preferFar = byTarget.size > 1 && lane % 2 === 1;
+    wires.push({ candidates, farSide, startSide, span: Math.abs(childEdge - edge), group: `${laneKey}|${targetKey}`, into, clause: clause.id, preferFar });
   }
   return wires;
 }

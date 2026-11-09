@@ -28,7 +28,7 @@ export class Layout {
   readonly placed: Array<{ x: number; y: number; w: number; h: number }> = [];
 
   constructor() {
-    $$('.ll', this.canvas).forEach((label) => label.remove());
+    $$('.ll, .box > svg.inner', this.canvas).forEach((item) => item.remove());
     this.svg.innerHTML = '';
     this.base = this.canvas.getBoundingClientRect();
     this.tips.innerHTML = '';
@@ -100,8 +100,27 @@ export class Layout {
   };
 
   /**
+   * 方框里画箭头的一层：方框的第一个子元素，按绘制顺序在底色、成分块之上，在文字（position: relative，排在后面）之下。
+   * 坐标仍用画布坐标：把这层挪回画布原点。
+   */
+  readonly inner = (box: HTMLElement): SVGSVGElement => {
+    let layer = box.querySelector<SVGSVGElement>(':scope > svg.inner');
+    if (!layer) {
+      layer = document.createElementNS(SVG, 'svg') as SVGSVGElement;
+      layer.setAttribute('class', 'inner');
+      layer.setAttribute('width', '1');
+      layer.setAttribute('height', '1');
+      const r = box.getBoundingClientRect();
+      layer.style.left = `${this.base.left - r.left - box.clientLeft}px`;
+      layer.style.top = `${this.base.top - r.top - box.clientTop}px`;
+      box.prepend(layer);
+    }
+    return layer;
+  };
+
+  /**
    * 带箭头的线：线画在 layer，只画到箭头底边（线宽不会从箭头尖两侧露出来）；箭头是单独的三角形，
-   * 一律画在最上层（#tips），不被方框边框盖住，各处大小一样。
+   * 画在 #tips，不被方框边框盖住，各处大小一样；伸进方框的箭头（layer 是方框里的 svg.inner）连尖一起画在那一层，不盖住文字。
    */
   readonly arrow = (layer: SVGSVGElement, points: Point[], cls = '', hops: Point[] = []): void => {
     const [tx, ty] = points.at(-1)!;
@@ -118,7 +137,7 @@ export class Layout {
     const head = document.createElementNS(SVG, 'path');
     head.setAttribute('class', cls ? `${cls}-tip` : 'tip');
     head.setAttribute('d', `M${tx},${ty} L${bx - dy * 4.5},${by + dx * 4.5} L${bx + dy * 4.5},${by - dx * 4.5} z`);
-    this.tips.append(head);
+    (layer.classList.contains('inner') ? layer : this.tips).append(head);
   };
 
   /** 一段不带箭头的线。 */

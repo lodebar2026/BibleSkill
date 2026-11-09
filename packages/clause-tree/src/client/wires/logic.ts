@@ -121,7 +121,8 @@ export function drawLogic(L: Layout): void {
     const label = document.createElement('div');
     label.className = 'll';
     label.textContent = clause.logic!.targetIds.length > 1 ? `${clause.logic!.label} → ${clause.logic!.targetText}` : clause.logic!.label;
-    canvas.append(label);
+    // 标签排在折叠按钮之前：按绘制顺序压在连线上、在按钮之下
+    canvas.insertBefore(label, $('#bfold', canvas));
     labels.push({ label, line: points(best), lane: best });
   }
   // 标签放在这条线独有的横段上（几条竖道并排时，放在竖线上看不出归属）：挑最长的横段，避开横穿它的竖线和已放好的标签；

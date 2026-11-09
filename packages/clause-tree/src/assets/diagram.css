@@ -62,6 +62,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .tok.var { text-decoration: underline dotted var(--accent); text-underline-offset: 4px; }
 
 .scroller { overflow-x: auto; padding-bottom: 6px; }
+/* 图层靠绘制顺序（DOM 先后）叠放，不用 z-index：#wires 框外连线 → 方框（底色、成分块 → 框内 svg.inner 伸进框里的箭头 →
+   框里的文字）→ #tips 箭头尖、同位语双线 → #hits 感应区 → 标签。框里的文字设成 position: relative，排在 svg.inner 之后画，压在箭头上 */
 .canvas { position: relative; }
 .forest { display: flex; flex-direction: column; align-items: flex-start; gap: 26px; padding: 4px 0; }
 .forest .box.vstart { margin-top: 14px; }
@@ -70,7 +72,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .forest .row.vstart:first-child { margin-top: 0; }
 /* 连线上要标「宾语」「定语」等的从句框：上方多留空隙，紧挨母句时那段竖线也够长，标签两头还露得出线 */
 .forest > .box.wl { margin-top: 20px; }
-.box { position: relative; z-index: 2; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
+.box { position: relative; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
 /* 方框宽度由原文成分与框头标签决定（标签不折行）；大意、说明、展开内容不参与宽度计算，在框内换行 */
 .box > .up, .box > .more, .bh .gist { contain: inline-size; }
 .box.root { border: 2.5px solid var(--accent); box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent); }
@@ -99,11 +101,11 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 .bh .unfold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 /* 鼠标移到连线上：这一支加亮，旁边出现「收起」按钮 */
-#hits { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 3; overflow: visible; }
+#hits { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
 #hits path.hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
 #hits path.lit { fill: none; stroke: var(--accent); stroke-width: 6; opacity: .45; pointer-events: none; }
 .box.lit { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
-#bfold { position: absolute; z-index: 6; display: none; font: inherit; font-size: 12px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
+#bfold { position: absolute; display: none; font: inherit; font-size: 12px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
 #bfold.on { display: block; }
 .box[hidden] { display: none; }
 /* 只有一个词的引语框架（εἰπόντες、לֵאמֹר）放在母句同一行的行尾，省竖向空间 */
@@ -197,20 +199,22 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .more summary { cursor: pointer; color: var(--accent); }
 .more .tag { font-weight: 600; }
 .up { font-size: 12px; color: var(--accent); margin-top: 6px; direction: ltr; }
-#wires, #tips { position: absolute; left: 0; top: 0; pointer-events: none; z-index: 1; overflow: visible; }
-#tips { z-index: 3; }
-#tips path { fill: none; stroke: var(--wire); stroke-width: 2; }
+#wires, #tips, .box > svg.inner { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
+.bh > *, .chip > .rl, .w > span, .box > .up, .box > .more { position: relative; }
+/* 穿过框头的箭头在字旁断开：文字带一圈底色描边 */
+.bh .gist, .chip > .rl { text-shadow: 0 0 2px var(--panel), 0 0 2px var(--panel), 0 0 3px var(--panel), 0 0 3px var(--panel); }
+#tips path, svg.inner path { fill: none; stroke: var(--wire); stroke-width: 2; }
 /* 有连线时句法、逻辑说明放进「详情」，不挡箭头；窄屏不画线，留在框底 */
 .more .up { margin: 0 0 6px; }
 .box > .up { display: none; }
 #wires path { fill: none; stroke: var(--wire); stroke-width: 2; }
-#wires path.tip, #tips path.tip { fill: var(--wire); stroke: none; }
+#wires path.tip, #tips path.tip, svg.inner path.tip { fill: var(--wire); stroke: none; }
 #wires path.logic { stroke: var(--logic); stroke-dasharray: 6 4; }
 #tips path.logic-tip { fill: var(--logic); stroke: none; }
-.ll { position: absolute; z-index: 4; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--logic); background: var(--panel); border: 1.5px dashed var(--logic); border-radius: 999px; padding: 0 7px; white-space: nowrap; pointer-events: none; direction: ltr; }
+.ll { position: absolute; transform: translate(-50%, -50%); font-size: 12px; font-weight: 600; color: var(--logic); background: var(--panel); border: 1.5px dashed var(--logic); border-radius: 999px; padding: 0 7px; white-space: nowrap; pointer-events: none; direction: ltr; }
 .hide-logic .ll:not(.al) { display: none; }
 /* 从句在母句里的作用（宾语、主语、表语、引语、定语）：标签画在句法连线上 */
-.ll.al { color: var(--wire); border: 1.5px solid var(--wire); font-weight: 500; z-index: 4; }
+.ll.al { color: var(--wire); border: 1.5px solid var(--wire); font-weight: 500; }
 .up .lg { color: var(--logic); }
 @media (max-width: 760px) {
   .forest { gap: 12px; }
@@ -226,7 +230,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .legend span::before { content: ""; display: inline-block; width: 14px; height: 4px; margin-right: 4px; vertical-align: middle; background: var(--c); }
 .hl { background: var(--hl) !important; }
 .sel { outline: 2px solid var(--accent); }
-#pop { position: fixed; z-index: 10; width: min(380px, calc(100vw - 16px)); overflow: auto; box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); display: none; font-size: 13px; direction: ltr; }
+#pop { position: fixed; width: min(380px, calc(100vw - 16px)); overflow: auto; box-sizing: border-box; background: var(--panel); border: 1.5px solid var(--accent); border-radius: 10px; padding: 10px 12px; box-shadow: 0 8px 28px rgba(0,0,0,.18); display: none; font-size: 13px; direction: ltr; }
 #pop.show { display: block; }
 #pop .lemma { font-size: 24px; }
 #pop .x { position: absolute; right: 8px; top: 4px; border: none; background: none; color: var(--muted); font-size: 18px; cursor: pointer; }

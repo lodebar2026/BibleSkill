@@ -2,6 +2,7 @@
  * 句法连线挑走法并画出：按「交叉数 → 折点数 → 长度」取最好的；跨度短的先定。
  * 指向同一个词的几条线一起挑（可共用一段主干绕开别的线）：组合不多时穷举；各组按其中跨度最短的那条排先后。
  */
+import { $ } from '../dom.js';
 import { D, byId } from '../model.js';
 import { type Point, type Seg, crossJoints, crosses, length, overlapping, pathD, polyline } from './geometry.js';
 import type { Layout } from './layout.js';
@@ -27,9 +28,10 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
     // 与别组的线重合（同一条竖道或横道上有一段叠在一起）看不出各自指向哪个词，与交叉同价
     const shared = path.reduce((sum, seg) => sum + segs.filter((other) => !own.includes(other) && overlapping(seg, other)).length, 0);
     // 新约：主干、分叉优先走起始侧（左侧），尾侧留给逻辑虚线；只在左侧会多出交叉时才走尾侧
-    const farCost = !D.isOT && wire.farSide.has(index) ? 500 : 0;
+    // 母句同一侧有几组线、这组排在单数位时反过来走尾侧，与起始侧那组左右分开（routes.ts 的 preferFar）
+    const farCost = wire.preferFar ? (wire.farSide.has(index) ? 0 : 500) : !D.isOT && wire.farSide.has(index) ? 500 : 0;
     // 新约：几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）
-    const sideCost = !D.isOT && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
+    const sideCost = !D.isOT && !wire.preferFar && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
     return (cost(path) + logicCrossings + joints + shared) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + farCost + sideCost;
   };
   const commit = (wire: Wire, best: Point[]) => {
@@ -58,10 +60,11 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
     if (wire.into === null) {
       arrow(svg, best, '', hops);
     } else {
-      // 框外一段画在下层，伸进框里的一段画在上层
+      // 框外一段画在下层；伸进框里的一段画在母句框里的 svg.inner，压在成分块上、文字下
       L.path(svg, pathD(best, hops));
       const [x, y] = best.at(-1)!;
-      arrow(tips, [[x, y], [x, wire.into]]);
+      const parentBox = $(`[data-box="${byId.get(wire.clause)!.parentId}"]`);
+      arrow(parentBox ? L.inner(parentBox) : tips, [[x, y], [x, wire.into]]);
     }
   };
   const minSpan = (group: Wire[]) => Math.min(...group.map((wire) => wire.span));

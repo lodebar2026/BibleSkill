@@ -198,8 +198,8 @@ export type DiagramClause = {
 
 export type DiagramParagraph = { title: string | null };
 
-/** 带补词标记的中文：added 段是原文没有、译者补出的词，note 是补词说明。 */
-export type DiagramText = Array<{ text: string; added?: true; note?: string }>;
+/** 带补词标记的中文：added 段是原文没有、译者补出的词，note 是补词说明；aside 是图上的说明（「（合译）」），不是译文，复制时去掉。 */
+export type DiagramText = Array<{ text: string; added?: true; note?: string; aside?: true }>;
 
 /**
  * 一节的原文与译文。paragraphs：本节里的段首（可在节中）：wordId 为段首子句的首词（原文从这里断段），
@@ -777,7 +777,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const segments = text ? parseFormatted(text.formatted) : [];
     let gist: DiagramText = [];
     if (text) {
-      gist = text.translationSpan === 0 ? [{ text: '（译文并入前句）' }] : [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）' }] : [])];
+      gist = text.translationSpan === 0 ? [{ text: '（译文并入前句）', aside: true }]
+        : [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）', aside: true as const }] : [])];
     }
     const paraTitle = text ? paraTitleText(text.paraTitle) : undefined;
 

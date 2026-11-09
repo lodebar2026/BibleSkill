@@ -117,7 +117,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .bh .st { font-size: 11px; border-radius: 4px; padding: 0 5px; }
 .bh .st.ambiguous { background: var(--amb); color: var(--ink); border: 1px solid var(--accent); }
 .bh .st.needs-review { background: var(--rev); color: var(--ink); border: 1px solid var(--r-v); }
-.bh .gist { font-size: 14px; flex: 1 1 100%; min-width: 0; }
+.bh .gist { font-size: 14px; flex: 1 1 100%; min-width: 0; user-select: text; cursor: text; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
 .chip { display: flex; flex-direction: column; border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 6px; padding: 0 2px 2px; background: color-mix(in srgb, var(--c) 6%, var(--panel)); --c: var(--r-none); }
 .chip > .rl { font-size: 11px; color: var(--c); font-weight: 600; padding: 1px 4px 0; min-height: 1.4em; direction: ltr; }

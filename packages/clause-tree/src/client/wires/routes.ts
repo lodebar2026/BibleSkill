@@ -114,8 +114,10 @@ export function buildWires(L: Layout): Wire[] {
     const target = targetOf(clause, parentBox);
     const t = target?.getBoundingClientRect();
     const edge = (below ? p.bottom : p.top) - base.top;
-    // 从下方来的箭头伸进框里指到词的下沿；从上方来的停在框边（框头的编号、译文在词的上面）
-    const into = t && below ? t.bottom - base.top + 3 : null;
+    // 从下方来的箭头伸进框里指到词的下沿；从上方来的（排在母句上方的分词句，徒 9:38c → ἀπέστειλαν）穿过框头，
+    // 停在那个词所在成分块的顶边，不压到成分名和词
+    const chipTop = target?.closest('.chip')?.getBoundingClientRect().top;
+    const into = t && below ? t.bottom - base.top + 3 : t && chipTop !== undefined ? chipTop - base.top - 1 : null;
     const tip = into !== null ? edge : below ? edge + 1 : edge - 1;
     // 横道离母句至少 13px：箭头（9px）前留一段竖线，折点不直接接在箭头上；多条横道相隔 4px，都在框间 26px 的空隙里
     const yLane = below ? edge + 13 + lane * 4 : edge - 13 - lane * 4;

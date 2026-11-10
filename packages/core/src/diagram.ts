@@ -858,9 +858,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const text = textByKey.get(clause.id);
     const segments = text ? parseFormatted(text.formatted) : [];
     let gist: DiagramText = [];
-    if (text) {
-      gist = text.translationSpan === 0 ? [{ text: '（译文并入前句）', aside: true }]
-        : [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）', aside: true as const }] : [])];
+    // 译文并进前句的子句（span 0）框头不写译文，也不另加说明
+    if (text && text.translationSpan > 0) {
+      gist = [...diagramText(segments), ...(text.translationSpan > 1 ? [{ text: '（合译）', aside: true as const }] : [])];
     }
     const paraTitle = text ? paraTitleText(text.paraTitle) : undefined;
 

@@ -3,7 +3,7 @@
  * 指向同一个词的并列从句共用一条横道（汇成主干）；其余的各占一条横道，上下错开。
  */
 import { $ } from '../dom.js';
-import { type Clause, D, byId, firstWord, words } from '../model.js';
+import { type Clause, D, byId, firstWord, lastWord, words } from '../model.js';
 import { candidatesFor } from './candidates.js';
 import { type Point, polyline } from './geometry.js';
 import type { Layout } from './layout.js';
@@ -21,6 +21,7 @@ export type Wire = {
 /**
  * 主干：同一母句里指向同一个词的从句，只有并列的才汇成一条主干——后一句以 καί、τε、ἤ、וְ 开头，且紧接着前一句
  * （徒 9:27d–f πῶς… καὶ ὅτι… καὶ πῶς…）。不并列的各走各的线（徒 9:38a 独立属格与 38c ἀκούσαντες 都修饰 ἀπέστειλαν）。
+ * 并列的两句中间夹着母句的词时也分开（9:40a ἐκβαλών 在母句开头的占位符处、40c καὶ θείς 紧挨 προσηύξατο，中间隔着 ὁ Πέτρος）。
  */
 const COORD = /^(G2532|G5037|G2228|H9002)/;
 const startsCoordinated = (clause: Clause) => {
@@ -37,8 +38,11 @@ function trunkKey(clause: Clause): string {
     }
     for (const [key, siblings] of groups) {
       let trunk = '';
-      siblings.sort((a, b) => firstWord(a).localeCompare(firstWord(b))).forEach((item, i) => {
-        trunk = i > 0 && startsCoordinated(item) ? trunk : `${key}|${item.id}`;
+      const sorted = siblings.sort((a, b) => firstWord(a).localeCompare(firstWord(b)));
+      sorted.forEach((item, i) => {
+        const parentWords = byId.get(item.parentId ?? '')?.chips.flatMap((chip) => chip.wordIds) ?? [];
+        const apart = i > 0 && parentWords.some((id) => id > lastWord(sorted[i - 1]) && id < firstWord(item));
+        trunk = i > 0 && startsCoordinated(item) && !apart ? trunk : `${key}|${item.id}`;
         trunks.set(item.id, trunk);
       });
     }

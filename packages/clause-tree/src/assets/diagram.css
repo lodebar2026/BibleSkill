@@ -33,7 +33,8 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 -apple-system, "PingFang SC", "Noto Sans SC", sans-serif; }
-.o { font-family: "Gentium Book Plus", "SBL BibLit", "SBL Greek", "SBL Hebrew", "Noto Serif Hebrew", "Times New Roman", serif; }
+/* 希腊文、希伯来文默认用本机装的 SBL 字体（SBL Greek / SBL Hebrew，或两者都有的 SBL BibLit）；没装时才用网络字体 */
+.o { font-family: "SBL Greek", "SBL BibLit", "SBL Hebrew", "Gentium Book Plus", "Noto Serif Hebrew", "Times New Roman", serif; }
 .ot .o { font-family: "SBL Hebrew", "SBL BibLit", "Noto Serif Hebrew", "Ezra SIL", serif; }
 header { padding: 20px 16px 8px; max-width: 1400px; margin: 0 auto; }
 h1 { font-size: 20px; margin: 0 0 4px; }
@@ -140,7 +141,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 #tips path.appos-in { fill: none; stroke: var(--panel); stroke-width: 1.6; stroke-linejoin: round; }
 .chip.r-o, .chip.r-o2, .chip.r-io, .chip.r-adv, .chip.r-p { --c: var(--muted); }
 .chip > .ws > .w.ind { margin-inline-start: calc(var(--ind) * 28px); }
-.canvas:not(.hide-case) .w[data-case="nom"] .g { font-weight: 700; }
+/* 主格加粗：SBL 字体只有常规字重，浏览器模拟的粗体几乎看不出，改用描边加粗 */
+.canvas:not(.hide-case) .w[data-case="nom"] .g { -webkit-text-stroke: .04em currentColor; }
 .canvas:not(.hide-case) .w[data-case="acc"] .g { color: var(--c-acc); } .canvas:not(.hide-case) .w[data-case="gen"] .g { color: var(--c-gen); }
 .canvas:not(.hide-case) .w[data-case="dat"] .g { color: var(--c-dat); } .canvas:not(.hide-case) .w[data-case="voc"] .g { color: var(--c-voc); }
 .canvas:not(.hide-case) .w[data-tense] .g { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 3px; background: var(--m, transparent); }

@@ -64,15 +64,15 @@ export function hebrewStem(morph: string): HebrewStem | null {
 
 export type HebrewForm = 'wayyiqtol' | 'qatal' | 'weqatal' | 'yiqtol' | 'ptcp' | 'inf';
 const HEBREW_FORMS: Record<string, [HebrewForm, GreekMood | null]> = {
-  w: ['wayyiqtol', null], p: ['qatal', null], q: ['weqatal', null], i: ['yiqtol', null],
+  w: ['wayyiqtol', 'ind'], p: ['qatal', 'ind'], q: ['weqatal', 'ind'], i: ['yiqtol', 'ind'],
   // 祈使式、jussive、cohortative 都是前缀形式一系：外框同 yiqtol，底色标语气（祈使浅红，意愿浅绿，与新约祈愿同色）
   v: ['yiqtol', 'impv'], j: ['yiqtol', 'opt'], h: ['yiqtol', 'opt'],
-  r: ['ptcp', null], s: ['ptcp', null], a: ['inf', 'inf'], c: ['inf', 'inf'],
+  r: ['ptcp', 'ptcp'], s: ['ptcp', 'ptcp'], a: ['inf', 'inf'], c: ['inf', 'inf'],
 };
 
 /**
- * 希伯来、亚兰动词的形式与语气：`HVqw3ms` → wayyiqtol、直说（不标底色）；`HVqv2ms` → 祈使；`HVqj3ms` → jussive（意愿）。
- * 与新约共用 data-tense、data-mood：wayyiqtol 与不定过去同为墨色框，qatal 同完成红框，yiqtol 同将来绿框，weqatal 同现在蓝框，分词单用棕框。
+ * 希伯来、亚兰动词的形式与语气：`HVqw3ms` → wayyiqtol、直说；`HVqv2ms` → 祈使；`HVqj3ms` → jussive（意愿）。
+ * 与新约共用 data-tense、data-mood：限定动词的字色 wayyiqtol 同不定过去（墨），qatal 同完成（红），yiqtol 同将来（绿），weqatal 同现在（蓝）；分词画棕色外框。
  */
 export function hebrewVerb(morph: string): { tense: HebrewForm | null; mood: GreekMood | null } {
   const form = HEBREW_FORMS[morph.match(/^[HA]V\w(\w)/)?.[1] ?? ''];

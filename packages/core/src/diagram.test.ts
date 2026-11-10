@@ -305,16 +305,16 @@ test('旧约词干：qal 主动不标，其余按词干类归并，被动另记'
 });
 
 test('旧约动词形式与语气：与新约共用 tense、mood', () => {
-  assert.deepEqual(hebrewVerb('HVqw3ms'), { tense: 'wayyiqtol', mood: null });
-  assert.deepEqual(hebrewVerb('HVqp3ms'), { tense: 'qatal', mood: null });
-  assert.deepEqual(hebrewVerb('HVqq3ms'), { tense: 'weqatal', mood: null });
-  assert.deepEqual(hebrewVerb('HVqi1cs'), { tense: 'yiqtol', mood: null });
+  assert.deepEqual(hebrewVerb('HVqw3ms'), { tense: 'wayyiqtol', mood: 'ind' });
+  assert.deepEqual(hebrewVerb('HVqp3ms'), { tense: 'qatal', mood: 'ind' });
+  assert.deepEqual(hebrewVerb('HVqq3ms'), { tense: 'weqatal', mood: 'ind' });
+  assert.deepEqual(hebrewVerb('HVqi1cs'), { tense: 'yiqtol', mood: 'ind' });
   assert.deepEqual(hebrewVerb('HVqv2ms'), { tense: 'yiqtol', mood: 'impv' });
   assert.deepEqual(hebrewVerb('HVqj3ms'), { tense: 'yiqtol', mood: 'opt' });
   assert.deepEqual(hebrewVerb('HVqh1cs'), { tense: 'yiqtol', mood: 'opt' });
-  assert.deepEqual(hebrewVerb('HVqsmsa'), { tense: 'ptcp', mood: null });
+  assert.deepEqual(hebrewVerb('HVqsmsa'), { tense: 'ptcp', mood: 'ptcp' });
   assert.deepEqual(hebrewVerb('HVqcc'), { tense: 'inf', mood: 'inf' });
-  assert.deepEqual(hebrewVerb('AVpp3ms'), { tense: 'qatal', mood: null });
+  assert.deepEqual(hebrewVerb('AVpp3ms'), { tense: 'qatal', mood: 'ind' });
   assert.deepEqual(hebrewVerb('HNcmsa'), { tense: null, mood: null });
 });
 

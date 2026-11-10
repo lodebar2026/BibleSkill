@@ -5,7 +5,7 @@
   --r-v: #b42318; --r-s: #1d4ed8; --r-conj: #6b665d; --r-none: #b8b0a2;
   --hl: #fde68a; --amb: #fff1c7; --rev: #fde2e2;
   --c-nom: var(--r-s); --c-acc: #a16207; --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: #db2777;
-  --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #ff0000; --t-inf: #6b6b6b; --t-ptcp: #9e5329;
+  --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #991b1b; --t-inf: #6b6b6b; --t-ptcp: #9e5329;
   --m-ind: #f5f5dc; --m-impv: #ffc0c0; --m-subj: #ffe0ff; --m-opt: #e0ffe0; --m-inf: #e0e0e0;
   --focus: #d97706; --st-qal: #6b665d; --st-niphal: #0369a1; --st-piel: #c2410c; --st-hiphil: #7e22ce; --st-hithpael: #15803d;
 }
@@ -16,7 +16,7 @@
     --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
     --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
     --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #f472b6;
-    --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171; --t-inf: #a3a3a3; --t-ptcp: #d09a6a;
+    --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #fca5a5; --t-inf: #a3a3a3; --t-ptcp: #d09a6a;
     --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
     --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
   }
@@ -27,7 +27,7 @@
   --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
   --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
   --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #f472b6;
-  --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171; --t-inf: #a3a3a3; --t-ptcp: #d09a6a;
+  --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #fca5a5; --t-inf: #a3a3a3; --t-ptcp: #d09a6a;
   --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
   --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
 }
@@ -136,13 +136,15 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .canvas:not(.hide-case) .w[data-case="nom"] .g { color: var(--c-nom); }
 .canvas:not(.hide-case) .w[data-case="acc"] .g { color: var(--c-acc); } .canvas:not(.hide-case) .w[data-case="gen"] .g { color: var(--c-gen); }
 .canvas:not(.hide-case) .w[data-case="dat"] .g { color: var(--c-dat); } .canvas:not(.hide-case) .w[data-case="voc"] .g { color: var(--c-voc); }
-.canvas:not(.hide-case) .w[data-tense] .g { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 3px; background: var(--m, transparent); }
-.canvas:not(.hide-case) .w[data-tense="plpf"] .g { border-width: 2.5px; }
-/* 旧约动词框由「句型与主线」开关控制（旧约没有格的开关） */
-.ot .canvas.hide-forms .w[data-tense] .g { border-color: transparent; background: transparent; }
+/* 动词：限定动词、不定式的字色 = 时态（旧约 = 动词形式），底色 = 语气，有底色就是动词，不与同色的名词混；
+   分词有名词性，字色留给格，外框 = 时态（旧约分词棕框）。新约随「格与时态」开关，旧约随「句型与主线」开关 */
+body:not(.ot) .canvas:not(.hide-case) .w[data-tense]:not([data-mood="ptcp"]) .g, .ot .canvas:not(.hide-forms) .w[data-tense]:not([data-mood="ptcp"]) .g {
+  color: var(--t); background: var(--m, transparent); border-radius: 4px; padding: 0 3px;
+}
+body:not(.ot) .canvas:not(.hide-case) .w[data-mood="ptcp"] .g, .ot .canvas:not(.hide-forms) .w[data-mood="ptcp"] .g { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 3px; }
 .w[data-tense="pres"] { --t: var(--t-pres); } .w[data-tense="impf"] { --t: var(--t-impf); } .w[data-tense="fut"] { --t: var(--t-fut); }
 .w[data-tense="aor"] { --t: var(--t-aor); } .w[data-tense="perf"] { --t: var(--t-perf); } .w[data-tense="plpf"] { --t: var(--t-plpf); }
-/* 旧约动词形式按「体」与新约对齐：wayyiqtol = 不定过去（墨），qatal = 完成（红），yiqtol = 将来（绿），weqatal = 现在（蓝），分词棕（状态、进行，与 weqatal 区分），不定式灰 */
+/* 旧约动词形式按「体」与新约对齐：wayyiqtol = 不定过去（墨），qatal = 完成（红），yiqtol = 将来（绿），weqatal = 现在（蓝），分词棕框，不定式灰 */
 .w[data-tense="wayyiqtol"] { --t: var(--t-aor); } .w[data-tense="qatal"] { --t: var(--t-perf); } .w[data-tense="yiqtol"] { --t: var(--t-fut); }
 .w[data-tense="weqatal"] { --t: var(--t-pres); } .w[data-tense="ptcp"] { --t: var(--t-ptcp); } .w[data-tense="inf"] { --t: var(--t-inf); }
 /* 语态：右上角小字，中间红、被动蓝（同 BibleCenter）；关掉格与时态着色时一起隐去 */
@@ -157,6 +159,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .case-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; align-items: baseline; }
 .case-legend .o { font-size: 15px; }
 .case-legend .vt { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 4px; }
+.case-legend .vx { color: var(--t); background: var(--m-ind); border-radius: 4px; padding: 0 4px; }
 .case-legend .vm { background: var(--m); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .chip.r-conj { --c: var(--r-conj); border-style: dashed; border-top-style: solid; }
 .w { display: inline-flex; flex-direction: column; align-items: center; padding: 1px 4px 2px; border-radius: 5px; cursor: pointer; }
@@ -183,7 +186,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .chip > .rl .fr { color: var(--ink); }
 .hide-focus .chip > .rl .fr, .hide-focus .bh .mk.front { display: none; }
 .bh .mk.front { background: var(--hl); border: 1px solid transparent; }
-.canvas:not(.hide-focus):not(.hide-case) .w.emph .g.o { background: var(--hl); }
+body .canvas:not(.hide-focus):not(.hide-case) .w.emph .g.o { background: var(--hl); }
 .forms-legend .hl-key { background: var(--hl); border-radius: 4px; padding: 0 5px; color: var(--ink); }
 .vb { font-size: 10px; color: var(--panel); background: var(--muted); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
 .box:not(.open) .w .m, .box:not(.open) .w .z, .box:not(.open) .w .e { display: none; }

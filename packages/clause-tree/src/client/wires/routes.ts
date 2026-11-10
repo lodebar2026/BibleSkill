@@ -20,7 +20,7 @@ export type Wire = {
 
 /**
  * 主干：同一母句里指向同一个词的从句，只有并列的才汇成一条主干——后一句以 καί、τε、ἤ、וְ 开头，且紧接着前一句
- * （徒 9:27d–f πῶς… καὶ ὅτι… καὶ πῶς…）。不并列的各走各的线（徒 9:38a 独立属格与 38c ἀκούσαντες 都修饰 ἀπέστειλαν）。
+ * （徒 9:27d–f πῶς… καὶ ὅτι… καὶ πῶς…）；同一段引语接连的几句也汇成一条，不论有没有连词（徒 10:4f–6a，6a οὗτος 不带 καί）。不并列的各走各的线（徒 9:38a 独立属格与 38c ἀκούσαντες 都修饰 ἀπέστειλαν）。
  * 并列的两句中间夹着母句的词时也分开（9:40a ἐκβαλών 在母句开头的占位符处、40c καὶ θείς 紧挨 προσηύξατο，中间隔着 ὁ Πέτρος）。
  */
 const COORD = /^(G2532|G5037|G2228|H9002)/;
@@ -42,7 +42,8 @@ function trunkKey(clause: Clause): string {
       sorted.forEach((item, i) => {
         const parentWords = byId.get(item.parentId ?? '')?.chips.flatMap((chip) => chip.wordIds) ?? [];
         const apart = i > 0 && parentWords.some((id) => id > lastWord(sorted[i - 1]) && id < firstWord(item));
-        trunk = i > 0 && startsCoordinated(item) && !apart ? trunk : `${key}|${item.id}`;
+        const joins = i > 0 && (startsCoordinated(item) || (item.wireLabel === '引语' && sorted[i - 1].wireLabel === '引语'));
+        trunk = joins && !apart ? trunk : `${key}|${item.id}`;
         trunks.set(item.id, trunk);
       });
     }

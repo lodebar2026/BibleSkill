@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Gentium+Book+Plus:wght@400;700&family=Noto+Serif+Hebrew:wght@400;600&display=swap');
 :root {
   --bg: #f7f5f0; --panel: #ffffff; --ink: #1f1d1a; --muted: #6b665d; --line: #dcd6ca; --soft: #efebe2;
-  --accent: #8a4b16; --wire: #8a4b16; --logic: #0f766e;
+  --accent: #8a4b16; --wire: #8a857c; --logic: #0f766e;
   --r-v: #b42318; --r-s: #1d4ed8; --r-conj: #6b665d; --r-none: #b8b0a2;
   --hl: #fde68a; --amb: #fff1c7; --rev: #fde2e2;
   --c-nom: var(--r-s); --c-acc: #a16207; --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: #db2777;
@@ -12,7 +12,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #171614; --panel: #201e1b; --ink: #ece7dd; --muted: #a39d92; --line: #3a3631; --soft: #2a2724;
-    --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
+    --accent: #e0a46a; --wire: #8f897f; --logic: #5eead4;
     --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
     --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
     --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #f472b6;
@@ -23,7 +23,7 @@
 }
 :root[data-theme="dark"] {
   --bg: #171614; --panel: #201e1b; --ink: #ece7dd; --muted: #a39d92; --line: #3a3631; --soft: #2a2724;
-  --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
+  --accent: #e0a46a; --wire: #8f897f; --logic: #5eead4;
   --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
   --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
   --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #f472b6;

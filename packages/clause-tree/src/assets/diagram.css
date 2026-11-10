@@ -4,8 +4,8 @@
   --accent: #8a4b16; --wire: #8a4b16; --logic: #0f766e;
   --r-v: #b42318; --r-s: #1d4ed8; --r-conj: #6b665d; --r-none: #b8b0a2;
   --hl: #fde68a; --amb: #fff1c7; --rev: #fde2e2;
-  --c-nom: var(--r-s); --c-acc: #a16207; --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: rgb(255, 102, 0);
-  --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #ff0000;
+  --c-nom: var(--r-s); --c-acc: #a16207; --c-gen: rgb(0, 160, 0); --c-dat: rgb(164, 73, 255); --c-voc: #db2777;
+  --t-pres: #0000ff; --t-impf: #ff00ff; --t-fut: #32cd32; --t-aor: #1f1d1a; --t-perf: #ff0000; --t-plpf: #ff0000; --t-inf: #6b6b6b;
   --m-ind: #f5f5dc; --m-impv: #ffc0c0; --m-subj: #ffe0ff; --m-opt: #e0ffe0; --m-inf: #e0e0e0;
   --focus: #d97706; --st-qal: #6b665d; --st-niphal: #0369a1; --st-piel: #c2410c; --st-hiphil: #7e22ce; --st-hithpael: #15803d;
 }
@@ -15,8 +15,8 @@
     --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
     --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
     --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
-    --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
-    --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
+    --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #f472b6;
+    --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171; --t-inf: #a3a3a3;
     --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
     --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
   }
@@ -26,8 +26,8 @@
   --accent: #e0a46a; --wire: #e0a46a; --logic: #5eead4;
   --r-v: #f87171; --r-s: #7aa2ff; --r-conj: #a39d92; --r-none: #5a554d;
   --hl: #6b5512; --amb: #3d3418; --rev: #44232a;
-  --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #fb923c;
-  --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171;
+  --c-nom: var(--r-s); --c-acc: #d6a54a; --c-gen: #4ade80; --c-dat: #c084fc; --c-voc: #f472b6;
+  --t-pres: #7aa2ff; --t-impf: #f472d0; --t-fut: #65e07a; --t-aor: #ece7dd; --t-perf: #f87171; --t-plpf: #f87171; --t-inf: #a3a3a3;
   --m-ind: #3a3626; --m-impv: #4a2626; --m-subj: #44284a; --m-opt: #24402a; --m-inf: #3a3a3a;
   --focus: #fbbf24; --st-qal: #a39d92; --st-niphal: #38bdf8; --st-piel: #fb923c; --st-hiphil: #c084fc; --st-hithpael: #4ade80;
 }
@@ -82,22 +82,13 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 /* 「详情」是标签那一排的最后一项，推到行尾：它的位置只算在标签那一排（框宽按“标签 + 详情”定），大意另起一行用满框宽 */
 .bh .det { margin-inline-start: auto; font: inherit; font-size: 11px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); border-radius: 999px; padding: 0 8px; cursor: pointer; }
 .box.open .bh .det { color: var(--ink); border-color: var(--muted); }
-.box[data-form] { border-color: var(--tc); border-width: 2px; }
-.box.root[data-form] { border-width: 3px; box-shadow: none; }
-.box[data-form="wayyiqtol"] { --tc: #F656B8; } .box[data-form="qatal"] { --tc: #FF0000; } .box[data-form="weqatal"] { --tc: #2A7FFF; }
-.box[data-form="yiqtol"] { --tc: #00CC00; } .box[data-form="participle"] { --tc: #9E5329; } .box[data-form="infinitive"] { --tc: #6B6B6B; }
-.box[data-form="imperative"] { --tc: #A449FF; } .box[data-form="nominal"] { --tc: #B8B0A2; }
-/* 新约方框不按时态着色（动词本身已有时态框），框头标签用中性色 */
-.box[data-nt-form] { --tc: var(--muted); }
-.bh .ty { font-size: 12px; font-weight: 700; color: var(--tc); border: 1.5px solid var(--tc); border-radius: 4px; padding: 0 5px; font-family: ui-monospace, Menlo, monospace; }
+/* 方框边框不表示语法（两约同）：时态、动词形式画在动词本身的外框上，框头标签只写名称，用中性色 */
+.bh .ty { font-size: 12px; font-weight: 700; color: var(--muted); border: 1.5px solid var(--muted); border-radius: 4px; padding: 0 5px; font-family: ui-monospace, Menlo, monospace; }
 .bh .mk { font-size: 11px; border-radius: 4px; padding: 0 5px; color: var(--ink); background: var(--soft); border: 1px dashed var(--muted); }
 .forest.ot-forms { padding-inline-start: 30px; }
-.hide-forms .box[data-form] { border-color: var(--line); border-width: 1.5px; }
-.hide-forms .box.root[data-form] { border-color: var(--accent); border-width: 2.5px; }
 .hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .spine { display: none; }
 #wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
 .forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
-.forms-legend i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; margin-inline-end: 4px; vertical-align: -1px; border: 2px solid var(--tc); }
 .bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 .box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 .bh .unfold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 4px; padding: 0 6px; cursor: pointer; }
@@ -126,7 +117,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: stretch; }
 .chip { display: flex; flex-direction: column; border: 1px solid var(--line); border-top: 4px solid var(--c); border-radius: 6px; padding: 0 2px 2px; background: color-mix(in srgb, var(--c) 6%, var(--panel)); --c: var(--r-none); }
 .chip > .rl { font-size: 11px; color: var(--c); font-weight: 600; padding: 1px 4px 0; min-height: 1.4em; direction: ltr; }
-.hide-roles .chip > .rl:not(:has(.sb)), .hide-roles.hide-focus .chip > .rl, .hide-roles .chip > .rl .rn { display: none; }
+.hide-roles .chip > .rl { display: none; }
 /* 隐藏成分名后块宽只剩字宽：给个最小宽度、内容居中，单个字母（וַ）的块不显得局促 */
 .hide-roles .chip { padding-top: 2px; min-width: 30px; align-items: center; }
 .chip > .ws { display: flex; flex-wrap: wrap; }
@@ -147,12 +138,21 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .canvas:not(.hide-case) .w[data-case="dat"] .g { color: var(--c-dat); } .canvas:not(.hide-case) .w[data-case="voc"] .g { color: var(--c-voc); }
 .canvas:not(.hide-case) .w[data-tense] .g { border: 1.5px solid var(--t); border-radius: 4px; padding: 0 3px; background: var(--m, transparent); }
 .canvas:not(.hide-case) .w[data-tense="plpf"] .g { border-width: 2.5px; }
+/* 旧约动词框由「句型与主线」开关控制（旧约没有格的开关） */
+.ot .canvas.hide-forms .w[data-tense] .g { border-color: transparent; background: transparent; }
 .w[data-tense="pres"] { --t: var(--t-pres); } .w[data-tense="impf"] { --t: var(--t-impf); } .w[data-tense="fut"] { --t: var(--t-fut); }
 .w[data-tense="aor"] { --t: var(--t-aor); } .w[data-tense="perf"] { --t: var(--t-perf); } .w[data-tense="plpf"] { --t: var(--t-plpf); }
+/* 旧约动词形式按「体」与新约对齐：wayyiqtol = 不定过去（墨），qatal = 完成（红），yiqtol = 将来（绿），weqatal、分词 = 现在（蓝），不定式灰 */
+.w[data-tense="wayyiqtol"] { --t: var(--t-aor); } .w[data-tense="qatal"] { --t: var(--t-perf); } .w[data-tense="yiqtol"] { --t: var(--t-fut); }
+.w[data-tense="weqatal"], .w[data-tense="ptcp"] { --t: var(--t-pres); } .w[data-tense="inf"] { --t: var(--t-inf); }
 /* 语态：右上角小字，中间红、被动蓝（同 BibleCenter）；关掉格与时态着色时一起隐去 */
 .vc { font: 600 0.55em/1 -apple-system, "PingFang SC", sans-serif; vertical-align: super; margin-inline-start: 1px; }
 .vc.mid, .vc.midpass { color: var(--t-perf); } .vc.pass { color: var(--t-pres); }
 .canvas.hide-case .vc { display: none; }
+/* 旧约词干：同一位置的小字，按词干类着色；被动词干（pual、hophal…）加空心框；随「词干与前置」开关 */
+.vc.stem { color: var(--st); font-family: sans-serif; }
+.vc.pass-stem { border: 1px solid var(--st); border-radius: 2px; padding: 0 1px; }
+.hide-focus .vc.stem { display: none; }
 .w[data-mood="ind"] { --m: var(--m-ind); } .w[data-mood="impv"] { --m: var(--m-impv); } .w[data-mood="subj"] { --m: var(--m-subj); } .w[data-mood="opt"] { --m: var(--m-opt); } .w[data-mood="inf"] { --m: var(--m-inf); }
 .case-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; align-items: baseline; }
 .case-legend .o { font-size: 15px; }
@@ -176,22 +176,16 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent); border: 1.5px dashed var(--accent); border-radius: 5px; padding: 0 6px; direction: ltr; }
 .ot .w.slot .g { font-size: 13px; }
 .box.flash { box-shadow: 0 0 0 3px var(--hl); }
-/* 旧约词干：非 qal 的动词按词干类着色，标签放在成分名那一行；主动实心、被动空心 */
 [data-stem="qal"] { --st: var(--st-qal); } [data-stem="niphal"] { --st: var(--st-niphal); } [data-stem="piel"] { --st: var(--st-piel); }
 [data-stem="hiphil"] { --st: var(--st-hiphil); } [data-stem="hithpael"] { --st: var(--st-hithpael); }
-.canvas:not(.hide-focus) .w[data-stem] .g { color: var(--st); }
-.sb { font-size: 10px; font-weight: 700; color: var(--panel); background: var(--st); border: 1px solid var(--st); border-radius: 3px; padding: 0 3px; margin-inline-start: 4px; font-family: sans-serif; }
-.sb.pass { color: var(--st); background: transparent; }
-.hide-focus .sb { display: none; }
-/* 旧约：谓语前的实词成分（前置），多为焦点、对比或话题 */
-.canvas:not(.hide-focus) .chip.front { border: 2px solid var(--focus); border-top: 4px solid var(--c); background: color-mix(in srgb, var(--focus) 14%, var(--panel)); }
-.chip > .rl .fr { color: var(--focus); }
+/* 强调一律用荧光笔底色（--hl）：旧约谓语前的实词成分（前置）整块涂底；同根不定式、新约显性的强调代词涂在词上 */
+.canvas:not(.hide-focus) .chip.front { background: var(--hl); }
+.chip > .rl .fr { color: var(--ink); }
 .hide-focus .chip > .rl .fr, .hide-focus .bh .mk.front { display: none; }
-/* 同根不定式独立形强调动词：不定式与动词都加焦点色框 */
-.canvas:not(.hide-focus) .w.cog .g, .forms-legend .cog-key { outline: 2px solid var(--focus); outline-offset: 1px; border-radius: 4px; background: color-mix(in srgb, var(--focus) 14%, transparent); }
-.forms-legend .cog-key { padding: 0 4px; color: var(--ink); }
-.forms-legend .front-key { border: 2px solid var(--focus); border-radius: 4px; padding: 0 5px; background: color-mix(in srgb, var(--focus) 14%, var(--panel)); color: var(--ink); }
-.vb { font-size: 10px; color: var(--panel); background: var(--accent); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
+.bh .mk.front { background: var(--hl); border: 1px solid transparent; }
+.canvas:not(.hide-focus):not(.hide-case) .w.emph .g.o { background: var(--hl); }
+.forms-legend .hl-key { background: var(--hl); border-radius: 4px; padding: 0 5px; color: var(--ink); }
+.vb { font-size: 10px; color: var(--panel); background: var(--muted); border-radius: 3px; padding: 0 3px; margin-inline-start: 2px; vertical-align: super; font-family: sans-serif; }
 .box:not(.open) .w .m, .box:not(.open) .w .z, .box:not(.open) .w .e { display: none; }
 .hide-m .w .m, .hide-z .w .z, .hide-e .w .e { display: none !important; }
 .more { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 13px; max-width: 46em; direction: ltr; }

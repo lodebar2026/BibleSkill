@@ -33,9 +33,9 @@ export type DiagramWord = {
   rendering: string | null;
   /** 异文、读型、NA28 双括号等提示。 */
   variant: string | null;
-  /** 新约：名词性词的格；动词的时态、语气、语态（着色用；主动语态为 null，不标）。 */
+  /** 新约：名词性词的格；动词的时态、语气、语态（着色用；主动语态为 null，不标）。旧约动词的 tense 是动词形式、mood 是语气（见 hebrewVerb）。 */
   gcase: GreekCase | null;
-  tense: GreekTense | null;
+  tense: GreekTense | HebrewForm | null;
   mood: GreekMood | null;
   voice: GreekVoice | null;
   /** 旧约动词的词干（qal 主动为 null，不着色；新约一律 null）。 */
@@ -60,6 +60,23 @@ export function hebrewStem(morph: string): HebrewStem | null {
   const name = code ? HEBREW_STEMS[code] : undefined;
   const family = name ? (Object.keys(STEM_FAMILIES) as StemFamily[]).find((key) => STEM_FAMILIES[key].includes(name)) : undefined;
   return name && family ? { name, family, passive: PASSIVE_STEMS.has(name) } : null;
+}
+
+export type HebrewForm = 'wayyiqtol' | 'qatal' | 'weqatal' | 'yiqtol' | 'ptcp' | 'inf';
+const HEBREW_FORMS: Record<string, [HebrewForm, GreekMood | null]> = {
+  w: ['wayyiqtol', null], p: ['qatal', null], q: ['weqatal', null], i: ['yiqtol', null],
+  // 祈使式、jussive、cohortative 都是前缀形式一系：外框同 yiqtol，底色标语气（祈使浅红，意愿浅绿，与新约祈愿同色）
+  v: ['yiqtol', 'impv'], j: ['yiqtol', 'opt'], h: ['yiqtol', 'opt'],
+  r: ['ptcp', null], s: ['ptcp', null], a: ['inf', 'inf'], c: ['inf', 'inf'],
+};
+
+/**
+ * 希伯来、亚兰动词的形式与语气：`HVqw3ms` → wayyiqtol、直说（不标底色）；`HVqv2ms` → 祈使；`HVqj3ms` → jussive（意愿）。
+ * 与新约共用 data-tense、data-mood：wayyiqtol 与不定过去同为墨色框，qatal 同完成红框，yiqtol 同将来绿框，weqatal、分词同现在蓝框。
+ */
+export function hebrewVerb(morph: string): { tense: HebrewForm | null; mood: GreekMood | null } {
+  const form = HEBREW_FORMS[morph.match(/^[HA]V\w(\w)/)?.[1] ?? ''];
+  return form ? { tense: form[0], mood: form[1] } : { tense: null, mood: null };
 }
 
 export type GreekCase = 'nom' | 'gen' | 'dat' | 'acc' | 'voc';
@@ -693,7 +710,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       id: token.id, bcv: token.bcv, text: token.surface, after: token.after, lemma: token.lemma, translit: token.translit,
       strong: token.strong, morph: token.morph, morphExp: input.morphExpansion(token.morph), glossEn: token.glossEn,
       glossZh: token.glossZh, sense: token.sense, rendering: renderings.get(token.id) ?? null, variant: variantOf(token, isOT),
-      ...(isOT ? { gcase: null, tense: null, mood: null, voice: null } : greekMorph(token.morph)),
+      ...(isOT ? { gcase: null, ...hebrewVerb(token.morph), voice: null } : greekMorph(token.morph)),
       stem: isOT ? hebrewStem(token.morph) : null,
     };
   }
@@ -914,7 +931,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       paragraph: paraTitle === undefined ? null : { title: paraTitle },
       status: clause.status,
       type: clause.type,
-      ntForm: verbWord?.tense && verbWord.mood ? `${verbWord.tense}-${verbWord.mood}` : null,
+      ntForm: !isOT && verbWord?.tense && verbWord.mood ? `${verbWord.tense}-${verbWord.mood}` : null,
       chips: placeSlots(chipsOf(clause, own, isOT, input.syntax, covered), own, slotsOf.get(clause.id) ?? [], clause.id,
         (id) => modifiesOf.get(id) ?? null),
       fromWordId: clause.firstWordId,

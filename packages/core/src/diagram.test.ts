@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SyntaxNode, Token, TokenSyntax } from './db.js';
-import { PAUSE_COORD, PAUSE_EMBED, PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, cognateInfinitive, greekMorph, hebrewStem, rangeLabel } from './diagram.js';
+import { PAUSE_COORD, PAUSE_EMBED, PAUSE_FORCED, PAUSE_JOINED, buildDiagram, chipPauses, cognateInfinitive, greekMorph, hebrewStem, hebrewVerb, rangeLabel } from './diagram.js';
 import { parseScriptureRange } from './ref.js';
 import type { ClauseEntity, ClauseText } from './schemas.js';
 
@@ -302,6 +302,20 @@ test('旧约词干：qal 主动不标，其余按词干类归并，被动另记'
   assert.deepEqual(hebrewStem('AVpp3ms'), { name: 'piel', family: 'piel', passive: false });
   assert.equal(hebrewStem('HNcmsa'), null);
   assert.equal(hebrewStem('V-AAI-3S'), null);
+});
+
+test('旧约动词形式与语气：与新约共用 tense、mood', () => {
+  assert.deepEqual(hebrewVerb('HVqw3ms'), { tense: 'wayyiqtol', mood: null });
+  assert.deepEqual(hebrewVerb('HVqp3ms'), { tense: 'qatal', mood: null });
+  assert.deepEqual(hebrewVerb('HVqq3ms'), { tense: 'weqatal', mood: null });
+  assert.deepEqual(hebrewVerb('HVqi1cs'), { tense: 'yiqtol', mood: null });
+  assert.deepEqual(hebrewVerb('HVqv2ms'), { tense: 'yiqtol', mood: 'impv' });
+  assert.deepEqual(hebrewVerb('HVqj3ms'), { tense: 'yiqtol', mood: 'opt' });
+  assert.deepEqual(hebrewVerb('HVqh1cs'), { tense: 'yiqtol', mood: 'opt' });
+  assert.deepEqual(hebrewVerb('HVqsmsa'), { tense: 'ptcp', mood: null });
+  assert.deepEqual(hebrewVerb('HVqcc'), { tense: 'inf', mood: 'inf' });
+  assert.deepEqual(hebrewVerb('AVpp3ms'), { tense: 'qatal', mood: null });
+  assert.deepEqual(hebrewVerb('HNcmsa'), { tense: null, mood: null });
 });
 
 test('旧约前置：限定动词句里谓语前含名词性词的成分块标出；连词、否定词、疑问代词、分词句不算；新约不标', () => {

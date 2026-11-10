@@ -21,7 +21,7 @@
         <button type="button" data-toggle="roles" aria-pressed="true" title="成分块顶上的名称（主语、谓语、宾语……）；关掉后只留顶边色条">成分名</button>
         <button type="button" data-toggle="logic" aria-pressed="true">逻辑关系</button>
         <button type="button" data-if="ot" data-toggle="forms" aria-pressed="true">句型与主线</button>
-        <button type="button" data-if="ot" data-toggle="focus" aria-pressed="true" title="非 qal 词干的动词着色、动词前的实词成分（前置）加框">词干与前置</button>
+        <button type="button" data-if="ot" data-toggle="focus" aria-pressed="true" title="动词右上角的词干小字（非 qal）、动词前的实词成分（前置）与同根强调的荧光笔底色">词干与前置</button>
         <button type="button" data-if="nt" data-toggle="case" aria-pressed="true">格与时态</button>
         <button type="button" data-if="nt narrative" data-toggle="forms" aria-pressed="true">时态与主线</button>
         <button type="button" data-if="nt !narrative" data-toggle="forms" aria-pressed="true">时态标签</button>
@@ -38,23 +38,18 @@
     </div>
     <div class="legend">
       <span style="--c: var(--r-v)">谓语</span><span style="--c: var(--r-s)">主语</span><span style="--c: var(--r-s)">同位语（虚线框，双线连到所配的成分）</span><span style="--c: var(--r-conj)">连词</span><span style="--c: var(--muted)">宾语、间接宾语、状语、表语等（照 Macula）</span>
-      <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <b style="color:var(--accent)">异</b> = 有异文</span>
+      <span>· 实线 = 句法从属，指到被修饰的词（下划线） · <b style="color:var(--logic)">虚线</b> = 逻辑关系（与句法不同时标出） · <span class="vb">异</span> = 有异文</span>
+    </div>
+    <div class="case-legend" data-if="ot">
+      <span>动词框色 = 动词形式（与新约时态按「体」对应）：</span><span class="vt" style="--t:var(--t-aor)">wayyiqtol</span><span class="vt" style="--t:var(--t-perf)">qatal</span>
+      <span class="vt" style="--t:var(--t-fut)">yiqtol</span><span class="vt" style="--t:var(--t-pres)">weqatal、分词</span><span class="vt" style="--t:var(--t-inf)">不定式</span>
+      <span>· 底色 = 语气：</span><span>直说无底色</span><span class="vm" style="--m:var(--m-impv)">祈使</span><span class="vm" style="--m:var(--m-opt)">jussive、cohortative</span><span class="vm" style="--m:var(--m-inf)">不定式</span>
+      <span>· 右上角 = 词干：</span><span>qal 不标</span><span class="o">קָטַל<sup class="vc stem" data-stem="niphal">Ni</sup></span><span class="o">קָטַל<sup class="vc stem" data-stem="piel">Pi</sup></span>
+      <span class="o">קָטַל<sup class="vc stem" data-stem="hiphil">Hi</sup></span><span class="o">קָטַל<sup class="vc stem" data-stem="hithpael">Ht</sup></span><span>（被动加框，如 pual <span class="o">קָטַל<sup class="vc stem pass-stem" data-stem="piel">Pu</sup></span>）</span>
     </div>
     <div class="forms-legend" data-if="ot">
-      <span>边框颜色 = 动词形式：</span>
-      <span style="--tc:#F656B8"><i></i>wayyiqtol</span><span style="--tc:#2A7FFF"><i></i>weqatal</span><span style="--tc:#FF0000"><i></i>qatal</span>
-      <span style="--tc:#00CC00"><i></i>yiqtol</span><span style="--tc:#A449FF"><i></i>祈使</span><span style="--tc:#9E5329"><i></i>分词</span>
-      <span style="--tc:#6B6B6B"><i></i>不定式</span><span style="--tc:#B8B0A2"><i></i>名词句</span>
-      <span>· 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
-    </div>
-    <div class="forms-legend" data-if="ot">
-      <span>动词词干：</span><span class="o" style="color:var(--st-niphal)">niphal <span class="sb" data-stem="niphal">Ni</span></span>
-      <span class="o" style="color:var(--st-piel)">piel <span class="sb" data-stem="piel">Pi</span></span>
-      <span class="o" style="color:var(--st-hiphil)">hiphil <span class="sb" data-stem="hiphil">Hi</span></span>
-      <span class="o" style="color:var(--st-hithpael)">hithpael <span class="sb" data-stem="hithpael">Ht</span></span>
-      <span>（qal 不着色；被动如 pual <span class="sb pass" data-stem="piel">Pu</span>、hophal 用空心标签）</span>
-      <span>· <span class="front-key">前置</span> = 动词前的实词成分（X-动词语序），多为焦点、对比或话题；框头「前置」同义</span>
-      <span>· <span class="cog-key">同根强调</span> = 不定式独立形 + 同根动词（מוֹת תָּמוּת），强调动作本身</span>
+      <span>框头标签 = 句型 · 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用 wayyiqtol，不接主线</span>
+      <span>· <span class="hl-key">荧光笔底色</span> = 强调：动词前的实词成分（前置，X-动词语序，多为焦点、对比或话题；框头「前置」同义）、同根不定式独立形（מוֹת תָּמוּת）</span>
     </div>
     <div class="forms-legend" data-if="nt narrative">
       <span>框头标签 = 谓语动词的时态与语气 · 最外侧竖线 = 叙事主线，同一句法主干上的各句 = 会话序列 · 「离线」= 顶层不用不定过去式直说语气（背景、历史现在式、评述），不接主线</span>
@@ -67,6 +62,7 @@
       <span>· 底色 = 语气：</span><span class="vm" style="--m:var(--m-ind)">直说</span><span class="vm" style="--m:var(--m-impv)">祈使</span>
       <span class="vm" style="--m:var(--m-subj)">虚拟</span><span class="vm" style="--m:var(--m-opt)">祈愿</span><span class="vm" style="--m:var(--m-inf)">不定式</span><span>（分词无底色）</span>
       <span>· 右上角 = 语态：</span><span>主动不标</span><span class="o">λύ<sup class="vc mid">中</sup></span><span class="o">λύ<sup class="vc pass">被</sup></span><span class="o">λύ<sup class="vc midpass">中?</sup></span><span>（中被同形；异态动词照形式标）</span>
+      <span>· <span class="hl-key">荧光笔底色</span> = 强调：显性的第一、二人称主格代词（ἐγώ、σύ）</span>
     </div>
   </section>
 </main>

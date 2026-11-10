@@ -25,25 +25,29 @@ function header(clause: Clause, form: string | null): string {
 // 语态右上角小字（同 BibleCenter）：主动不标，中间「中」，被动「被」，中被同形「中?」；异态动词照形式标
 const VOICE_MARK: Record<string, string> = { mid: '中', pass: '被', midpass: '中?' };
 
+// 旧约词干：右上角小字，与新约语态同一位置；qal 主动不标，被动词干（pual、hophal…）加空心框
+function stemMark(stem: (typeof words)[string]['stem']): string {
+  return stem ? `<sup class="vc stem${stem.passive ? ' pass-stem' : ''}" data-stem="${stem.family}" title="${esc(stem.name)}">${esc(STEM_TAG[stem.name] ?? stem.name.slice(0, 3))}</sup>` : '';
+}
+
 function wordEl(clause: Clause, chip: Clause['chips'][number], id: string, index: number): HTMLElement {
   const word = words[id];
   const w = document.createElement('span');
   // 与下一个语素相连（同一词、maqqef）且下一个在同一块里时才去掉间距；跨块的（וַ 是连词、动词在下一块）照常留边
   const joined = (word.after === '' || word.after === '־') && index < chip.wordIds.length - 1;
-  w.className = `w${targets.has(id) ? ' target' : ''}${joined ? ' join' : ''}${clause.cognate.includes(id) ? ' cog' : ''}`;
+  // 强调：同根不定式（旧约）、显性的第一二人称主格代词（新约 ἐγώ、σύ、ἡμεῖς、ὑμεῖς，动词已含主语，写出来就是强调）
+  const emph = clause.cognate.includes(id) || (!D.isOT && /^P-[12]N[SP]/.test(word.morph));
+  w.className = `w${targets.has(id) ? ' target' : ''}${joined ? ' join' : ''}${emph ? ' emph' : ''}`;
   w.dataset.id = id;
   for (const key of ['gcase', 'tense', 'mood'] as const) {
     if (word[key]) {
       w.dataset[key === 'gcase' ? 'case' : key] = word[key]!;
     }
   }
-  if (word.stem) {
-    w.dataset.stem = word.stem.family;
-  }
   if (chip.indents) {
     w.dataset.indent = String(chip.indents[chip.wordIds.indexOf(id)]);
   }
-  w.innerHTML = `<span class="g o">${esc(word.text)}${word.voice ? `<sup class="vc ${word.voice}">${VOICE_MARK[word.voice]}</sup>` : ''}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
+  w.innerHTML = `<span class="g o">${esc(word.text)}${word.voice ? `<sup class="vc ${word.voice}">${VOICE_MARK[word.voice]}</sup>` : ''}${stemMark(word.stem)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
     + `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`;
   if (chip.pauses) {
     w.dataset.pause = String(chip.pauses[chip.wordIds.indexOf(id)]);
@@ -108,11 +112,8 @@ function chipsEl(clause: Clause, box: HTMLElement): HTMLElement {
       el.style.setProperty('--c', pair === 'v' ? 'var(--r-v)' : 'var(--muted)');
     }
     const frontLabel = chip.fronted ? `<span class="fr">${chip.role ? ' · ' : ''}前置</span>` : '';
-    // 词干标签与成分名同一行，不另占行
-    const stems = [...new Map(chip.wordIds.map((id) => words[id].stem).filter((stem) => stem !== null).map((stem) => [stem.name, stem])).values()];
-    const stemTags = stems.map((stem) => `<span class="sb${stem.passive ? ' pass' : ''}" data-stem="${stem.family}" title="${esc(stem.name)}">${esc(STEM_TAG[stem.name] ?? stem.name.slice(0, 3))}</span>`).join('');
     const roleName = chip.role ? ROLE_ZH[chip.role] : '';
-    el.innerHTML = `<span class="rl"><span class="rn">${roleName}${frontLabel}</span>${stemTags}</span><span class="ws"></span>`;
+    el.innerHTML = `<span class="rl"><span class="rn">${roleName}${frontLabel}</span></span><span class="ws"></span>`;
     const ws = $('.ws', el);
     chip.wordIds.forEach((id, index) => ws.append(wordEl(clause, chip, id, index)));
     addSlots(chip, ws);

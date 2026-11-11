@@ -87,12 +87,16 @@ function addSlots(chip: Clause['chips'][number], ws: HTMLElement): void {
 function chipsEl(clause: Clause, box: HTMLElement): HTMLElement {
   const chips = document.createElement('div');
   chips.className = 'chips';
-  // 下属子句的连线从下方伸进框里、指到同位语与所配成分之间的词时（徒 9:17e 17h、17i→ἀπέσταλκέν），
-  // 双线改走成分块上方，不与箭头交叉（从上方来的箭头停在框边，碰不到）
+  // 下属子句的连线从下方伸进框里、指到同位语、所配成分或两者之间的词时（徒 9:17e 17h、17i→ἀπέσταλκέν；
+  // 10:22b 22c、22d→同位语里的 ἀνήρ），双线改走成分块上方，不与箭头交叉。
+  // 排在母句上方的从句，箭头停在成分块顶边，会碰到上方的双线：这几块有从上方来的箭头时仍走下方
   const kidClauses = (kids.get(clause.id) ?? []).map((id) => byId.get(id)!);
-  const incoming = new Set(kidClauses.flatMap((kid) => kid.targetWordIds ?? (kid.targetWordId ? [kid.targetWordId] : [])));
-  const pointedInto = (chip: Clause['chips'][number]) => chip.wordIds.some((id) => incoming.has(id));
-  const upward = (index: number, head: number) => clause.chips.slice(Math.min(index, head) + 1, Math.max(index, head)).some(pointedInto);
+  const targetsOf = (list: Clause[]) => new Set(list.flatMap((kid) => kid.targetWordIds ?? (kid.targetWordId ? [kid.targetWordId] : [])));
+  const fromBelow = targetsOf(kidClauses.filter((kid) => !kid.above));
+  const fromAbove = targetsOf(kidClauses.filter((kid) => kid.above));
+  const span = (index: number, head: number) => clause.chips.slice(Math.min(index, head), Math.max(index, head) + 1);
+  const upward = (index: number, head: number) => span(index, head).some((chip) => chip.wordIds.some((id) => fromBelow.has(id)))
+    && !span(index, head).some((chip) => chip.wordIds.some((id) => fromAbove.has(id)));
   for (const [chipIndex, chip] of clause.chips.entries()) {
     const el = document.createElement('div');
     el.className = `chip${chip.role ? ` r-${chip.role}` : ''}${chip.fronted ? ' front' : ''}`;

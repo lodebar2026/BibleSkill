@@ -90,8 +90,8 @@ function chipsEl(clause: Clause, box: HTMLElement): HTMLElement {
   // 下属子句的连线从下方伸进框里、指到同位语与所配成分之间的词时（徒 9:17e 17h、17i→ἀπέσταλκέν），
   // 双线改走成分块上方，不与箭头交叉（从上方来的箭头停在框边，碰不到）
   const kidClauses = (kids.get(clause.id) ?? []).map((id) => byId.get(id)!);
-  const incoming = new Set(kidClauses.flatMap((kid) => [...(kid.targetWordIds ?? (kid.targetWordId ? [kid.targetWordId] : [])), kid.targetSlot ?? '']));
-  const pointedInto = (chip: Clause['chips'][number]) => chip.wordIds.some((id) => incoming.has(id)) || (chip.slots ?? []).some((slot) => incoming.has(slot.id));
+  const incoming = new Set(kidClauses.flatMap((kid) => kid.targetWordIds ?? (kid.targetWordId ? [kid.targetWordId] : [])));
+  const pointedInto = (chip: Clause['chips'][number]) => chip.wordIds.some((id) => incoming.has(id));
   const upward = (index: number, head: number) => clause.chips.slice(Math.min(index, head) + 1, Math.max(index, head)).some(pointedInto);
   for (const [chipIndex, chip] of clause.chips.entries()) {
     const el = document.createElement('div');

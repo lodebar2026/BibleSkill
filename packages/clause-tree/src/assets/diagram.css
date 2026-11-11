@@ -73,10 +73,13 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .forest .row.vstart:first-child { margin-top: 0; }
 /* 连线上要标「宾语」「定语」等的从句框：上方多留空隙，紧挨母句时那段竖线也够长，标签两头还露得出线 */
 .forest > .box.wl { margin-top: 20px; }
+/* 带标签的从句排在母句上方时，空隙留在母句框上方（见 forest.ts） */
+.forest > .wla { margin-top: 20px; }
 .box { position: relative; background: var(--panel); border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px 10px; width: fit-content; min-width: 280px; max-width: 100%; margin-inline-start: calc(var(--depth, 0) * 40px); }
 /* 方框宽度由原文成分与框头标签决定（标签不折行）；大意、说明、展开内容不参与宽度计算，在框内换行 */
 .box > .up, .box > .more, .bh .gist { contain: inline-size; }
-.box.root { border: 2.5px solid var(--accent); box-shadow: 0 2px 10px color-mix(in srgb, var(--accent) 18%, transparent); }
+/* 主句框用墨色（浅色主题黑、深色主题近白），不与棕色的编号、强调色混 */
+.box.root { border: 2.5px solid var(--ink); box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 14%, transparent); }
 .box.ambiguous { background: color-mix(in srgb, var(--amb) 45%, var(--panel)); }
 .bh { display: flex; gap: 4px 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; user-select: none; direction: ltr; }
 /* 「详情」是标签那一排的最后一项，推到行尾：它的位置只算在标签那一排（框宽按“标签 + 详情”定），大意另起一行用满框宽 */
@@ -89,9 +92,10 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .spine { display: none; }
 #wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
 .forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
-.bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 0 6px; cursor: pointer; }
-.box.folded .bh .fold { background: var(--accent); color: var(--panel); border-color: var(--accent); }
-.bh .unfold { font: inherit; font-size: 11px; border: 1px solid var(--accent); background: var(--accent); color: var(--panel); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+/* 「收起分支」、子句编号用中性色，不着棕 */
+.bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--muted); background: var(--panel); color: var(--muted); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+.box.folded .bh .fold { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.bh .unfold { font: inherit; font-size: 11px; border: 1px solid var(--ink); background: var(--ink); color: var(--panel); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 /* 鼠标移到连线上：这一支加亮，旁边出现「收起」按钮 */
 #hits { position: absolute; left: 0; top: 0; pointer-events: none; overflow: visible; }
 #hits path.hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: pointer; }
@@ -99,7 +103,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 #wires path.lit, svg.inner path.lit { stroke: var(--focus); stroke-width: 3.5; }
 #tips path.tip.lit, svg.inner path.tip.lit, #wires path.tip.lit { fill: var(--focus); stroke: none; }
 .box.lit { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
-#bfold { position: absolute; display: none; font: inherit; font-size: 12px; border: 1px solid var(--accent); background: var(--panel); color: var(--accent); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
+#bfold { position: absolute; display: none; font: inherit; font-size: 12px; border: 1px solid var(--muted); background: var(--panel); color: var(--ink); border-radius: 4px; padding: 1px 8px; cursor: pointer; white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,.15); direction: ltr; }
 #bfold.on { display: block; }
 .box[hidden] { display: none; }
 /* 只有一个词的引语框架（εἰπόντες、לֵאמֹר）放在母句同一行的行尾，省竖向空间 */
@@ -107,9 +111,10 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .row > .box.side { margin-inline-start: 0; min-width: 250px; }
 .row.marker { align-items: center; }
 .row[hidden] { display: none; }
-.bh .cid { font-size: 12px; font-weight: 700; color: var(--accent); border: 1.5px solid var(--accent); border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
+.bh .cid { font-size: 12px; font-weight: 700; color: var(--ink); border: 1.5px solid var(--muted); border-radius: 4px; padding: 0 5px; font-variant-numeric: tabular-nums; }
 .bh .lab { font-size: 12px; font-weight: 600; color: var(--panel); background: var(--muted); border-radius: 4px; padding: 0 6px; }
-.box.root .bh .lab { background: var(--accent); }
+/* 「主句」标签与主句框同用墨色，「从句」用灰 */
+.box.root .bh .lab { background: var(--ink); }
 .bh .st { font-size: 11px; border-radius: 4px; padding: 0 5px; }
 .bh .st.ambiguous { background: var(--amb); color: var(--ink); border: 1px solid var(--accent); }
 .bh .st.needs-review { background: var(--rev); color: var(--ink); border: 1px solid var(--r-v); }
@@ -176,7 +181,7 @@ body:not(.ot) .canvas:not(.hide-case) .w[data-mood="ptcp"] .g, .ot .canvas:not(.
 .w.target:has(+ .w.target) .g::after { inset-inline-end: -10px; }
 /* 嵌在句中的子句：占位符（虚线小框，标子句编号），点它跳到那个子句 */
 .w.slot { justify-content: center; }
-.w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--accent); border: 1.5px dashed var(--accent); border-radius: 5px; padding: 0 6px; direction: ltr; }
+.w.slot .g { font-family: ui-monospace, Menlo, monospace; font-size: 13px; font-weight: 700; color: var(--ink); border: 1.5px dashed var(--muted); border-radius: 5px; padding: 0 6px; direction: ltr; }
 .ot .w.slot .g { font-size: 13px; }
 .box.flash { box-shadow: 0 0 0 3px var(--hl); }
 [data-stem="qal"] { --st: var(--st-qal); } [data-stem="niphal"] { --st: var(--st-niphal); } [data-stem="piel"] { --st: var(--st-piel); }
@@ -222,7 +227,8 @@ body .canvas:not(.hide-focus):not(.hide-case) .w.emph .g.o { background: var(--h
   .box { margin-inline-start: calc(var(--depth, 0) * 14px); max-width: calc(100% - var(--depth, 0) * 14px); }
   #wires, #tips, #hits, #bfold, .ll { display: none; }
   .box.has-appos { padding-bottom: 10px; }
-  .forest > .box.wl { margin-top: 0; }
+  .forest > .box.wl, .forest > .wla { margin-top: 0; }
+  .forest > .wla.vstart { margin-top: 14px; }
   .forest > .box.wl.vstart { margin-top: 14px; }
   .box > .up { display: block; }
   .more .up { display: none; }

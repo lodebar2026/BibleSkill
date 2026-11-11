@@ -52,7 +52,9 @@ function build() {
 test('成分块：主语、谓语取自分析，句首“介词 + 关系代名词”算连词，其余相邻的词合成一块', () => {
   const [main, relative] = build().clauses;
   const show = (chips: typeof main.chips) => chips.map((chip) => `${chip.role ?? '-'}:${chip.wordIds.map((id) => Number(id.slice(-3))).join(',')}`);
-  assert.deepEqual(show(main.chips), ['conj:1,2', 'v:3', 's:4,5', '-:6,7']);
+  // 18b ὃς 指 βασιλεὺς，与它隔着 ἐπ᾽ Αἴγυπτον：母句末尾放占位符（只含占位符的块）
+  assert.deepEqual(show(main.chips), ['conj:1,2', 'v:3', 's:4,5', '-:6,7', '-:']);
+  assert.deepEqual(main.chips.flatMap((chip) => chip.slots ?? []).map((slot) => slot.clauseIds), [['44007018b']]);
   assert.deepEqual(show(relative.chips), ['s:8', '-:9', 'v:10', '-:11,12']);
 });
 
@@ -210,7 +212,7 @@ test('旧约也按短语树分成分块（介词短语按状语），但块内�
   assert.equal(object.indents, undefined);
 });
 
-test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就放在块内，否则随被修饰词），连线指向占位符', () => {
+test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就放在块内，否则随被修饰词），连线仍指被修饰词', () => {
   const nested = (subjectRange: string) => buildDiagram({
     title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,
     clauses: [
@@ -227,6 +229,18 @@ test('嵌入：母句只含自身的词，嵌入处放占位符（同一块就�
   const split = nested('n44007018004-n44007018007');
   assert.deepEqual(show(split.clauses[0].chips), ['conj:1,2', 'v:3', 's:4,5,6,7[4:44007018b]', '-:11,12']);
   assert.equal(split.clauses[0].chips[2].pauses?.at(-1), PAUSE_JOINED);
+});
+
+test('嵌入：紧跟在所修饰的词后面、只嵌一句的不放占位符（徒 10:18b Σίμων 后的 18c）', () => {
+  const data = buildDiagram({
+    title: '测试', isOT: false, texts: [], tokens: TOKENS, variants: [], morphExpansion: () => null,
+    clauses: [
+      clause('44007018a', 1, 12, { verbRange: 'n44007018003', subjectRange: 'n44007018004' }),
+      clause('44007018b', 8, 10, { parentId: '44007018a', modifies: 'n44007018007', verbRange: 'n44007018010' }),
+    ],
+  });
+  assert.deepEqual(data.clauses[0].chips.flatMap((chip) => chip.slots ?? []), []);
+  assert.equal(data.clauses[1].targetWordId, 'n44007018007');
 });
 
 test('嵌入：修饰母句谓语的状语子句也放占位符（连同它下面的从句），连线直接指到动词', () => {
@@ -274,6 +288,27 @@ test('独立属格修饰整个母句：不指某个词，连线标「修饰全�
   const participle = build('V-PAP-NSM');
   assert.equal(participle.wholeClause, false);
   assert.equal(participle.targetWordId, 'n44007018003');
+});
+
+test('占位符：排在母句前后、指向词的从句，与那个词紧挨着才不放；指向全句的（独立属格）在母句开头、结尾都不放', () => {
+  const slotsOf = (morph: string, clauses: ClauseEntity[]) => buildDiagram({
+    title: '测试', isOT: false, texts: [], variants: [], morphExpansion: () => null,
+    tokens: TOKENS.map((item) => (item.id === 'n44007018002' || item.id === 'n44007018010' ? { ...item, morph } : item)),
+    clauses,
+  }).clauses[0].chips.flatMap((chip) => chip.slots ?? []).map((slot) => `${slot.id.endsWith('@0') ? '首' : '尾'}:${slot.clauseIds.join(',')}`);
+  const main = (first: number, last: number) => clause('44007018a', first, last, { verbRange: 'n44007018003', subjectRange: 'n44007018004' });
+  // 后接的从句指母句末词（关系从句紧跟先行词）：不放；指中间的词（徒 10:4e εἶπεν δὲ αὐτῷ· 后的引语）：末尾放
+  const after = (modifies: string) => [main(1, 7), clause('44007018b', 8, 12, { parentId: '44007018a', modifies, verbRange: 'n44007018010' })];
+  assert.deepEqual(slotsOf('V-2LAI-3S', after('n44007018007')), []);
+  assert.deepEqual(slotsOf('V-2LAI-3S', after('n44007018003')), ['尾:44007018b']);
+  // 前置的从句指母句首词：不放；指后面的词（10:15b ἃ ὁ θεὸς ἐκαθάρισεν 与 κοίνου 隔着 σὺ μή）：开头放
+  const before = (modifies: string) => [main(3, 7), clause('44007018b', 1, 2, { parentId: '44007018a', modifies, verbRange: 'n44007018002' })];
+  assert.deepEqual(slotsOf('V-PAP-NSM', before('n44007018003')), []);
+  assert.deepEqual(slotsOf('V-PAP-NSM', before('n44007018005')), ['首:44007018b']);
+  // 独立属格修饰全句：在开头、结尾都不放，不论动词在哪（这里母句动词 ἕτερος 不在开头）
+  assert.deepEqual(slotsOf('V-PAP-GSM', [clause('44007018a', 3, 7, { verbRange: 'n44007018005' }),
+    clause('44007018b', 1, 2, { parentId: '44007018a', modifies: 'n44007018005', verbRange: 'n44007018002' })]), []);
+  assert.deepEqual(slotsOf('V-PAP-GSM', after('n44007018003')), []);
 });
 
 test('嵌入：母句中间已有嵌入子句时，紧接在母句后面的从句在母句末尾也放占位符', () => {
@@ -459,6 +494,22 @@ test('引语：徒 9:5c ὁ δέ 省去说话动词换人说话，指向 ὁ 的
   assert.equal(wire('44007018b'), '引语');
   assert.equal(wire('44007018c'), '定语');
   assert.equal(wire('44007018d'), '引语');
+});
+
+test('引语：徒 10:19b εἶπεν αὐτῷ τὸ πνεῦμα· 上点在说话人后面，指向说话动词的 19c ἰδοὺ… 与后续的 20a 都标「引语」', () => {
+  const surfaces: Array<[string, string, string]> = [
+    ['εἶπεν', 'V-2AAI-3S', 'G2036'], ['αὐτῷ', 'P-DSM', 'G0846'], ['τὸ', 'T-NSN', 'G3588'], ['πνεῦμα·', 'N-NSN', 'G4151'],
+    ['ἰδοὺ', 'INJ', 'G2400'], ['ζητοῦντές', 'V-PAP-NPM', 'G2212'], ['ἀλλὰ', 'CONJ', 'G0235'], ['κατάβηθι', 'V-2AAM-2S', 'G2597'],
+  ];
+  const tokens = surfaces.map(([surface, morph, strong], i) => token(i + 1, surface, morph, { strong }));
+  const data = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, texts: [], clauses: [
+    clause('44007018a', 1, 4, { verbRange: 'n44007018001', subjectRange: 'n44007018003-n44007018004' }),
+    clause('44007018b', 5, 6, { parentId: '44007018a', modifies: 'n44007018001', verbRange: 'n44007018006' }),
+    clause('44007018c', 7, 8, { parentId: '44007018a', modifies: 'n44007018001', verbRange: 'n44007018008' }),
+  ] });
+  const wire = (id: string) => data.clauses.find((item) => item.id === id)!.wireLabel;
+  assert.equal(wire('44007018b'), '引语');
+  assert.equal(wire('44007018c'), '引语');
 });
 
 test('同位语：徒 8:38c 主语是 ἀμφότεροι，Macula 另标作主语的 ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος 显示为同位语；与主语同一成分里没标进主语的词不算', () => {

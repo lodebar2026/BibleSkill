@@ -80,4 +80,14 @@ export function renderForest(): void {
     }
     lastVerse = verse;
   }
+  // 带标签的从句紧挨在母句上方时（徒 10:15b ἃ ὁ θεὸς ἐκαθάρισεν 是 15c κοίνου 的宾语），连线从上面直下进母句框：
+  // 母句框（或它所在的那一行）上方多留空隙，标签放在框外那段竖线上。中间隔着别的框时连线走沟槽，竖线够长，不用留（徒 7:35a → 35d）
+  for (const clause of ordered) {
+    const parent = clause.parentId ? byId.get(clause.parentId) : undefined;
+    if (clause.wireLabel && parent && ordered.indexOf(parent) === ordered.indexOf(clause) + 1) {
+      const box = $(`[data-box="${parent.id}"]`);
+      const holder = box?.parentElement?.classList.contains('row') ? box.parentElement : box;
+      holder?.classList.add('wla');
+    }
+  }
 }

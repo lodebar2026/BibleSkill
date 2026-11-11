@@ -29,7 +29,9 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
     const shared = path.reduce((sum, seg) => sum + segs.filter((other) => !own.includes(other) && overlapping(seg, other)).length, 0);
     // 新约：主干、分叉优先走起始侧（左侧），尾侧留给逻辑虚线；只在左侧会多出交叉时才走尾侧
     // 母句同一侧有几组线、这组排在单数位时反过来走尾侧，与起始侧那组左右分开（routes.ts 的 preferFar）
-    const farCost = wire.preferFar ? (wire.farSide.has(index) ? 0 : 500) : !D.isOT && wire.farSide.has(index) ? 500 : 0;
+    // 正对目标词、一根竖线直上的不算哪一侧，不受左右交替约束（徒 10:17e 紧挨 17d 下方、对着 ἄνδρες，直上；17f 走尾侧）
+    const straight = points.length === 2;
+    const farCost = straight ? 0 : wire.preferFar ? (wire.farSide.has(index) ? 0 : 500) : !D.isOT && wire.farSide.has(index) ? 500 : 0;
     // 新约：几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）
     const sideCost = !D.isOT && !wire.preferFar && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
     return (cost(path) + logicCrossings + joints + shared) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + farCost + sideCost;
@@ -46,10 +48,11 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
     }
     hitArea(best, wire.clause);
     const wireLabel = byId.get(wire.clause)?.wireLabel;
-    // 几条线指向同一个词（汇成一条主干）、标签又相同时只标一次，放在它们共用的那段上（见 labels.ts）
+    // 几条线指向同一个词（汇成一条主干）、标签又相同时只标一次，放在它们共用的那段上（见 labels.ts）。
+    // 只算框外的线：伸进母句框的那段不放标签，免得压在母句的框头、成分上（徒 10:15b 在 15c 上方，标签曾落在 15c 框里）
     if (wireLabel) {
       const labelKey = `${wire.group}|${wireLabel}`;
-      const line: Point[] = wire.into === null ? best : [...best, [best.at(-1)![0], wire.into]];
+      const line: Point[] = best;
       const entry = argumentLines.find((item) => item.key === labelKey);
       if (entry) {
         entry.lines.push(line);

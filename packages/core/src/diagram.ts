@@ -745,6 +745,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
   // 修饰母句动词、紧挨着动词的分词句（徒 9:38c ἀκούσαντες… 紧接 ἀπέστειλαν 之前，8:25b）不放占位符：
   // 在动词前面的整组（连同它下面的从句）排在母句上方，在动词后面的照常排在下方，靠上下位置看出原文顺序
   const above = new Map<string, string>();
+  // 中间嵌了紧跟被修饰词的子句、因此没放占位符的母句：后接的从句照样与母句隔着那几行，末尾仍要放占位符
+  const hasEmbedded = new Set<string>();
   const slotsOf = new Map(input.clauses.map((clause) => {
     const own = wordsOf.get(clause.id) ?? [];
     const verbAt = clause.verbRange ? [...idsInRange(clause.verbRange, own)].map((id) => own.findIndex((word) => word.id === id)) : [];
@@ -753,6 +755,18 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       const adjacent = verbAt.length > 0 && (slot.at === Math.min(...verbAt) || slot.at === Math.max(...verbAt) + 1);
       const participles = heads.length > 0 && heads.every((head) => isParticiple(head) && modifiesVerb(head.id, clause))
         && slot.clauseIds.every((id) => heads.some((head) => head.id === id || descends(input.clauses.find((item) => item.id === id)!, head.id)));
+      // 修饰名词等（不是母句动词）的嵌入子句紧跟在所修饰的词后面、这处只嵌它一句（连同它下面的从句）时也不放：
+      // 连线一根直上指到那个词，位置一看便知（徒 10:18b Σίμων ⟨18c⟩ → 18c ὁ ἐπικαλούμενος Πέτρος 直接接在 Σίμων 后）。
+      // 这处嵌了好几句的照放（10:17d οἱ ἄνδρες ⟨17e 17f⟩，17f 修饰后面的 ἐπέστησαν）
+      const head = heads.length === 1 ? heads[0] : undefined;
+      const modified = head ? new Set(idsInRange(head.modifies, own)) : new Set<string>();
+      const followsTarget = head !== undefined && slot.at > 0 && modified.has(own[slot.at - 1].id)
+        && !verbAt.some((index) => modified.has(own[index].id))
+        && slot.clauseIds.every((id) => id === head.id || descends(input.clauses.find((item) => item.id === id)!, head.id));
+      if (followsTarget) {
+        hasEmbedded.add(clause.id);
+        return false;
+      }
       if (!adjacent || !participles) {
         return true;
       }
@@ -763,47 +777,6 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     });
     return [clause.id, slots];
   }));
-  // 母句末尾的占位符，标出紧接在母句后面的从句（连同它们下面的从句）接在哪里：
-  // 1) 母句中间已有嵌入子句，后接的从句与母句之间隔着那几行（徒 8:32a 末尾的 ⟨32c–33c⟩）；
-  // 2) 后接的第一句是修饰母句动词的分词句，却不紧跟动词、中间隔着别的词（9:38b ἀπέστειλαν δύο ἄνδρας πρὸς αὐτόν ⟨38e 38f⟩）。
-  //    只有一个说话动词的分词（λέγων）排在母句行尾，不用标
-  const SPEECH = /^(G3004|G2036|G5346|G0611|G2980)/;
-  for (const clause of input.clauses) {
-    const slots = slotsOf.get(clause.id)!;
-    const tail: string[] = [];
-    for (const item of byFirst.filter((other) => other.firstWordId > clause.lastWordId)) {
-      if (!descends(item, clause.id)) {
-        break;
-      }
-      tail.push(item.id);
-    }
-    const head = tail.length > 0 ? input.clauses.find((item) => item.id === tail[0])! : undefined;
-    const own = wordsOf.get(clause.id) ?? [];
-    const verbIds = new Set(idsInRange(clause.verbRange, own));
-    const headWords = head ? wordsOf.get(head.id) ?? [] : [];
-    const detached = head !== undefined && head.parentId === clause.id && isParticiple(head) && modifiesVerb(head.id, clause)
-      && own.length > 0 && !verbIds.has(own[own.length - 1].id)
-      && !(headWords.length === 1 && SPEECH.test(headWords[0].strong));
-    if (tail.length > 0 && (slots.length > 0 || detached)) {
-      slots.push({ at: (wordsOf.get(clause.id) ?? []).length, clauseIds: tail });
-    }
-    // 母句开头同理：紧挨在母句前面、修饰母句动词的分词句（连同它下面的从句），与动词之间隔着别的词时，
-    // 在母句开头放占位符（9:40b ⟨40a⟩ ὁ Πέτρος … προσηύξατο）。独立属格修饰全句，与动词的位置无关，不标
-    const lead: string[] = [];
-    for (const item of byFirst.filter((other) => other.firstWordId < clause.firstWordId).reverse()) {
-      if (!descends(item, clause.id) || item.lastWordId > clause.firstWordId) {
-        break;
-      }
-      lead.unshift(item.id);
-    }
-    const leadHeads = lead.map((id) => input.clauses.find((item) => item.id === id)!).filter((item) => item.parentId === clause.id);
-    const genitive = (item: ClauseEntity) => greekMorph(tokenById.get([...idsInRange(item.verbRange, wordsOf.get(item.id) ?? [])][0] ?? '')?.morph ?? '').gcase === 'gen';
-    const leadDetached = leadHeads.some((item) => isParticiple(item) && !genitive(item) && modifiesVerb(item.id, clause))
-      && own.length > 0 && !verbIds.has(own[0].id);
-    if (lead.length > 0 && leadDetached) {
-      slots.unshift({ at: 0, clauseIds: lead });
-    }
-  }
   const modifiesOf = new Map(input.clauses.map((clause) => [clause.id, clause.modifies]));
 
   // 子句在母句里充当的论元（宾语、主语、表语）：取 Macula 短语树上本句谓词所在子句结点的 role，
@@ -821,6 +794,70 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const governed = above >= 0 && parentPath.map((node) => node.cls).lastIndexOf('cl') === above && parentPath[above].id === path[above].id;
     return governed && role && role in ARGUMENT_LABELS ? role as keyof typeof ARGUMENT_LABELS : null;
   };
+
+  // 连线指向：独立属格（属格分词作状语，徒 9:38a ἐγγὺς δὲ οὔσης Λύδδας）修饰整个母句，连线指到母句框，不指某个词；
+  // 作母句论元的属格分词（8:30b αὐτοῦ ἀναγινώσκοντος 是 ἤκουσεν 的宾语）不算。其余指到 modifies 的词，没有时指到母句动词
+  const targetOf = (clause: ClauseEntity): { wholeClause: boolean; targetWordIds: string[] } => {
+    const parent = clause.parentId && clauseIds.has(clause.parentId) ? input.clauses.find((item) => item.id === clause.parentId) : undefined;
+    if (!parent) {
+      return { wholeClause: false, targetWordIds: [] };
+    }
+    const own = wordsOf.get(clause.id) ?? [];
+    const parentWords = wordsOf.get(parent.id) ?? [];
+    const verbMorph = greekMorph(tokenById.get([...idsInRange(clause.verbRange, own)][0] ?? '')?.morph ?? '');
+    const wholeClause = !isOT && !argumentOf(clause, parent) && verbMorph.mood === 'ptcp' && verbMorph.gcase === 'gen' && modifiesVerb(clause.id, parent);
+    if (wholeClause) {
+      return { wholeClause, targetWordIds: [] };
+    }
+    const targetWordIds = [...idsInRange(clause.modifies, parentWords)];
+    return { wholeClause, targetWordIds: targetWordIds.length > 0 ? targetWordIds : [[...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId] };
+  };
+
+  // 排在母句前后的从句（连同它们下面的从句）在母句开头、末尾放占位符，标出接在哪里。不放占位符只限两种：
+  // 指向词的，与那个词紧挨着（徒 9:38c ἀκούσαντες 紧接 ἀπέστειλαν 之前；关系从句紧跟在母句末尾的先行词后面）；
+  // 指向全句的（独立属格），本来就在母句开头或结尾。所以 10:15b ἃ ὁ θεὸς ἐκαθάρισεν 与 κοίνου 隔着 σὺ μή，
+  // 15c 开头放 ⟨15b⟩；9:38b ἀπέστειλαν δύο ἄνδρας πρὸς αὐτόν 末尾放 ⟨38e 38f⟩。
+  // 母句中间已有占位符时，后接的从句与母句隔着那几行，末尾也放（8:32a 末尾的 ⟨32c–33c⟩）。
+  // 只有一个说话动词的分词（λέγων）排在母句那一行的行尾，位置一看便知，不用标
+  const SPEECH = /^(G3004|G2036|G5346|G0611|G2980)/;
+  for (const clause of input.clauses) {
+    const slots = slotsOf.get(clause.id)!;
+    const own = wordsOf.get(clause.id) ?? [];
+    if (own.length === 0) {
+      continue;
+    }
+    const headsOf = (ids: string[]) => ids.map((id) => input.clauses.find((item) => item.id === id)!).filter((item) => item.parentId === clause.id);
+    // 紧挨着：这一侧最靠近母句的那组从句的头，且它指的词就在母句挨着它的那一端
+    const detached = (heads: ClauseEntity[], nearest: ClauseEntity | undefined, edgeWordId: string) => heads.some((head) => {
+      const { wholeClause, targetWordIds } = targetOf(head);
+      return !wholeClause && !(head === nearest && targetWordIds.includes(edgeWordId));
+    });
+    const tail: string[] = [];
+    for (const item of byFirst.filter((other) => other.firstWordId > clause.lastWordId)) {
+      if (!descends(item, clause.id)) {
+        break;
+      }
+      tail.push(item.id);
+    }
+    const tailHeads = headsOf(tail).filter((head) => {
+      const headWords = wordsOf.get(head.id) ?? [];
+      return !(headWords.length === 1 && SPEECH.test(headWords[0].strong));
+    });
+    if (tail.length > 0 && (slots.length > 0 || hasEmbedded.has(clause.id) || detached(tailHeads, headsOf(tail)[0], own[own.length - 1].id))) {
+      slots.push({ at: own.length, clauseIds: tail });
+    }
+    const lead: string[] = [];
+    for (const item of byFirst.filter((other) => other.firstWordId < clause.firstWordId).reverse()) {
+      if (!descends(item, clause.id) || item.lastWordId > clause.firstWordId) {
+        break;
+      }
+      lead.unshift(item.id);
+    }
+    const leadHeads = headsOf(lead);
+    if (lead.length > 0 && detached(leadHeads, leadHeads.at(-1), own[0].id)) {
+      slots.unshift({ at: 0, clauseIds: lead });
+    }
+  }
 
   // 定语：短语树上从本句的子句结点往上到母句的子句结点，中间经过名词短语（徒 8:32b ἣν ἀνεγίνωσκεν 在 περιοχὴ τῆς γραφῆς 之内；
   // 8:26e τὴν καταβαίνουσαν 在 ὁδόν 的名词短语里，外面还套着不带谓词的 DetCL）。与母句只是并列、指向代词的（8:32c–e 是 αὕτη
@@ -852,19 +889,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const parentId = clause.parentId && clauseIds.has(clause.parentId) ? clause.parentId : null;
     const parent = parentId ? input.clauses.find((item) => item.id === parentId) : undefined;
     const parentWords = parent ? wordsOf.get(parent.id) ?? [] : [];
-    let targetWordIds: string[] = [];
     const argument = parent && !isOT ? argumentOf(clause, parent) : null;
-    // 独立属格（属格分词作状语，徒 9:38a ἐγγὺς δὲ οὔσης Λύδδας）修饰整个母句：连线指到母句框，不指某个词。
-    // 作母句论元的属格分词（8:30b αὐτοῦ ἀναγινώσκοντος 是 ἤκουσεν 的宾语）不算
-    const verbMorph = greekMorph(tokenById.get([...idsInRange(clause.verbRange, own)][0] ?? '')?.morph ?? '');
-    const wholeClause = !isOT && parent !== undefined && !argument && verbMorph.mood === 'ptcp' && verbMorph.gcase === 'gen'
-      && modifiesVerb(clause.id, parent);
-    if (parent && !wholeClause) {
-      targetWordIds = [...idsInRange(clause.modifies, parentWords)];
-      if (!targetWordIds.length) {
-        targetWordIds = [[...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId];
-      }
-    }
+    const { wholeClause, targetWordIds } = targetOf(clause);
     const targetWordId = targetWordIds[0] ?? null;
     const target = targetWordId ? tokenById.get(targetWordId) : undefined;
     // 嵌在母句中间：连线指向母句里的占位符；修饰母句谓语的照常指到动词
@@ -918,7 +944,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const speakerOnly = !isOT && target !== undefined && target.morph.startsWith('T-')
       && parentWords.every((word) => word.morph.startsWith('T-') || isConjunction(word, isOT));
     const quote = !(lead && /^R-/.test(lead.morph)) && (speakerOnly || before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after)
-      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id)));
+      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id)
+        // 指向说话动词、说话人排在动词后面的（徒 10:19b εἶπεν αὐτῷ τὸ πνεῦμα· 后的 19c–20b）
+        || targetWordIds.some((id) => SPEECH.test(tokenById.get(id)?.strong ?? ''))));
     return {
       id: clause.id,
       parentId,

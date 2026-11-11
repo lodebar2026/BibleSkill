@@ -1,5 +1,5 @@
 /**
- * 句法连线：每个从句连到母句里被修饰的词（或嵌入子句的占位符）。这里定出每条线的几种走法，挑选在 pick.ts。
+ * 句法连线：每个从句连到母句里被修饰的词。这里定出每条线的几种走法，挑选在 pick.ts。
  * 指向同一个词的并列从句共用一条横道（汇成主干）；其余的各占一条横道，上下错开。
  */
 import { $ } from '../dom.js';
@@ -33,7 +33,7 @@ function trunkKey(clause: Clause): string {
   if (trunks.size === 0) {
     const groups = new Map<string, Clause[]>();
     for (const item of D.clauses) {
-      const key = `${item.parentId}|${item.targetSlot ?? item.targetWordId ?? ''}`;
+      const key = `${item.parentId}|${item.targetWordId ?? ''}`;
       groups.set(key, [...groups.get(key) ?? [], item]);
     }
     for (const [key, siblings] of groups) {
@@ -51,10 +51,10 @@ function trunkKey(clause: Clause): string {
   return trunks.get(clause.id)!;
 }
 
-// 连线指到母句里的占位符（嵌入子句）或被修饰的词
-const targetOf = (clause: Clause, parentBox: HTMLElement) => clause.targetSlot
-  ? $(`[data-slot="${clause.targetSlot}"] .g`, parentBox)
-  : clause.targetWordId ? $(`[data-id="${clause.targetWordId}"] .g`, parentBox) : null;
+// 连线指到母句里被修饰的词；嵌入子句的占位符只标原文位置，不作箭头终点
+// （徒 10:17e 修饰 ἄνδρες，与 17f 共用占位符 ⟨17e 17f⟩，曾指到占位符上，看着像指向自己）
+const targetOf = (clause: Clause, parentBox: HTMLElement) =>
+  clause.targetWordId ? $(`[data-id="${clause.targetWordId}"] .g`, parentBox) : null;
 
 // 同一母句同一侧的横道按跨度排：子句离得最远的那组（主干在最外圈）用最靠近母句的横道，
 // 内圈的竖线从更远的横道起，不会横穿外圈的横线（徒 8:9a 下 10a→Σίμων 与 9b–9d→προϋπῆρχεν）

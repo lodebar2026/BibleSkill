@@ -301,6 +301,11 @@ test('占位符：排在母句前后、指向词的从句，与那个词紧挨�
   const after = (modifies: string) => [main(1, 7), clause('44007018b', 8, 12, { parentId: '44007018a', modifies, verbRange: 'n44007018010' })];
   assert.deepEqual(slotsOf('V-2LAI-3S', after('n44007018007')), []);
   assert.deepEqual(slotsOf('V-2LAI-3S', after('n44007018003')), ['尾:44007018b']);
+  // 后接几句都指母句末词（徒 10:34a εἶπεν 后接整篇讲话，几句都挂在 εἶπεν 上）：不放；其中有一句指别的词：末尾放
+  const sayings = (modifies: string) => [main(1, 7), clause('44007018b', 8, 9, { parentId: '44007018a', modifies: 'n44007018007', verbRange: 'n44007018009' }),
+    clause('44007018c', 10, 12, { parentId: '44007018a', modifies, verbRange: 'n44007018010' })];
+  assert.deepEqual(slotsOf('V-2LAI-3S', sayings('n44007018007')), []);
+  assert.deepEqual(slotsOf('V-2LAI-3S', sayings('n44007018003')), ['尾:44007018b,44007018c']);
   // 前置的从句指母句首词：不放；指后面的词（10:15b ἃ ὁ θεὸς ἐκαθάρισεν 与 κοίνου 隔着 σὺ μή）：开头放
   const before = (modifies: string) => [main(3, 7), clause('44007018b', 1, 2, { parentId: '44007018a', modifies, verbRange: 'n44007018002' })];
   assert.deepEqual(slotsOf('V-PAP-NSM', before('n44007018003')), []);

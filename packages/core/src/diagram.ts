@@ -827,11 +827,16 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       continue;
     }
     const headsOf = (ids: string[]) => ids.map((id) => input.clauses.find((item) => item.id === id)!).filter((item) => item.parentId === clause.id);
-    // 紧挨着：这一侧最靠近母句的那组从句的头，且它指的词就在母句挨着它的那一端
-    const detached = (heads: ClauseEntity[], nearest: ClauseEntity | undefined, edgeWordId: string) => heads.some((head) => {
-      const { wholeClause, targetWordIds } = targetOf(head);
-      return !wholeClause && !(head === nearest && targetWordIds.includes(edgeWordId));
-    });
+    // 紧挨着：这一侧最靠近母句的那组从句的头，且它指的词就在母句挨着它的那一端。
+    // 这一侧的头都指向那一端的同一个词时，后面几组也算紧挨着：中间隔的只是同指那个词的兄弟句，没有别的词
+    // （徒 10:34a εἶπεν 后接 34b–43a 整篇讲话，37a、39a … 43a 都指 εἶπεν，末尾不放 ⟨34b–43a⟩）
+    const detached = (heads: ClauseEntity[], nearest: ClauseEntity | undefined, edgeWordId: string) => {
+      const allAtEdge = nearest !== undefined && heads.every((head) => targetOf(head).targetWordIds.includes(edgeWordId));
+      return heads.some((head) => {
+        const { wholeClause, targetWordIds } = targetOf(head);
+        return !wholeClause && !((head === nearest || allAtEdge) && targetWordIds.includes(edgeWordId));
+      });
+    };
     const tail: string[] = [];
     for (const item of byFirst.filter((other) => other.firstWordId > clause.lastWordId)) {
       if (!descends(item, clause.id)) {

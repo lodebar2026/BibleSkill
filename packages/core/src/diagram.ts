@@ -813,13 +813,83 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return { wholeClause, targetWordIds: targetWordIds.length > 0 ? targetWordIds : [[...idsInRange(parent.verbRange, parentWords)][0] ?? parent.firstWordId] };
   };
 
+  const SPEECH = /^(G3004|G2036|G5346|G0611|G2980)/;
+
+  // 定语：短语树上从本句的子句结点往上到母句的子句结点，中间经过名词短语（徒 8:32b ἣν ἀνεγίνωσκεν 在 περιοχὴ τῆς γραφῆς 之内；
+  // 8:26e τὴν καταβαίνουσαν 在 ὁδόν 的名词短语里，外面还套着不带谓词的 DetCL）。与母句只是并列、指向代词的（8:32c–e 是 αὕτη
+  // 所指的经文）不算。树上找不到母句时，冠词开头、谓词是分词（名词化分词）的算
+  const attributive = (clause: ClauseEntity, parent: ClauseEntity, target: Token | undefined): boolean => {
+    if (!target || !isNominal(target, isOT)) {
+      return false;
+    }
+    // 关系代词开头的（含跨节的 7:45a ἣν、8:10a ᾧ）都是定语
+    const lead = (wordsOf.get(clause.id) ?? []).find((word) => !isConjunction(word, isOT));
+    if (lead && (isOT ? /^[HA]Tr/.test(lead.morph) : /^R-/.test(lead.morph))) {
+      return true;
+    }
+    const pathOf = (item: ClauseEntity) => input.syntax?.get([...idsInRange(item.verbRange, wordsOf.get(item.id) ?? [])][0] ?? item.firstWordId)?.path;
+    const path = pathOf(clause);
+    const parentPath = pathOf(parent);
+    const parentNode = parentPath?.[parentPath.map((node) => node.cls).lastIndexOf('cl')];
+    const at = path ? path.map((node) => node.cls).lastIndexOf('cl') : -1;
+    const from = parentNode && path ? path.findIndex((node) => node.id === parentNode.id) : -1;
+    if (path && at > from && from >= 0) {
+      return path.slice(from + 1, at).some((node) => node.cls === 'np' || node.cls === 'adjp');
+    }
+    const verb = tokenById.get([...idsInRange(clause.verbRange, wordsOf.get(clause.id) ?? [])][0] ?? '');
+    return lead !== undefined && !isOT && lead.morph.startsWith('T-') && verb !== undefined && /^V-\w+P-/.test(verb.morph);
+  };
+
+  // 连线标签：引语、论元（宾语等）、定语；都不是为 null。引语后同一母句、指向同一个词的子句也算引语，在后面统一补上
+  const labelOf = (clause: ClauseEntity): string | null => {
+    const own = wordsOf.get(clause.id) ?? [];
+    const parent = clause.parentId && clauseIds.has(clause.parentId) ? input.clauses.find((item) => item.id === clause.parentId) : undefined;
+    if (!parent) {
+      return null;
+    }
+    const parentWords = wordsOf.get(parent.id) ?? [];
+    const argument = !isOT ? argumentOf(clause, parent) : null;
+    const { targetWordIds } = targetOf(clause);
+    const target = targetWordIds[0] ? tokenById.get(targetWordIds[0]) : undefined;
+    // 作宾语、前面以上点（·）引出的是直接引语（徒 8:29b λέγει… τῷ Φιλίππῳ· πρόσελθε）
+    const before = tokens[tokens.findIndex((token) => token.id === clause.firstWordId) - 1];
+    // 上点引出、指向上点前那个词的（8:32c αὕτη· 后面引的经文）也是引语
+    // 以关系代词开头的是定语从句（7:46a ὃς εὗρεν χάριν 指 Δαυίδ），前一个词带上点也不算
+    const lead = own.find((word) => !isConjunction(word, isOT));
+    // \u7701\u53bb\u8bf4\u8bdd\u52a8\u8bcd\u3001\u53ea\u7528\u51a0\u8bcd\u52a0 \u03b4\u03ad \u6362\u4eba\u8bf4\u8bdd\u7684\uff089:5c \u1f41 \u03b4\u03ad\u00b7 \u1f10\u03b3\u03ce \u03b5\u1f30\u03bc\u03b9\u2026\uff09\uff1a\u6bcd\u53e5\u53ea\u6709\u51a0\u8bcd\u548c\u8fde\u8bcd\uff0c\u6307\u5411\u90a3\u4e2a\u51a0\u8bcd\u7684\u5c31\u662f\u5b83\u8bf4\u7684\u8bdd\u3002
+    // \u6807\u70b9\u6765\u81ea THGNT\uff0c\u8fd9\u91cc\u5e38\u6ca1\u6709\u4e0a\u70b9\uff0c\u4e0d\u80fd\u53ea\u770b\u6807\u70b9
+    const speakerOnly = !isOT && target !== undefined && target.morph.startsWith('T-')
+      && parentWords.every((word) => word.morph.startsWith('T-') || isConjunction(word, isOT));
+    const quote = !(lead && /^R-/.test(lead.morph)) && (speakerOnly || before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after)
+      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id)
+        // 指向说话动词、说话人排在动词后面的（徒 10:19b εἶπεν αὐτῷ τὸ πνεῦμα· 后的 19c–20b）
+        || targetWordIds.some((id) => SPEECH.test(tokenById.get(id)?.strong ?? ''))));
+    return quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : attributive(clause, parent, target) ? '定语' : null;
+  };
+
+  // 母句同一侧的几句汇成一条主干（与页面连线 wires/routes.ts 的 trunkKey 同一判据）：后一句以 καί、τε、ἤ、וְ 开头，
+  // 或同一段引语接连的几句，或角色相同（连线标签一样）的相邻几句。不汇成一条的各是一个分支
+  const COORD = /^(G2532|G5037|G2228|H9002)/;
+  const oneTrunk = (heads: ClauseEntity[]) => {
+    let previous: string | null = null;
+    return heads.every((head, i) => {
+      const first = (wordsOf.get(head.id) ?? [])[0];
+      let label = labelOf(head);
+      if (label === null && previous === '引语') {
+        label = '引语';
+      }
+      const joins = i === 0 || Boolean(first && isConjunction(first, isOT) && COORD.test(first.strong)) || (label !== null && label === previous);
+      previous = label;
+      return joins;
+    });
+  };
+
   // 排在母句前后的从句（连同它们下面的从句）在母句开头、末尾放占位符，标出接在哪里。不放占位符只限两种：
   // 指向词的，与那个词紧挨着（徒 9:38c ἀκούσαντες 紧接 ἀπέστειλαν 之前；关系从句紧跟在母句末尾的先行词后面）；
   // 指向全句的（独立属格），本来就在母句开头或结尾。所以 10:15b ἃ ὁ θεὸς ἐκαθάρισεν 与 κοίνου 隔着 σὺ μή，
   // 15c 开头放 ⟨15b⟩；9:38b ἀπέστειλαν δύο ἄνδρας πρὸς αὐτόν 末尾放 ⟨38e 38f⟩。
   // 母句中间已有占位符时，后接的从句与母句隔着那几行，末尾也放（8:32a 末尾的 ⟨32c–33c⟩）。
   // 只有一个说话动词的分词（λέγων）排在母句那一行的行尾，位置一看便知，不用标
-  const SPEECH = /^(G3004|G2036|G5346|G0611|G2980)/;
   for (const clause of input.clauses) {
     const slots = slotsOf.get(clause.id)!;
     const own = wordsOf.get(clause.id) ?? [];
@@ -828,10 +898,12 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
     const headsOf = (ids: string[]) => ids.map((id) => input.clauses.find((item) => item.id === id)!).filter((item) => item.parentId === clause.id);
     // 紧挨着：这一侧最靠近母句的那组从句的头，且它指的词就在母句挨着它的那一端。
-    // 这一侧的头都指向那一端的同一个词时，后面几组也算紧挨着：中间隔的只是同指那个词的兄弟句，没有别的词
-    // （徒 10:34a εἶπεν 后接 34b–43a 整篇讲话，37a、39a … 43a 都指 εἶπεν，末尾不放 ⟨34b–43a⟩）
+    // 这一侧的头都指向那一端的同一个词、又汇成一条主干（一个分支）时，后面几句也算紧挨着
+    // （徒 10:34a εἶπεν 后接 34b–43a 整篇讲话，都指 εἶπεν、同一段引语，末尾不放 ⟨34b–43a⟩）；
+    // 汇不成一条的是几个分支，照放（10:34b καταλαμβάνομαι 后的 34c ὅτι…、35a ἀλλ᾽… 不并列，末尾放 ⟨34c 35a⟩）
     const detached = (heads: ClauseEntity[], nearest: ClauseEntity | undefined, edgeWordId: string) => {
-      const allAtEdge = nearest !== undefined && heads.every((head) => targetOf(head).targetWordIds.includes(edgeWordId));
+      const allAtEdge = nearest !== undefined && heads.every((head) => targetOf(head).targetWordIds.includes(edgeWordId))
+        && oneTrunk(heads.filter((head) => !targetOf(head).wholeClause));
       return heads.some((head) => {
         const { wholeClause, targetWordIds } = targetOf(head);
         return !wholeClause && !((head === nearest || allAtEdge) && targetWordIds.includes(edgeWordId));
@@ -863,31 +935,6 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       slots.unshift({ at: 0, clauseIds: lead });
     }
   }
-
-  // 定语：短语树上从本句的子句结点往上到母句的子句结点，中间经过名词短语（徒 8:32b ἣν ἀνεγίνωσκεν 在 περιοχὴ τῆς γραφῆς 之内；
-  // 8:26e τὴν καταβαίνουσαν 在 ὁδόν 的名词短语里，外面还套着不带谓词的 DetCL）。与母句只是并列、指向代词的（8:32c–e 是 αὕτη
-  // 所指的经文）不算。树上找不到母句时，冠词开头、谓词是分词（名词化分词）的算
-  const attributive = (clause: ClauseEntity, parent: ClauseEntity, target: Token | undefined): boolean => {
-    if (!target || !isNominal(target, isOT)) {
-      return false;
-    }
-    // 关系代词开头的（含跨节的 7:45a ἣν、8:10a ᾧ）都是定语
-    const lead = (wordsOf.get(clause.id) ?? []).find((word) => !isConjunction(word, isOT));
-    if (lead && (isOT ? /^[HA]Tr/.test(lead.morph) : /^R-/.test(lead.morph))) {
-      return true;
-    }
-    const pathOf = (item: ClauseEntity) => input.syntax?.get([...idsInRange(item.verbRange, wordsOf.get(item.id) ?? [])][0] ?? item.firstWordId)?.path;
-    const path = pathOf(clause);
-    const parentPath = pathOf(parent);
-    const parentNode = parentPath?.[parentPath.map((node) => node.cls).lastIndexOf('cl')];
-    const at = path ? path.map((node) => node.cls).lastIndexOf('cl') : -1;
-    const from = parentNode && path ? path.findIndex((node) => node.id === parentNode.id) : -1;
-    if (path && at > from && from >= 0) {
-      return path.slice(from + 1, at).some((node) => node.cls === 'np' || node.cls === 'adjp');
-    }
-    const verb = tokenById.get([...idsInRange(clause.verbRange, wordsOf.get(clause.id) ?? [])][0] ?? '');
-    return lead !== undefined && !isOT && lead.morph.startsWith('T-') && verb !== undefined && /^V-\w+P-/.test(verb.morph);
-  };
 
   const clauses = input.clauses.map((clause): DiagramClause => {
     const own = wordsOf.get(clause.id) ?? [];
@@ -939,25 +986,13 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     }
 
     const targetZh = target ? targetWordIds.map((id) => words[id]?.rendering ?? tokenById.get(id)?.glossZh ?? tokenById.get(id)?.surface ?? '').join('') : null;
-    // 作宾语、前面以上点（·）引出的是直接引语（徒 8:29b λέγει… τῷ Φιλίππῳ· πρόσελθε）
-    const before = tokens[tokens.findIndex((token) => token.id === clause.firstWordId) - 1];
-    // 上点引出、指向上点前那个词的（8:32c αὕτη· 后面引的经文）也是引语
-    // 以关系代词开头的是定语从句（7:46a ὃς εὗρεν χάριν 指 Δαυίδ），前一个词带上点也不算
-    const lead = own.find((word) => !isConjunction(word, isOT));
-    // \u7701\u53bb\u8bf4\u8bdd\u52a8\u8bcd\u3001\u53ea\u7528\u51a0\u8bcd\u52a0 \u03b4\u03ad \u6362\u4eba\u8bf4\u8bdd\u7684\uff089:5c \u1f41 \u03b4\u03ad\u00b7 \u1f10\u03b3\u03ce \u03b5\u1f30\u03bc\u03b9\u2026\uff09\uff1a\u6bcd\u53e5\u53ea\u6709\u51a0\u8bcd\u548c\u8fde\u8bcd\uff0c\u6307\u5411\u90a3\u4e2a\u51a0\u8bcd\u7684\u5c31\u662f\u5b83\u8bf4\u7684\u8bdd\u3002
-    // \u6807\u70b9\u6765\u81ea THGNT\uff0c\u8fd9\u91cc\u5e38\u6ca1\u6709\u4e0a\u70b9\uff0c\u4e0d\u80fd\u53ea\u770b\u6807\u70b9
-    const speakerOnly = !isOT && target !== undefined && target.morph.startsWith('T-')
-      && parentWords.every((word) => word.morph.startsWith('T-') || isConjunction(word, isOT));
-    const quote = !(lead && /^R-/.test(lead.morph)) && (speakerOnly || before !== undefined && /[\u00b7\u0387:]\s*$/.test(before.surface + before.after)
-      && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id)
-        // 指向说话动词、说话人排在动词后面的（徒 10:19b εἶπεν αὐτῷ τὸ πνεῦμα· 后的 19c–20b）
-        || targetWordIds.some((id) => SPEECH.test(tokenById.get(id)?.strong ?? ''))));
+    const quote = labelOf(clause) === '引语';
     return {
       id: clause.id,
       parentId,
       // 子句在母句里的作用（宾语、引语、定语等）标在连线上，框头不再重复
       label: clause.parentId === null ? '主句' : '从句',
-      wireLabel: quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : parent && attributive(clause, parent, target) ? '定语' : null,
+      wireLabel: labelOf(clause),
       wholeClause,
       link: wholeClause ? '修饰全句' : !targetZh ? null : quote ? `“${targetZh}”的内容` : argument ? `作“${targetZh}”的${ARGUMENT_LABELS[argument].role}` : `修饰“${targetZh}”`,
       gist,

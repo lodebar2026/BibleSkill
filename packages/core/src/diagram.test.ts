@@ -290,7 +290,7 @@ test('独立属格修饰整个母句：不指某个词，连线标「修饰全�
   assert.equal(participle.targetWordId, 'n44007018003');
 });
 
-test('占位符：排在母句前后、指向词的从句，与那个词紧挨着才不放；指向全句的（独立属格）在母句开头、结尾都不放', () => {
+test('占位符：排在母句前后、指向词的从句，与那个词紧挨着才不放（同指那个词、汇成一条主干的几句算一个分支）；指向全句的（独立属格）在母句开头、结尾都不放', () => {
   const slotsOf = (morph: string, clauses: ClauseEntity[]) => buildDiagram({
     title: '测试', isOT: false, texts: [], variants: [], morphExpansion: () => null,
     tokens: TOKENS.map((item) => (item.id === 'n44007018002' || item.id === 'n44007018010' ? { ...item, morph } : item)),
@@ -301,11 +301,17 @@ test('占位符：排在母句前后、指向词的从句，与那个词紧挨�
   const after = (modifies: string) => [main(1, 7), clause('44007018b', 8, 12, { parentId: '44007018a', modifies, verbRange: 'n44007018010' })];
   assert.deepEqual(slotsOf('V-2LAI-3S', after('n44007018007')), []);
   assert.deepEqual(slotsOf('V-2LAI-3S', after('n44007018003')), ['尾:44007018b']);
-  // 后接几句都指母句末词（徒 10:34a εἶπεν 后接整篇讲话，几句都挂在 εἶπεν 上）：不放；其中有一句指别的词：末尾放
-  const sayings = (modifies: string) => [main(1, 7), clause('44007018b', 8, 9, { parentId: '44007018a', modifies: 'n44007018007', verbRange: 'n44007018009' }),
-    clause('44007018c', 10, 12, { parentId: '44007018a', modifies, verbRange: 'n44007018010' })];
-  assert.deepEqual(slotsOf('V-2LAI-3S', sayings('n44007018007')), []);
-  assert.deepEqual(slotsOf('V-2LAI-3S', sayings('n44007018003')), ['尾:44007018b,44007018c']);
+  // 后接几句都指母句末词、汇成一条主干（并列连词开头；徒 10:34a εἶπεν 后接整篇讲话是同一段引语）：不放；
+  // 不汇成一条（10:34b καταλαμβάνομαι 后的 34c ὅτι…、35a ἀλλ᾽…）或其中有一句指别的词：末尾放
+  const sayings = (modifies: string, conj: boolean) => buildDiagram({
+    title: '测试', isOT: false, texts: [], variants: [], morphExpansion: () => null,
+    tokens: TOKENS.map((item) => (conj && item.id === 'n44007018010' ? { ...item, surface: 'καὶ', morph: 'CONJ', strong: 'G2532' } : item)),
+    clauses: [main(1, 7), clause('44007018b', 8, 9, { parentId: '44007018a', modifies: 'n44007018007', verbRange: 'n44007018009' }),
+      clause('44007018c', 10, 12, { parentId: '44007018a', modifies, verbRange: 'n44007018011' })],
+  }).clauses[0].chips.flatMap((chip) => chip.slots ?? []).map((slot) => slot.clauseIds.join(','));
+  assert.deepEqual(sayings('n44007018007', true), []);
+  assert.deepEqual(sayings('n44007018007', false), ['44007018b,44007018c']);
+  assert.deepEqual(sayings('n44007018003', true), ['44007018b,44007018c']);
   // 前置的从句指母句首词：不放；指后面的词（10:15b ἃ ὁ θεὸς ἐκαθάρισεν 与 κοίνου 隔着 σὺ μή）：开头放
   const before = (modifies: string) => [main(3, 7), clause('44007018b', 1, 2, { parentId: '44007018a', modifies, verbRange: 'n44007018002' })];
   assert.deepEqual(slotsOf('V-PAP-NSM', before('n44007018003')), []);

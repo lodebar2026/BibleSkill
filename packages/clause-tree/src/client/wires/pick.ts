@@ -30,7 +30,8 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
     // 新约：主干、分叉优先走起始侧（左侧），尾侧留给逻辑虚线；只在左侧会多出交叉时才走尾侧
     // 母句同一侧有几组线、这组排在单数位时反过来走尾侧，与起始侧那组左右分开（routes.ts 的 preferFar）
     // 正对目标词、一根竖线直上的不算哪一侧，不受左右交替约束（徒 10:17e 紧挨 17d 下方、对着 ἄνδρες，直上；17f 走尾侧）
-    const straight = points.length === 2;
+    // 从子句框侧边横出、只折一次的也一样（徒 11:1b 从右边横出指 ἀδελφοί，这组轮到走尾侧，它原不算尾侧被罚，改绕尾侧沟槽多折了两次）
+    const straight = points.length <= 3;
     const farCost = straight ? 0 : wire.preferFar ? (wire.farSide.has(index) ? 0 : 500) : !D.isOT && wire.farSide.has(index) ? 500 : 0;
     // 新约：几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）
     const sideCost = !D.isOT && !wire.preferFar && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;

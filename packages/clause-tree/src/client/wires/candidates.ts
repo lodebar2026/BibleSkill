@@ -12,6 +12,9 @@ export type RouteInput = { clause: Clause; c: DOMRect; skip: HTMLElement[]; belo
 export function candidatesFor(L: Layout, { clause, c, skip, below, edge, tip, yLane, yChild, xT }: RouteInput) {
   const { base, rtl, start, endOf, blockedV, visible, canvas, showLogic } = L;
   const candidates: Point[][] = [];
+  // 走起始侧、尾侧的候选（pick.ts 按它们分左右）
+  const startSide = new Set<number>();
+  const farSide = new Set<number>();
   // 1) 从子句朝母句的那条边直接出：能对准被修饰词就一根竖线，否则在母句旁的空隙横折一次
   const childEdge = (below ? c.top : c.bottom) - base.top;
   const [cl, cr] = [c.left - base.left + c.width * 0.2, c.right - base.left - c.width * 0.2];
@@ -42,11 +45,14 @@ export function candidatesFor(L: Layout, { clause, c, skip, below, edge, tip, yL
     const logicBeside = onFar && !canvas.classList.contains('hide-logic')
       && between.some((item) => logicBoxes.has(item.box.dataset.box!) && (rtl ? item.left > xT : item.right < xT));
     if (!blockedH && !logicBeside && !blockedV(xT, ySide, tip, skip)) {
+      // 从起始边横出的算走起始侧，几条线汇主干时不罚（徒 9:5d–6c 原绕到沟槽外再折回 ὁ）；从尾边横出的不记，与直上的竖线一样不分左右（见 pick.ts）
+      if (!onFar) {
+        startSide.add(candidates.length);
+      }
       candidates.push([[sideX, ySide], [xT, ySide], [xT, tip]]);
     }
   }
   // 2) 起始侧沟槽：在子句与母句之间所有方框的起始侧之外（记在 startSide）
-  const startSide = new Set<number>();
   let gutter = start(c) + (rtl ? 16 : -16);
   for (const item of visible) {
     if (!skip.includes(item.box) && item.top < Math.max(childEdge, edge) && item.bottom > Math.min(childEdge, edge)) {
@@ -64,7 +70,6 @@ export function candidatesFor(L: Layout, { clause, c, skip, below, edge, tip, yL
     candidates.push([[start(c), yChild], [g, yChild], [g, yLane], [xT, yLane], [xT, tip]]);
   }
   // 3) 尾侧沟槽（这里和 4) 里竖道在尾侧的走法记在 farSide）
-  const farSide = new Set<number>();
   let far = endOf(c);
   for (const item of visible) {
     if (item.top < Math.max(childEdge, edge) && item.bottom > Math.min(childEdge, edge)) {

@@ -125,34 +125,47 @@ export function drawLogic(L: Layout): void {
     canvas.insertBefore(label, $('#bfold', canvas));
     labels.push({ label, line: points(best), lane: best });
   }
-  // 标签放在这条线独有的横段上（几条竖道并排时，放在竖线上看不出归属）：挑最长的横段，避开横穿它的竖线和已放好的标签；
-  // 横段都放不下时才放在竖线中点，与已放好的标签重叠就往下挪
+  // 标签写的是本句之于目标的关系，放在本句那头，不贴着目标框（跨度长时贴在目标旁，看着像目标句自己的关系：徒 11:17d「结果 → 15a–16d」曾贴在 15a 旁）。
+  // 先找本句到竖道之间的横段（几条竖道并排时，放在竖线上看不出归属），避开横穿它的竖线和已放好的标签；
+  // 横段太短放不下时，放在竖道上紧挨本句拐角处，与已放好的标签重叠就顺着竖道往目标方向挪
   for (const { label, line, lane } of labels) {
     const width = label.offsetWidth + 8;
     const height = label.offsetHeight + 4;
+    const corner = line.findIndex(([px]) => px === lane);
     let spot: Point | null = null;
-    let room = 0;
-    for (let i = 1; i < line.length; i += 1) {
+    for (let i = 1; i <= corner && !spot; i += 1) {
       const [[xa, ya], [xb, yb]] = [line[i - 1], line[i]];
       if (ya !== yb || Math.abs(xb - xa) < width + 12) {
         continue;
       }
       const lo = Math.min(xa, xb) + 6 + width / 2;
       const hi = Math.max(xa, xb) - 6 - width / 2;
-      for (let x = lo; x <= hi; x += 4) {
+      for (let x = lo; x <= hi && !spot; x += 4) {
         const clear = !verticals.some((v) => v.x !== lane && v.top < ya && v.bottom > ya && Math.abs(v.x - x) < width / 2 + 2)
           && !overlapsLabel(x, ya, width, height);
-        if (clear && hi - lo + width > room) {
+        if (clear) {
           spot = [x, ya];
-          room = hi - lo + width;
-          break;
         }
       }
     }
-    let [x, y] = spot ?? [lane, (line[0][1] + line.at(-1)![1]) / 2];
-    while (!spot && overlapsLabel(x, y, width, height)) {
-      y += height;
+    if (!spot) {
+      const [y1, y2] = [line[corner][1], line[corner + 1][1]];
+      const dir = y2 >= y1 ? 1 : -1;
+      let y = y1 + dir * (height / 2 + 6);
+      while (overlapsLabel(lane, y, width, height) && (y2 - y) * dir > height) {
+        y += dir * height;
+      }
+      // 竖道离框近时标签会压到框上（创 30:30e），往外挪到框外，仍压着竖线
+      let x = lane;
+      for (const box of allBoxes) {
+        const r = box.getBoundingClientRect();
+        if (!box.hidden && r.top - base.top < y + height / 2 && r.bottom - base.top > y - height / 2) {
+          x = outer(x, end(r) + (rtl ? -1 : 1) * (width / 2 + 4));
+        }
+      }
+      spot = [x, y];
     }
+    const [x, y] = spot;
     placed.push({ x, y, w: width, h: height });
     label.style.left = `${x}px`;
     label.style.top = `${y}px`;

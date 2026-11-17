@@ -129,7 +129,7 @@ pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram ~/圣经翻译/图�
 
 ### 按设定的模型跑分析与翻译
 
-子句分析和翻译可以交给不同的模型。默认分析用 agy 的 Gemini 4 Argon（找争议最全），翻译用 Claude Code 的 Opus（译文最好）：
+子句分析和翻译可以交给不同的模型。默认两项都用 agy 的 Gemini 4 Hydrogen（medium，速度约为 Argon 的两倍；它常犯的错已写进提示词，见 [docs/模型评估-Hydrogen-徒9.md](docs/模型评估-Hydrogen-徒9.md)）。要更稳可改用分析 Gemini 4 Argon（找争议最全）、翻译 Claude Code 的 Opus（译文最好）：
 
 ```bash
 pnpm passage 创 30:32-33 --workdir ~/圣经翻译                      # 先分析再翻译
@@ -140,7 +140,7 @@ pnpm passage 创 30:32-33 --workdir ~/圣经翻译 --translate claude:opus@high 
 模型写在工作目录 `config.json` 的 `models` 里，写法 `claude:<模型>[@思考级别]` 或 `agy:<模型>`（agy 的思考级别含在模型名里，见 `agy models`）：
 
 ```json
-{ "models": { "analyze": "agy:gemini-4-argon-medium", "translate": "claude:opus" } }
+{ "models": { "analyze": "agy:gemini-4-hydrogen-medium", "translate": "claude:opus" } }
 ```
 
 安装时用 `install.sh --analyze-model <写法> --translate-model <写法>` 设定；不给时沿用已有设定，或取 `~/.config/bibleskill/models.json`，再没有就用上面的默认。agy 默认带 `--dangerously-skip-permissions` 运行（无头模式不能弹权限确认）；已在 agy 设置里放行 bibleskill 工具的，可加 `--no-skip-permissions`。

@@ -15,7 +15,7 @@
 #        不给时若 ~/.config/bibleskill/ 下有同名文件、且工作目录里还没有，就拷过去。
 # --analyze-model / --translate-model：子句分析、翻译用的模型（写进 config.json 的 models，pnpm passage 按它调用），
 #        写法 claude:<模型>[@思考级别] 或 agy:<模型>。不给时沿用 config.json 已有的；都没有时用
-#        ~/.config/bibleskill/models.json（{"analyze": …, "translate": …}），再没有就用默认（agy:gemini-4-argon-medium、claude:opus）。
+#        ~/.config/bibleskill/models.json（{"analyze": …, "translate": …}），再没有就用默认（都是 agy:gemini-4-hydrogen-medium）。
 #
 # 安装内容：
 #   Claude Code   .claude/skills/<skill>/、.mcp.json

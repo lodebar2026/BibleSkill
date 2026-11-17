@@ -15,7 +15,7 @@ export type CriticalTextTool = { server: string; tool: string; args?: Record<str
 export type TaskModels = { analyze: string; translate: string };
 
 /** 测试中 Argon 找争议最全，Opus 译文最好（创 30:32-33、徒 7:16 对比）。 */
-export const DEFAULT_MODELS: TaskModels = { analyze: 'agy:gemini-4-argon-medium', translate: 'claude:opus' };
+export const DEFAULT_MODELS: TaskModels = { analyze: 'agy:gemini-4-hydrogen-medium', translate: 'agy:gemini-4-hydrogen-medium' };
 
 export type ModelSpec = { cli: 'claude' | 'agy'; model: string; effort?: string };
 

@@ -33,8 +33,9 @@ export function pickWires(L: Layout, wires: Wire[], logicSegs: Seg[]): ArgumentL
     // 从子句框侧边横出、只折一次的也一样（徒 11:1b 从右边横出指 ἀδελφοί，这组轮到走尾侧，它原不算尾侧被罚，改绕尾侧沟槽多折了两次）
     const straight = points.length <= 3;
     const farCost = straight ? 0 : wire.preferFar ? (wire.farSide.has(index) ? 0 : 500) : !D.isOT && wire.farSide.has(index) ? 500 : 0;
-    // 新约：几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）
-    const sideCost = !D.isOT && !wire.preferFar && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
+    // 几条线指向同一个词时，都从起始侧沟槽汇进主干（包括正对着目标词、本可直上的那条，如引语的第一句）；
+    // 旧约同样，起始侧在右（创 30:25d 原直上 וַיֹּאמֶר，同一段话的 25e–26d 都从右侧横接主干）
+    const sideCost = !wire.preferFar && !wire.startSide.has(index) && (groups.get(wire.group)?.length ?? 0) > 1 ? 400 : 0;
     return (cost(path) + logicCrossings + joints + shared) * 1000 + crowded(points) * 300 + (points.length - 2) * 40 + length(points) * 0.05 + farCost + sideCost;
   };
   const commit = (wire: Wire, best: Point[]) => {

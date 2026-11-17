@@ -9,7 +9,7 @@ import { Layout } from './layout.js';
 import { drawLogic, estimateLogicSegs } from './logic.js';
 import { pickWires } from './pick.js';
 import { buildWires } from './routes.js';
-import { drawSpine } from './spine.js';
+import { drawSpine, spineOf, spineSegs } from './spine.js';
 
 function drawWires(): void {
   const L = new Layout();
@@ -17,10 +17,13 @@ function drawWires(): void {
     return;
   }
   const logicSegs = estimateLogicSegs(L);
+  // 主线先算好记进已画线段，句法连线挑走法时避开它；最后才画
+  const spine = spineOf(L);
+  L.segs.push(...spineSegs(spine));
   const wires = buildWires(L);
   placeArgumentLabels(L, pickWires(L, wires, logicSegs));
   drawAppositions(L);
-  drawSpine(L);
+  drawSpine(L, spine);
   if (L.showLogic) {
     drawLogic(L);
   }

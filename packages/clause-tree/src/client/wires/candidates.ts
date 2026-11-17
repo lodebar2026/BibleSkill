@@ -20,8 +20,11 @@ export function candidatesFor(L: Layout, { clause, c, skip, below, edge, tip, yL
   const [cl, cr] = [c.left - base.left + c.width * 0.2, c.right - base.left - c.width * 0.2];
   // 目标词对着子句框底边、顶边的中段时直接一根竖线；否则横折，折出来的横段太短（不到 16px）不好看，不用
   const straight = xT >= cl && xT <= cr;
+  // 目标词不在中段、但离中段不到 16px 又仍在框内时，也直上（折出的横段太短不好看，原来这条直接去掉；
+  // 徒 11:29c 指 ὥρισαν 只剩从框中间出、在 πέμψαι 右侧竖起的一条，29a 从右边来指 πέμψαι 就非穿过它不可）
+  const inside = xT > c.left - base.left + 12 && xT < c.right - base.left - 12;
   const exits = [...new Set([Math.min(Math.max(xT, cl), cr), (cl + cr) / 2, rtl ? cr : cl].map(Math.round))]
-    .map((x) => (straight && Math.abs(x - xT) < 16 ? xT : x))
+    .map((x) => ((straight || inside) && Math.abs(x - xT) < 16 ? xT : x))
     .filter((x) => x === xT || Math.abs(x - xT) >= 16);
   for (const x of [...new Set(exits)]) {
     if (Math.abs(x - xT) < 1) {

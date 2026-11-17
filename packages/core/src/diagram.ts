@@ -454,10 +454,16 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
 /**
  * 同位语成对标出（结构图留在原位，用双线连到所配的成分）：
  * - 一个成分块整个是 Macula 的同位结构（Np-Appos）时，按它的直属部分拆开：第一部分保留原成分，其后的是它的同位语
- *   （徒 8:28 宾语 Ἠσαΐαν ｜ 同位语 τὸν προφήτην）。带冠词的分词、关系从句这类部分是定语，不拆。
+ *   （徒 8:28 宾语 Ἠσαΐαν ｜ 同位语 τὸν προφήτην）。带冠词的分词、关系从句这类部分是定语，不拆；重复冠词带属格、介词短语
+ *   而没有自己的中心词（冠词之外没有与它同格的名词、代词、形容词）的部分也是定语，不拆（徒 11:23 τὴν χάριν [τὴν] τοῦ θεοῦ）。
  * - 与所配成分隔开的同位语（8:38c 主语 ἀμφότεροι … 同位语 ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος）配给主语块。
  */
-function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, TokenSyntax>): T[] {
+function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, TokenSyntax>, morphOf: (id: string) => string): T[] {
+  const headless = (ids: string[]) => {
+    const article = greekMorph(morphOf(ids[0]));
+    return morphOf(ids[0]).startsWith('T-') && article.gcase !== null
+      && !ids.slice(1).some((id) => /^[NAPRDSFCKQX]-/.test(morphOf(id)) && greekMorph(morphOf(id)).gcase === article.gcase);
+  };
   const out: T[] = [];
   const headOf = new Map<T, T>();
   for (const chip of chips) {
@@ -483,7 +489,8 @@ function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, 
         }
       });
     }
-    const usable = parts.length > 1 && new Set(parts.map((part) => part.key)).size === parts.length && !parts.some((part) => part.attributive);
+    const usable = parts.length > 1 && new Set(parts.map((part) => part.key)).size === parts.length
+      && !parts.some((part) => part.attributive) && !parts.slice(1).some((part) => headless(part.ids));
     if (!usable) {
       out.push(chip);
       continue;
@@ -561,7 +568,8 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
     }
   });
   if (syntax && !isOT) {
-    chips.splice(0, chips.length, ...pairAppositives(chips, syntax));
+    const morphs = new Map(words.map((word) => [word.id, word.morph]));
+    chips.splice(0, chips.length, ...pairAppositives(chips, syntax, (id) => morphs.get(id) ?? ''));
   }
   const manual = new Set((clause.br ?? '').split(',').map((id) => id.trim()).filter(Boolean));
   const byId = new Map(words.map((word) => [word.id, word]));

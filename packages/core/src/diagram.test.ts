@@ -577,6 +577,20 @@ test('同位语：一个成分整个是 Macula 的同位结构（Np-Appos）时�
   assert.deepEqual(run(node(4, 'np', null, 'DetCL')).map((chip) => chip.role), ['v', 'o']);
 });
 
+test('同位语：重复冠词带属格、没有自己中心词的部分是定语，不拆（徒 11:23 τὴν χάριν [τὴν] τοῦ θεοῦ）', () => {
+  const surfaces: Array<[string, string]> = [['ἰδὼν', 'V-2AAP-NSM'], ['τὴν', 'T-ASF'], ['χάριν', 'N-ASF'], ['τὴν', 'T-ASF'], ['τοῦ', 'T-GSM'], ['θεοῦ', 'N-GSM-T']];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const c = node(1, 'cl', null, 'V-O');
+  const appos = node(2, 'np', 'o', 'Np-Appos');
+  const grace = node(3, 'np', null, 'DetNP');
+  const of = node(4, 'np', null, 'NPofNP');
+  const god = node(5, 'np', null, 'DetNP');
+  const chips = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, texts: [],
+    syntax: syntaxOf([[1, 'v', [c]], [2, null, [c, appos, grace]], [3, null, [c, appos, grace]], [4, null, [c, appos, of]], [5, null, [c, appos, of, god]], [6, null, [c, appos, of, god]]]),
+    clauses: [clause('44007018a', 1, 6, { verbRange: 'n44007018001' })] }).clauses[0].chips;
+  assert.deepEqual(chips.map((chip) => chip.role), ['v', 'o']);
+});
+
 test('段落：节中段首（18b 起新段、带标题）——子句带 paragraph，页首原文从段首词断开、译文从对应的段断开', () => {
   const texts: ClauseText[] = [
     { ...TEXTS[0], paraTitle: '[]' },

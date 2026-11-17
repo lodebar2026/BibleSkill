@@ -928,7 +928,13 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       const headWords = wordsOf.get(head.id) ?? [];
       return !(headWords.length === 1 && SPEECH.test(headWords[0].strong));
     });
-    if (tail.length > 0 && (slots.length > 0 || hasEmbedded.has(clause.id) || detached(tailHeads, headsOf(tail)[0], own[own.length - 1].id))) {
+    // 提前、后置成分：排在母句这一侧、却挂在母句下级子句上的（徒 11:29a 在 29b 前面，挂 29b 下的 29c πέμψαι），
+    // 母句里看不出它接在哪里，一律放占位符
+    const hoisted = (ids: string[]) => ids.some((id) => {
+      const parent = input.clauses.find((item) => item.id === id)!.parentId;
+      return parent !== clause.id && !ids.includes(parent ?? '');
+    });
+    if (tail.length > 0 && (slots.length > 0 || hasEmbedded.has(clause.id) || hoisted(tail) || detached(tailHeads, headsOf(tail)[0], own[own.length - 1].id))) {
       slots.push({ at: own.length, clauseIds: tail });
     }
     const lead: string[] = [];
@@ -939,7 +945,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       lead.unshift(item.id);
     }
     const leadHeads = headsOf(lead);
-    if (lead.length > 0 && detached(leadHeads, leadHeads.at(-1), own[0].id)) {
+    if (lead.length > 0 && (hoisted(lead) || detached(leadHeads, leadHeads.at(-1), own[0].id))) {
       slots.unshift({ at: 0, clauseIds: lead });
     }
   }

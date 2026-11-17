@@ -605,3 +605,16 @@ test('段落：节中段首（18b 起新段、带标题）——子句带 paragr
   assert.deepEqual(build().verses[0].paragraphs, []);
   assert.equal(build().clauses[0].paragraph, null);
 });
+
+test('占位符：提前成分排在母句前、挂在母句下级子句上时，母句开头放占位符（徒 11:29a 在 29b 前，挂 29b 下的 29c πέμψαι）', () => {
+  const surfaces: Array<[string, string]> = [['τῶν', 'T-GPM'], ['μαθητῶν', 'N-GPM'], ['καθὼς', 'CONJ'], ['εὐπορεῖτό', 'V-IMI-3S'], ['τις', 'X-NSM'],
+    ['ὥρισαν', 'V-AAI-3P'], ['ἕκαστος', 'A-NSM'], ['αὐτῶν', 'P-GPM'], ['πέμψαι', 'V-AAN'], ['ἀδελφοῖς', 'N-DPM']];
+  const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));
+  const data = buildDiagram({ title: '', isOT: false, tokens, variants: [], morphExpansion: () => null, texts: [], clauses: [
+    clause('44007018a', 1, 5, { parentId: '44007018c', modifies: 'n44007018009', verbRange: 'n44007018004' }),
+    clause('44007018b', 6, 8, { verbRange: 'n44007018006', subjectRange: 'n44007018007-n44007018008' }),
+    clause('44007018c', 9, 10, { parentId: '44007018b', modifies: 'n44007018006', verbRange: 'n44007018009' }),
+  ] });
+  const slots = data.clauses[1].chips.flatMap((chip) => chip.slots ?? []).map((slot) => slot.clauseIds);
+  assert.deepEqual(slots[0], ['44007018a']);
+});

@@ -822,6 +822,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
   };
 
   const SPEECH = /^(G3004|G2036|G5346|G0611|G2980)/;
+  const SPEECH_OT = /^H(0559|1696)/;
 
   // 定语：短语树上从本句的子句结点往上到母句的子句结点，中间经过名词短语（徒 8:32b ἣν ἀνεγίνωσκεν 在 περιοχὴ τῆς γραφῆς 之内；
   // 8:26e τὴν καταβαίνουσαν 在 ὁδόν 的名词短语里，外面还套着不带谓词的 DetCL）。与母句只是并列、指向代词的（8:32c–e 是 αὕτη
@@ -872,7 +873,10 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
       && (argument === 'o' || argument === 'o2' || targetWordIds.includes(before.id)
         // 指向说话动词、说话人排在动词后面的（徒 10:19b εἶπεν αὐτῷ τὸ πνεῦμα· 后的 19c–20b）
         || targetWordIds.some((id) => SPEECH.test(tokenById.get(id)?.strong ?? ''))));
-    return quote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : attributive(clause, parent, target) ? '定语' : null;
+    // 旧约：挂在 אמר、דבר 下的是话语内容（创 30:31c וַיֹּאמֶר יַעֲקֹב 下的 31d–33d）；关系从句、只有说话动词的 לֵאמֹר 框架不算
+    const otQuote = isOT && target !== undefined && SPEECH_OT.test(target.strong) && !(lead && /^[HA]Tr/.test(lead.morph))
+      && !own.filter((word) => !/^H9/.test(word.strong)).every((word) => SPEECH_OT.test(word.strong));
+    return quote || otQuote ? '引语' : argument ? ARGUMENT_LABELS[argument].role : attributive(clause, parent, target) ? '定语' : null;
   };
 
   // 母句同一侧的几句汇成一条主干（与页面连线 wires/routes.ts 的 trunkKey 同一判据）：后一句以 καί、τε、ἤ、וְ 开头，

@@ -220,6 +220,17 @@ test('子句 id 的前导零在提交时去掉', () => {
   assert.equal(SubmittedClauseSchema.parse({ id: '1001001a', firstWordId: 'x', lastWordId: 'x' }).id, '1001001a');
 });
 
+test('合并子句的分行符：字面的 \\n 还原成换行（text 与 alternatives）', () => {
+  const parsed = SubmittedTranslationSchema.parse({
+    clauseId: '1001001a', text: '来到\\n通往城里的那扇铁门，',
+    alternatives: [{ text: '甲，\\r\\n乙', kind: 'syntax', basis: 'x' }],
+  });
+  assert.equal(parsed.text, '来到\n通往城里的那扇铁门，');
+  assert.equal(parsed.alternatives[0].text, '甲，\n乙');
+  assert.equal(SubmittedTranslationSchema.parse({ clauseId: '1001001a', text: '甲，\n乙' }).text, '甲，\n乙');
+  assert.equal(SubmittedTranslationSchema.safeParse({ clauseId: '1001001a', alternatives: [{ text: '', kind: 'syntax', basis: 'x' }] }).success, false);
+});
+
 test('补词：[ ] 拆成补词段，renderings 按去掉括号的译文定位；supplied 写进补词说明', () => {
   const result = checkTranslations([
     { clauseId: '1001001a', span: 1, text: '[他]创造', renderings: [{ tokens: id(2), zh: '创造' }], supplied: [{ text: '他', note: '原文只有动词' }] },

@@ -534,15 +534,25 @@ export function checkClauseAnalysis(
   };
 }
 
+/**
+ * 合并子句的分行符要是真换行。有的模型（Gemini 系）在 JSON 里多转义一层，送来字面的「\\n」两个字符，
+ * 存下来译文里就露出「\n」；中文译文不会有反斜杠，一律还原成换行。
+ */
+export function unescapeNewlines(value: string): string {
+  return value.replace(/(?:\\r)?\\n|\\r/g, '\n');
+}
+
+const translationText = z.string().transform(unescapeNewlines);
+
 export const SubmittedTranslationSchema = z.object({
   clauseId: clauseIdString,
   span: z.coerce.number().int().nonnegative().default(1),
   /** span>1 时的合并理由，见 FORMAT_HINTS.merge。 */
   merge: z.enum(['reorder', 'constituent', 'meaning']).optional(),
-  text: z.string().default(''),
+  text: translationText.default(''),
   renderings: z.array(RenderingSchema).default([]),
   /** 争议处的其他译法。 */
-  alternatives: z.array(TranslationAlternativeSchema).default([]),
+  alternatives: z.array(TranslationAlternativeSchema.extend({ text: translationText.pipe(z.string().min(1)) })).default([]),
   /** 主译的取舍理由 / 异文不影响翻译的说明；存进 formatted 的 note。 */
   note: z.string().default(''),
   /** 补词（text 里的 [ ]）的说明，存进对应补词段的 note。 */

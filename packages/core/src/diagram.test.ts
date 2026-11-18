@@ -185,8 +185,8 @@ test('块内按短语树折行：嵌入的分词短语连同冠词自成一行�
   assert.deepEqual(cuts, [`ἀγγέλου:${PAUSE_EMBED}`, `αὐτῷ:${PAUSE_COORD}`]);
   assert.ok(predicate.pauses!.every((pause) => pause < PAUSE_FORCED));
   assert.deepEqual(predicate.indents, [0, 0, 0, 1, 1, 1, 0, 0, 0]);
-  // 冠词之后不断
-  assert.deepEqual([1, 3, 7].map((i) => predicate.pauses![i]), [PAUSE_JOINED, PAUSE_JOINED, PAUSE_JOINED]);
+  // 介词、冠词之后不断
+  assert.deepEqual([0, 1, 3, 7].map((i) => predicate.pauses![i]), [PAUSE_JOINED, PAUSE_JOINED, PAUSE_JOINED, PAUSE_JOINED]);
 });
 
 test('旧约也按短语树分成分块（介词短语按状语），但块内折行只看停顿重音、不缩进', () => {
@@ -288,6 +288,24 @@ test('独立属格修饰整个母句：不指某个词，连线标「修饰全�
   const participle = build('V-PAP-NSM');
   assert.equal(participle.wholeClause, false);
   assert.equal(participle.targetWordId, 'n44007018003');
+});
+
+test('时间、条件从句也修饰全句：按引导连词的义项判定；比较的 ὡς、间接问句的 εἰ、ἕως 仍指动词', () => {
+  const build = (strong: string, sense: string | null) => buildDiagram({
+    title: '测试', isOT: false, texts: [], variants: [], morphExpansion: () => null,
+    tokens: TOKENS.map((item) => (item.id === 'n44007018001' ? { ...item, strong, sense } : item)),
+    clauses: [
+      clause('44007018a', 4, 7, { verbRange: 'n44007018005' }),
+      clause('44007018b', 1, 3, { parentId: '44007018a', modifies: 'n44007018005', verbRange: 'n44007018003' }),
+    ],
+  }).clauses[1];
+  assert.equal(build('G3753', null).link, '修饰全句'); // ὅτε（徒 12:6a，义项常缺）
+  assert.equal(build('G5613', '67.45').wholeClause, true); // ὡς「当…时」（9:23a）
+  assert.equal(build('G1487G', '89.65').wholeClause, true); // εἰ「若」（11:17a）
+  assert.equal(build('G1437', '89.67').wholeClause, true); // ἐάν「若」
+  assert.equal(build('G5613', '64.12').wholeClause, false); // ὡς 比较（8:32c）
+  assert.equal(build('G1487G', '90.26').wholeClause, false); // εἰ「是否」（10:18b）
+  assert.equal(build('G2193', '67.119').targetWordId, 'n44007018005'); // ἕως
 });
 
 test('占位符：排在母句前后、指向词的从句，与那个词紧挨着才不放（同指那个词、汇成一条主干的几句算一个分支）；指向全句的（独立属格）在母句开头、结尾都不放', () => {
@@ -427,8 +445,8 @@ test('徒 8:28a 迂说结构：ἦν τε ὑποστρέφων καὶ καθή
   const strongest = Math.max(...pauses.slice(0, -1));
   assert.deepEqual(pauses.slice(0, -1).flatMap((pause, i) => (pause === strongest ? [surfaces[i + 1][0]] : [])), ['καὶ']);
   assert.ok(pauses.every((pause) => pause < PAUSE_FORCED));
-  // καθήμενος 与它的介词短语之间、冠词之后都不是断点
-  assert.ok(pauses[4] < pauses[2] && pauses[6] === PAUSE_JOINED);
+  // καθήμενος 与它的介词短语之间不是断点，介词、冠词之后不断
+  assert.ok(pauses[4] < pauses[2] && pauses[5] === PAUSE_JOINED && pauses[6] === PAUSE_JOINED);
 });
 
 test('论元子句：徒 8:30b αὐτοῦ ἀναγινώσκοντος … 是 30a ἤκουσεν 的宾语，连线上标「宾语」；以上点引出的直接引语标「引语」；框头仍是「从句」', () => {

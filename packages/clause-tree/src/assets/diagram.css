@@ -49,8 +49,9 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .text-line { font-size: 22px; line-height: 2; }
 .ot .text-line { direction: rtl; font-size: 26px; }
 .vn { font-size: 12px; color: var(--accent); vertical-align: super; margin: 0 2px 0 6px; font-family: sans-serif; }
-.trans { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 16px; }
+.trans { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 16px; line-height: 2; }
 .trans .vn { font-size: 11px; }
+.trans .para:not(.hint) { text-indent: 2em; }
 /* 段落与段前小标题：页首原文、译文与结构图共用 */
 .para { margin: 0 0 4px; }
 .ptitle { font-weight: 600; font-size: 15px; color: var(--ink); margin: 10px 0 2px; font-family: sans-serif; direction: ltr; text-align: left; }
@@ -90,7 +91,8 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .bh .mk { font-size: 11px; border-radius: 4px; padding: 0 5px; color: var(--ink); background: var(--soft); border: 1px dashed var(--muted); }
 .forest.ot-forms { padding-inline-start: 30px; }
 .hide-forms .bh .ty, .hide-forms .bh .mk, .hide-forms #wires .spine { display: none; }
-#wires .spine { stroke: var(--muted); stroke-width: 3; stroke-linecap: round; opacity: .55; }
+/* 叙事主线与分支：线宽、颜色同修饰线（#wires path） */
+#wires .spine { stroke-linecap: round; }
 .forms-legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 6px; }
 /* 「收起分支」、子句编号用中性色，不着棕 */
 .bh .fold { font: inherit; font-size: 11px; border: 1px solid var(--muted); background: var(--panel); color: var(--muted); border-radius: 4px; padding: 0 6px; cursor: pointer; }

@@ -94,6 +94,26 @@ const VOICES: Record<string, GreekVoice> = { M: 'mid', D: 'mid', P: 'pass', O: '
  * Robinson 词法码里的格、时态、语气：`N-DSF`、`P-1GP`（人称代词先写人称）、`S-1SGSN`（物主代词先写所有者的人称、数）、
  * `V-2AAP-NSM`（第二不定过去式分词，格在末段）。不变格的词（`A-NUI`）没有格。
  */
+/**
+ * 新约的时间、条件从句：引导它的连词（在本句谓语之前）按 Louw-Nida 义项看——
+ * 时间：ὅτε、ὅταν、ἐπάν，或 ὡς、ἐπειδή、ἐάν、καθώς 取 67 域（徒 9:23a ὡς 67.45「当…时」；8:32c ὡς 64.12 是比较，不算）；
+ * 条件：89.65–89.68（εἰ、ἐάν「若」；10:18b εἰ 90.26「是否」是间接问句，不算）。ἕως、πρίν 这类说的是动作本身的时限，不算。
+ */
+const ALWAYS_TEMPORAL = /^G(3753|3752|1875)/;
+const TEMPORAL_IF_SENSE = /^G(5613|1894|1437|2531)/;
+export function isFrameClause(words: Array<Pick<Token, 'id' | 'strong' | 'sense'>>, verbRange: string | null): boolean {
+  const verbFirst = verbRange ? parseTokenRange(verbRange)[0] : undefined;
+  return words.some((word) => {
+    if (verbFirst !== undefined && word.id >= verbFirst) {
+      return false;
+    }
+    const senses = (word.sense ?? '').split(/\s+/);
+    return ALWAYS_TEMPORAL.test(word.strong)
+      || (TEMPORAL_IF_SENSE.test(word.strong) && senses.some((sense) => sense.startsWith('67.')))
+      || senses.some((sense) => /^89\.6[5-8]$/.test(sense));
+  });
+}
+
 export function greekMorph(morph: string): { gcase: GreekCase | null; tense: GreekTense | null; mood: GreekMood | null; voice: GreekVoice | null } {
   const verb = morph.match(/^V-2?([PIFARL])([A-Z])([ISOMNP])(?:-([NGDAV])?)?/);
   if (verb) {
@@ -404,8 +424,9 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
   });
   const shallowest = Math.min(...common);
   const pauses = chipWords.map((word, i) => {
-    // 冠词与它带的名词、分词子句（τοὺς | προκαταγγείλαντας…）不断开，虽然两者的共同祖先最浅
-    if (word.morph.startsWith('T-') && i < chipWords.length - 1) {
+    // 冠词与它带的名词、分词子句（τοὺς | προκαταγγείλαντας…）不断开，虽然两者的共同祖先最浅；
+    // 介词与它的宾语同理（徒 12:12b ἐπὶ | τὴν οἰκίαν… 原在 ἐπί 后折行，介词单独成行）
+    if ((word.morph.startsWith('T-') || word.morph === 'PREP') && i < chipWords.length - 1) {
       return PAUSE_JOINED;
     }
     const punct = pauseAfter(word, isOT);
@@ -803,8 +824,9 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     return governed && role && role in ARGUMENT_LABELS ? role as keyof typeof ARGUMENT_LABELS : null;
   };
 
-  // 连线指向：独立属格（属格分词作状语，徒 9:38a ἐγγὺς δὲ οὔσης Λύδδας）修饰整个母句，连线指到母句框，不指某个词；
-  // 作母句论元的属格分词（8:30b αὐτοῦ ἀναγινώσκοντος 是 ἤκουσεν 的宾语）不算。其余指到 modifies 的词，没有时指到母句动词
+  // 连线指向：给整句定框架的状语修饰整个母句，连线指到母句框，不指某个词——
+  // 独立属格（属格分词作状语，徒 9:38a ἐγγὺς δὲ οὔσης Λύδδας）、时间从句（12:6a Ὅτε δὲ ἤμελλεν…）、条件从句（11:17a εἰ οὖν…）。
+  // 作母句论元的（8:30b αὐτοῦ ἀναγινώσκοντος 是 ἤκουσεν 的宾语）不算。其余指到 modifies 的词，没有时指到母句动词
   const targetOf = (clause: ClauseEntity): { wholeClause: boolean; targetWordIds: string[] } => {
     const parent = clause.parentId && clauseIds.has(clause.parentId) ? input.clauses.find((item) => item.id === clause.parentId) : undefined;
     if (!parent) {
@@ -813,7 +835,8 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     const own = wordsOf.get(clause.id) ?? [];
     const parentWords = wordsOf.get(parent.id) ?? [];
     const verbMorph = greekMorph(tokenById.get([...idsInRange(clause.verbRange, own)][0] ?? '')?.morph ?? '');
-    const wholeClause = !isOT && !argumentOf(clause, parent) && verbMorph.mood === 'ptcp' && verbMorph.gcase === 'gen' && modifiesVerb(clause.id, parent);
+    const wholeClause = !isOT && !argumentOf(clause, parent) && modifiesVerb(clause.id, parent)
+      && ((verbMorph.mood === 'ptcp' && verbMorph.gcase === 'gen') || isFrameClause(own, clause.verbRange));
     if (wholeClause) {
       return { wholeClause, targetWordIds: [] };
     }

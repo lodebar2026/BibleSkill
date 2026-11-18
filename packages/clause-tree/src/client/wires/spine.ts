@@ -42,6 +42,6 @@ export function drawSpine(L: Layout, spine: Spine): void {
   const { x, roots } = spine;
   L.path(L.svg, `M${x},${roots[0][0]} L${x},${roots.at(-1)![0]}`, 'spine');
   for (const [y, edge] of roots) {
-    L.path(L.svg, `M${x},${y} L${edge},${y}`, 'spine').style.strokeWidth = '1.5';
+    L.path(L.svg, `M${x},${y} L${edge},${y}`, 'spine');
   }
 }

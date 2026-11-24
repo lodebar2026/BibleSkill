@@ -31,6 +31,18 @@ test('子句首尾相接覆盖全节时通过，并换算展示码、回填动�
   assert.equal(result.accepted[0].verbPerson, '3ms');
 });
 
+test('并列表语的后一项不能当谓语：创 30:33c אֵינֶנּוּ נָקֹד וְטָלוּא 把 טָלוּא 标成谓语被拒；名词句不填 verbRange、并列第一项作谓语都通过', () => {
+  // אֵינֶ נּוּ נָקֹד וְ טָלוּא
+  const words = [token(1, 'HNcmsc', 'H0369'), token(2, 'HSp3ms', 'H9023'), token(3, 'HAamsa', 'H5348'), token(4, 'HC', 'H9002'), token(5, 'HVqsmsa', 'H2921')];
+  const verse = new Map([[BCV, words]]);
+  const run = (extra: Record<string, unknown>) => checkClauseAnalysis([{ id: `${BCV}a`, firstWordId: words[0].id, lastWordId: words[4].id, subjectRange: words[1].id, ...extra }], verse, []).errors;
+  assert.match(run({ type: 'participle', verbRange: words[4].id }).map((error) => error.messages.join()).join(), /并列表语的后一项/);
+  assert.deepEqual(run({ type: 'nominal', verbRange: null }), []);
+  // 句首的 וְ + 分词（וְהוּא יֹשֵׁב 一类）不算
+  const lead = [token(1, 'HC', 'H9002'), token(2, 'HVqrmsa', 'H3427')];
+  assert.deepEqual(checkClauseAnalysis([{ id: `${BCV}a`, firstWordId: lead[0].id, lastWordId: lead[1].id, type: 'participle', verbRange: lead[1].id }], new Map([[BCV, lead]]), []).errors, []);
+});
+
 test('漏词、重叠、跳字母都按节报错', () => {
   assert.match(checkClauseAnalysis([clause('a', 1, 3)], verses, []).errors[0].messages.join(), /节末漏了词/);
   assert.match(checkClauseAnalysis([clause('a', 1, 3), clause('b', 3, 4)], verses, []).errors[0].messages.join(), /重叠/);

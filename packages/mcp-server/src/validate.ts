@@ -370,6 +370,15 @@ export function checkClauseAnalysis(
           messages.push(`subjectRange ${clause.subjectRange} 包含了谓词 ${clause.verbRange}；主语只标主语名词短语本身`);
         }
       }
+      // 并列表语的后一项不能当谓语（创 30:33c אֵינֶנּוּ נָקֹד וְטָלוּא 曾把 טָלוּא 标成谓语，结构图的表语就断在 וְ 上）
+      if (clause.verbRange) {
+        const verbAt = ids.indexOf(parseTokenRange(clause.verbRange)[0]);
+        const [before, conj, verb] = [tokens[verbAt - 2], tokens[verbAt - 1], tokens[verbAt]];
+        if (verb && conj && before && verbAt - 1 > start && /^H[Cc]$/.test(conj.morph) && /^HV\w[rs]/.test(verb.morph) && /^H(A|V\w[rs])/.test(before.morph)) {
+          messages.push(`verbRange ${verb.surface}（${verb.id}）与前面的 ${before.surface} 用 וְ 并列，是并列表语的后一项，不是谓语：`
+            + '名词句（如 אֵין 带表语）type 用 nominal、不填 verbRange；表语由分词充当时 verbRange 指到并列的第一项');
+        }
+      }
       if (messages.length === 0) {
         const subjectIssues = checkSubject(clause, seeds, surfaceOf, owns);
         if (subjectIssues.length > 0 && clause.seedDiff) {

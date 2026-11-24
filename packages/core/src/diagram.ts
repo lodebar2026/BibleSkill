@@ -575,6 +575,10 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
     const key = partKeys[index];
     return groups?.[index]?.role === 's' && key && !subjectKeys.has(key) && !subject.has(word.id) && /^[NATRPDKFQ]-N/.test(isOT ? '' : word.morph) ? [key] : [];
   }));
+  // wayyiqtol、weqatal 的 וַ / וְ 是动词形式的一部分，与动词同块，不单列为连词（创 30:33a וְעָנְתָה）
+  const firstVerb = words.findIndex((word) => verb.has(word.id));
+  const boundConj = isOT && firstVerb > 0 && /^(Way|WQtl)/.test(clause.type) && isConjunction(words[firstVerb - 1], true) && words[firstVerb - 1].after === ''
+    ? words[firstVerb - 1].id : null;
   let leading = true;
   const chips: Array<DiagramChip & { key?: string }> = [];
   words.forEach((word, index) => {
@@ -586,7 +590,7 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
       : group?.role === 'v' && verb.size > 0 ? null : group?.role ?? null;
     const lone = groups && isConjunction(word, isOT) && group?.key === `w${word.id}`;
     const withVerb = group?.role === 'v' && verbKeys.has(group.key);
-    const role: ChipRole | null = subject.has(word.id) ? 's' : verb.has(word.id) ? 'v' : leading || lone ? 'conj' : withVerb ? 'v' : tree;
+    const role: ChipRole | null = subject.has(word.id) ? 's' : verb.has(word.id) || word.id === boundConj ? 'v' : leading || lone ? 'conj' : withVerb ? 'v' : tree;
     const key = groups && role !== 's' && role !== 'v' && role !== 'conj' ? group!.key : undefined;
     const last = chips.at(-1);
     // 同一成分的词合成一块；不属于任何成分的零散词（אֵת אֲשֶׁר、句首冠词）相邻的也合成一块

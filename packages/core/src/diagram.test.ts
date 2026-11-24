@@ -634,6 +634,20 @@ test('名词句没有谓语时以主语定子句结点：创 30:33c כֹּל א�
   assert.deepEqual(chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-4, -1))).join(',')}`), ['null:1,2', 'adv:3', 's:4', 'p:5,6,7']);
 });
 
+test('wayyiqtol、weqatal 的 וַ / וְ 与动词同块，不单列连词；其他句型句首的 וְ 照旧单列', () => {
+  const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
+    ...token(word, surface, morph), id: `o01030033${String(word).padStart(3, '0')}1`, bcv: 1030033, after,
+  });
+  // 创 30:33a וְעָנְתָה בִּי צִדְקָתִי
+  const words = [ot(1, 'וְ', 'Hc', ''), ot(2, 'עָנְתָה', 'HVqq3fs'), ot(3, 'בִּי', 'HRd'), ot(4, 'צִדְקָתִי', 'HNcfsc')];
+  const run = (type: string) => buildDiagram({ title: '', isOT: true, texts: [], tokens: words, variants: [], morphExpansion: () => null,
+    clauses: [{ ...clause('1030033a', 1, 4), firstWordId: words[0].id, lastWordId: words[3].id, type, verbRange: words[1].id, subjectRange: words[3].id }] })
+    .clauses[0].chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-4, -1))).join(',')}`);
+  assert.deepEqual(run('WQtl').slice(0, 1), ['v:1,2']);
+  assert.deepEqual(run('Way0').slice(0, 1), ['v:1,2']);
+  assert.deepEqual(run('XQtl').slice(0, 2), ['conj:1', 'v:2']);
+});
+
 test('同位语：重复冠词带属格、没有自己中心词的部分是定语，不拆（徒 11:23 τὴν χάριν [τὴν] τοῦ θεοῦ）', () => {
   const surfaces: Array<[string, string]> = [['ἰδὼν', 'V-2AAP-NSM'], ['τὴν', 'T-ASF'], ['χάριν', 'N-ASF'], ['τὴν', 'T-ASF'], ['τοῦ', 'T-GSM'], ['θεοῦ', 'N-GSM-T']];
   const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));

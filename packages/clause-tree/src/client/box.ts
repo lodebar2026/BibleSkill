@@ -37,7 +37,11 @@ function wordEl(clause: Clause, chip: Clause['chips'][number], id: string, index
   const joined = (word.after === '' || word.after === '־') && index < chip.wordIds.length - 1;
   // 强调：同根不定式（旧约）、显性的第一二人称主格代词（新约 ἐγώ、σύ、ἡμεῖς、ὑμεῖς，动词已含主语，写出来就是强调）
   const emph = clause.cognate.includes(id) || (!D.isOT && /^P-[12]N[SP]/.test(word.morph));
-  w.className = `w${targets.has(id) ? ' target' : ''}${joined ? ' join' : ''}${emph ? ' emph' : ''}${word.bound && joined ? ' bound' : ''}`;
+  // wayyiqtol、weqatal 的 וַ / וְ（bound）写进后面动词的同一个着色块里，自己只留一个隐藏的占位（占位符按 .w 的下标插入）
+  const bound = word.bound === true && joined;
+  const prev = index > 0 ? words[chip.wordIds[index - 1]] : undefined;
+  const lead = prev?.bound && (prev.after === '' || prev.after === '־') ? prev.text : '';
+  w.className = `w${targets.has(id) ? ' target' : ''}${joined && !bound ? ' join' : ''}${emph ? ' emph' : ''}${bound ? ' bound' : ''}`;
   w.dataset.id = id;
   for (const key of ['gcase', 'tense', 'mood'] as const) {
     if (word[key]) {
@@ -47,10 +51,8 @@ function wordEl(clause: Clause, chip: Clause['chips'][number], id: string, index
   if (chip.indents) {
     w.dataset.indent = String(chip.indents[chip.wordIds.indexOf(id)]);
   }
-  w.innerHTML = `<span class="g o">${esc(word.text)}${word.voice ? `<sup class="vc ${word.voice}">${VOICE_MARK[word.voice]}</sup>` : ''}${stemMark(word.stem)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
-    // wayyiqtol、weqatal 的 וַ / וְ 与动词连成一个词：下面几行留空，宽度只按字形，不撑开间距
-    + (word.bound && joined ? '<span class="m"></span><span class="z"></span><span class="e"></span>'
-      : `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`);
+  w.innerHTML = `<span class="g o">${esc(lead + word.text)}${word.voice ? `<sup class="vc ${word.voice}">${VOICE_MARK[word.voice]}</sup>` : ''}${stemMark(word.stem)}${esc(punct(word.after))}${word.variant ? '<span class="vb">异</span>' : ''}</span>`
+    + `<span class="m">${esc(word.morph)}</span><span class="z">${esc(word.rendering ?? word.glossZh ?? '—')}</span><span class="e">${esc(word.glossEn)}</span>`;
   if (chip.pauses) {
     w.dataset.pause = String(chip.pauses[chip.wordIds.indexOf(id)]);
   }

@@ -85,7 +85,7 @@ create table token_syntax (
   role text
 );
 
--- 新约分段（可选，构建时给 --paragraphs，如 UBS5）：段首的主干词与段前的小标题（英文原样，翻译时译成中文）
+-- 分段（可选，构建时给 --paragraphs，如新约 UBS5、旧约 ESV）：段首的主干词与段前的小标题（英文原样，翻译时译成中文）
 create table paragraph (
   token_id text primary key,    -- 段首词；一节可有多处分段（节中分段）
   bcv integer not null,

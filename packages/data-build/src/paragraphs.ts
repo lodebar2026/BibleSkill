@@ -1,13 +1,13 @@
 /**
- * 新约分段与小标题（可选，构建时给 --paragraphs）。
+ * 分段与小标题（可选，构建时给 --paragraphs；新约如 UBS5，旧约如 ESV）。
  *
  * 文件格式（自备，不随仓库分发）：
  *   { "source": "UBS5", "breaks": [ { "book": 44, "chapter": 8, "verse": 1, "letters": 36, "heading": "…" }, … ] }
- * - book：新教 66 卷序号；chapter、verse：原文（NA28/UBS5）节号；
+ * - book：新教 66 卷序号；chapter、verse：原文节号（新约 NA28/UBS5，旧约 BHS）；
  * - letters：本节在分段处之前的字母数（NFD 分解后只数字母，不计重音、标点、空格），0 = 节首；
  * - heading：段前的小标题，没有就省略。
  *
- * 分段落到主干词上：按原文节号把主干词分组，在节内数字母，落到恰好在 letters 处开始的那个词；
+ * 分段落到主干词上：按原文节号把主干词分组，在节内数字母，落到恰好在 letters 处开始的那个词（旧约主干是语素，要落在词的首个语素上）；
  * letters 等于整节字母数时（分段在节末，如可 16:8 短结尾之后、罗 16:23 之后），落到下一个主干词。
  */
 import { readFileSync } from 'node:fs';
@@ -59,8 +59,8 @@ export function locateParagraphs(tokens: Array<Pick<TokenRow, 'id' | 'bcv' | 'su
     if (!hit && offset === item.letters) {
       hit = next.get(words.at(-1)!.id);
     }
-    if (!hit) {
-      report('paragraph-unmatched', where, offset < item.letters ? `本节只有 ${offset} 个字母` : '分段处落在词中间');
+    if (!hit || (hit.id.startsWith('o') && !hit.id.endsWith('1'))) {
+      report('paragraph-unmatched', where, !hit && offset < item.letters ? `本节只有 ${offset} 个字母` : '分段处落在词中间');
       continue;
     }
     const heading = item.heading?.trim() || null;

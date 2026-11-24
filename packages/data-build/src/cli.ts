@@ -4,12 +4,12 @@
  *
  *   pnpm data:build --step <STEPBible-Data> --macula-hebrew <macula-hebrew> \
  *     --macula-greek <macula-greek> --ubs <ubs-open-license> [--out data/bible.sqlite] [--critical-text <na28.json>]
- *     [--paragraphs <paragraphs.json>]
+ *     [--paragraphs <paragraphs.json> …]
  *
  * 四个数据目录都必须显式给出；构建产物不进仓库、不分发。
  * --critical-text：NA28 原文（scripts/fetch-critical-text.mjs 用扩展工具取来），新约主干按它挑 TAGNT 的词行（见 critical-text.ts）；
  * 不给时照 TAGNT 版本列。
- * --paragraphs：新约分段与小标题（格式见 paragraphs.ts）；不给时 paragraph 表为空，分段由模型自拟。
+ * --paragraphs：分段与小标题（格式见 paragraphs.ts），可给多个（如新约 UBS5、旧约 ESV 各一个）；不给时 paragraph 表为空，分段由模型自拟。
  */
 import { existsSync, readdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
@@ -30,7 +30,7 @@ const { values } = parseArgs({
     ubs: { type: 'string' },
     out: { type: 'string', default: 'data/bible.sqlite' },
     'critical-text': { type: 'string' },
-    paragraphs: { type: 'string' },
+    paragraphs: { type: 'string', multiple: true },
   },
 });
 
@@ -52,9 +52,11 @@ if (criticalTextPath && !existsSync(criticalTextPath)) {
   throw new Error(`找不到 --critical-text 文件: ${criticalTextPath}`);
 }
 const criticalText = criticalTextPath ? loadCriticalText(criticalTextPath) : undefined;
-const paragraphsPath = values.paragraphs ? path.resolve(values.paragraphs) : undefined;
-if (paragraphsPath && !existsSync(paragraphsPath)) {
-  throw new Error(`找不到 --paragraphs 文件: ${paragraphsPath}`);
+const paragraphsPaths = (values.paragraphs ?? []).map((file) => path.resolve(file));
+for (const file of paragraphsPaths) {
+  if (!existsSync(file)) {
+    throw new Error(`找不到 --paragraphs 文件: ${file}`);
+  }
 }
 
 const reportRows: Array<[string, string, string]> = [];
@@ -89,8 +91,11 @@ for (const file of amalgamatedFiles('TAGNT')) {
   parseTagnt(file, report, (row) => ntTokens.push(row), (row) => variants.push(row), criticalText);
 }
 fillMissingLemmas(ntTokens, report);
-const paragraphSource = paragraphsPath ? loadParagraphs(paragraphsPath) : undefined;
-const paragraphs = paragraphSource ? locateParagraphs(ntTokens, paragraphSource.breaks, report) : [];
+const paragraphSources = paragraphsPaths.map((file) => loadParagraphs(file));
+const paragraphSource = paragraphSources.length > 0
+  ? { source: paragraphSources.map((item) => item.source).join(' + '), breaks: paragraphSources.flatMap((item) => item.breaks) }
+  : undefined;
+const paragraphs = paragraphSource ? locateParagraphs([...otTokens, ...ntTokens], paragraphSource.breaks, report) : [];
 
 function assertUniqueIds(rows: TokenRow[]): void {
   const seen = new Set<string>();
@@ -125,7 +130,7 @@ db.exec('begin');
 const insertMeta = db.prepare('insert into meta (key, value) values (?, ?)');
 insertMeta.run('schema_version', String(SCHEMA_VERSION));
 insertMeta.run('built_at', new Date().toISOString());
-insertMeta.run('sources', JSON.stringify({ stepDir, maculaHebrewDir, maculaGreekDir, ubsDir, criticalText: criticalTextPath ?? null, paragraphs: paragraphsPath ?? null }));
+insertMeta.run('sources', JSON.stringify({ stepDir, maculaHebrewDir, maculaGreekDir, ubsDir, criticalText: criticalTextPath ?? null, paragraphs: paragraphsPaths.length > 0 ? paragraphsPaths : null }));
 if (paragraphSource) {
   insertMeta.run('paragraph_source', paragraphSource.source);
 }

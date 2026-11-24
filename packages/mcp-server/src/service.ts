@@ -318,9 +318,9 @@ function textualVariantLines(deps: Deps, range: ScriptureRange, verses: Map<numb
   return lines.length > 0 ? lines : undefined;
 }
 
-/** 本书有分段数据（新约、构建时给了 --paragraphs）时，范围内的分段；没有为 undefined，段首由模型自拟。 */
+/** 本书有分段数据（构建时给了 --paragraphs，且文件含本书）时，范围内的分段；没有为 undefined，段首由模型自拟。 */
 function paragraphBreaks(deps: Deps, range: Pick<ScriptureRange, 'isOT' | 'bookId' | 'startBcv' | 'endBcv'>): ParagraphBreak[] | undefined {
-  return range.isOT || !deps.db.hasParagraphs(range.bookId) ? undefined : deps.db.paragraphsInRange(range.startBcv, range.endBcv);
+  return !deps.db.hasParagraphs(range.bookId) ? undefined : deps.db.paragraphsInRange(range.startBcv, range.endBcv);
 }
 
 function paragraphStartsFor(deps: Deps, range: Pick<ScriptureRange, 'isOT' | 'bookId' | 'startBcv' | 'endBcv'>, clauses: ClauseEntity[]): Map<string, ParagraphStart> | undefined {

@@ -41,3 +41,23 @@ test('落在词中间、超出本节、没有这一节：记 report 跳过', () 
   assert.deepEqual(rows, []);
   assert.equal(report.length, 3);
 });
+
+test('旧约按原文节号定位，只落在词的首个语素上', () => {
+  const ot = [
+    // 英文 31:55 = 原文 32:1
+    { id: 'o010310550011', bcv: 1031055, maculaBcv: 1032001, surface: 'וַ' },
+    { id: 'o010310550012', bcv: 1031055, maculaBcv: 1032001, surface: 'יַּשְׁכֵּ֨ם' },
+    { id: 'o010310550021', bcv: 1031055, maculaBcv: 1032001, surface: 'לָבָ֜ן' },
+  ];
+  const report: string[] = [];
+  const rows = locateParagraphs(ot, [
+    { book: 1, chapter: 32, verse: 1, letters: 0, heading: 'Jacob Fears Esau' },
+    { book: 1, chapter: 32, verse: 1, letters: 1 },
+    { book: 1, chapter: 32, verse: 1, letters: 5 },
+  ], (kind, ref, detail) => report.push(`${kind} ${ref} ${detail}`));
+  assert.deepEqual(rows, [
+    { tokenId: 'o010310550011', bcv: 1031055, heading: 'Jacob Fears Esau' },
+    { tokenId: 'o010310550021', bcv: 1031055, heading: null },
+  ]);
+  assert.deepEqual(report, ['paragraph-unmatched 1:32:1+1 分段处落在词中间']);
+});

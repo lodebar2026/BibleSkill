@@ -195,7 +195,7 @@ export class BibleDb {
       .all(startBcv, endBcv) as ParagraphBreak[];
   }
 
-  /** 这卷书有没有分段数据（构建时给了 --paragraphs，且是新约）。有才按它定段首，没有就由模型自拟。 */
+  /** 这卷书有没有分段数据（构建时给了 --paragraphs，且文件含本书）。有才按它定段首，没有就由模型自拟。 */
   hasParagraphs(bookId: number): boolean {
     const low = bookId * 1_000_000;
     return this.db.prepare('select 1 from paragraph where bcv between ? and ? limit 1').get(low, low + 999_999) !== undefined;

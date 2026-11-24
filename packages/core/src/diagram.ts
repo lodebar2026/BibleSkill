@@ -478,9 +478,14 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
  *   （徒 8:28 宾语 Ἠσαΐαν ｜ 同位语 τὸν προφήτην）。带冠词的分词、关系从句这类部分是定语，不拆；重复冠词带属格、介词短语
  *   而没有自己的中心词（冠词之外没有与它同格的名词、代词、形容词）的部分也是定语，不拆（徒 11:23 τὴν χάριν [τὴν] τοῦ θεοῦ）。
  * - 与所配成分隔开的同位语（8:38c 主语 ἀμφότεροι … 同位语 ὅ τε Φίλιππος καὶ ὁ εὐνοῦχος）配给主语块。
+ * - 旧约同样按 Macula 的 Np-Appos 拆（创 7:16a 主语 הַבָּאִים ｜ 同位语 זָכָר וּנְקֵבָה מִכָּל־בָּשָׂר；4:9 הֶבֶל ｜ אָחִיךָ）；
+ *   直属部分都是单词、没有分层的（יְהוָה אֱלֹהִים）不拆。冠词随名词，不另查有无中心词。
  */
-function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, TokenSyntax>, morphOf: (id: string) => string): T[] {
+function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, TokenSyntax>, morphOf: (id: string) => string, isOT: boolean): T[] {
   const headless = (ids: string[]) => {
+    if (isOT) {
+      return false;
+    }
     const article = greekMorph(morphOf(ids[0]));
     return morphOf(ids[0]).startsWith('T-') && article.gcase !== null
       && !ids.slice(1).some((id) => /^[NAPRDSFCKQX]-/.test(morphOf(id)) && greekMorph(morphOf(id)).gcase === article.gcase);
@@ -588,9 +593,9 @@ function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: M
       chips.push({ role, wordIds: [word.id], key });
     }
   });
-  if (syntax && !isOT) {
+  if (syntax) {
     const morphs = new Map(words.map((word) => [word.id, word.morph]));
-    chips.splice(0, chips.length, ...pairAppositives(chips, syntax, (id) => morphs.get(id) ?? ''));
+    chips.splice(0, chips.length, ...pairAppositives(chips, syntax, (id) => morphs.get(id) ?? '', isOT));
   }
   const manual = new Set((clause.br ?? '').split(',').map((id) => id.trim()).filter(Boolean));
   const byId = new Map(words.map((word) => [word.id, word]));

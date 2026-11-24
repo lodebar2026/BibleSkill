@@ -595,6 +595,28 @@ test('同位语：一个成分整个是 Macula 的同位结构（Np-Appos）时�
   assert.deepEqual(run(node(4, 'np', null, 'DetCL')).map((chip) => chip.role), ['v', 'o']);
 });
 
+test('同位语：旧约也按 Np-Appos 拆（创 7:16a 主语 הַבָּאִים ｜ 同位语 זָכָר וּנְקֵבָה מִכָּל־בָּשָׂר）；直属部分都是单词的 יְהוָה אֱלֹהִים 不拆', () => {
+  const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
+    ...token(word, surface, morph), id: `o01007016${String(word).padStart(3, '0')}1`, bcv: 1007016, after,
+  });
+  const words = [ot(1, 'הַ', 'HTd', ''), ot(2, 'בָּאִים', 'HVqrmpa'), ot(3, 'זָכָר', 'HNcmsa'), ot(4, 'וּ', 'HC', ''), ot(5, 'נְקֵבָה', 'HNcfsa'),
+    ot(6, 'מִ', 'HR', ''), ot(7, 'כָּל', 'HNcmsc', '־'), ot(8, 'בָּשָׂר', 'HNcmsa'), ot(9, 'בָּאוּ', 'HVqp3cp')];
+  const c = node(1, 'cl', null, 'S-V');
+  const appos = node(2, 'np', null, 'Np-Appos');
+  const entered = node(3, 'np', null, 'DetNP');
+  const kinds = node(4, 'np', null, 'NpPp');
+  const paths: SyntaxNode[][] = [[c, appos, entered], [c, appos, entered], ...[3, 4, 5, 6, 7, 8].map(() => [c, appos, kinds]), [c]];
+  const syntax = new Map(words.map((word, i) => [word.id, { role: i === 8 ? 'v' : null, path: paths[i] }]));
+  const entity = { ...clause('1007016a', 1, 9), firstWordId: words[0].id, lastWordId: words[8].id, verbRange: words[8].id, subjectRange: `${words[0].id}-${words[7].id}` };
+  const chips = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], morphExpansion: () => null, syntax }).clauses[0].chips;
+  assert.deepEqual(chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-4, -1))).join(',')}`), ['s:1,2', 'appos:3,4,5,6,7,8', 'v:9']);
+  assert.equal(chips[1].apposOf, 0);
+  // 两个词直接挂在 Np-Appos 下、不分层：不拆
+  const flat = new Map(words.map((word, i) => [word.id, { role: i === 8 ? 'v' : null, path: i === 8 ? [c] : [c, appos] }]));
+  const whole = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], morphExpansion: () => null, syntax: flat }).clauses[0].chips;
+  assert.deepEqual(whole.map((chip) => chip.role), ['s', 'v']);
+});
+
 test('同位语：重复冠词带属格、没有自己中心词的部分是定语，不拆（徒 11:23 τὴν χάριν [τὴν] τοῦ θεοῦ）', () => {
   const surfaces: Array<[string, string]> = [['ἰδὼν', 'V-2AAP-NSM'], ['τὴν', 'T-ASF'], ['χάριν', 'N-ASF'], ['τὴν', 'T-ASF'], ['τοῦ', 'T-GSM'], ['θεοῦ', 'N-GSM-T']];
   const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));

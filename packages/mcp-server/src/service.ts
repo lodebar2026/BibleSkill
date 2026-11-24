@@ -72,6 +72,7 @@ export type { ReviewIssue } from './review.js';
 export type Deps = { db: BibleDb; store: WorkFileStore; memory: RenderingMemoryIndex; criticalText?: CriticalTextTool; models?: TaskModels };
 
 export function createDeps(db: BibleDb, store: WorkFileStore, criticalText?: CriticalTextTool, models?: TaskModels): Deps {
+  db.setMorphOverrides(() => store.morphOverrides.current());
   return { db, store, memory: new RenderingMemoryIndex(store, db), criticalText, models };
 }
 
@@ -179,6 +180,13 @@ function compactMorph(expansion: string): string {
   return expansion.replace(/\bhence /g, '').replace(/\b\w+=/g, '').replace(/\s*;\s*/g, '; ').replace(/;\s*$/, '').trim();
 }
 
+/** 工作目录覆盖过的词法：原标注 → 新标注与理由（briefing 里提醒模型按新的读）。 */
+function morphOverrideLines(verses: Map<number, Token[]>): string[] | undefined {
+  const lines = [...verses.values()].flat().filter((token) => token.morphOriginal)
+    .map((token) => `${verseLabel(token.bcv)} ${token.id} ${token.surface}：${token.morphOriginal} → ${token.morph}（用户在工作目录改的，按新的读）${token.morphNote ? `：${token.morphNote}` : ''}`);
+  return lines.length > 0 ? lines : undefined;
+}
+
 function morphLegend(deps: Deps, verses: Map<number, Token[]>): Record<string, string> {
   const legend: Record<string, string> = {};
   for (const tokens of verses.values()) {
@@ -257,6 +265,7 @@ export function getPassage(deps: Deps, range: ScriptureRange) {
     range: `${range.bookName} ${verseLabel(range.startBcv)}-${verseLabel([...verses.keys()].at(-1)!)}`,
     tokens: tokensTsv(verses),
     morphLegend: morphLegend(deps, verses),
+    morphOverrides: morphOverrideLines(verses),
     variants: variants.length === 0
       ? undefined
       : variants.map((variant) => `${variant.ref}\t${variant.surface}\t${variant.strong}\t${variant.glossEn}\t${variant.editions ?? ''}`).join('\n'),
@@ -354,6 +363,7 @@ export async function buildAnalysisBriefing(deps: Deps, range: ScriptureRange, o
     disputes: disputesBriefing(disputes),
     tokens: tokensTsv(verses),
     morphLegend: morphLegend(deps, verses),
+    morphOverrides: morphOverrideLines(verses),
     maculaSeeds: seedsTsv(deps.db.seedsInRange(range.startBcv, range.endBcv), verses),
     textualVariants: disputes ? textualVariantLines(deps, range, verses) : undefined,
     ambiguityHints: disputes ? ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)) : undefined,
@@ -536,6 +546,7 @@ export async function buildTranslationBriefing(deps: Deps, range: ScriptureRange
       : undefined,
     ambiguityHints: withDisputes ? ambiguityHints(verses, deps.db.seedsInRange(range.startBcv, range.endBcv)) : undefined,
     tokens: tokensTsv(verses),
+    morphOverrides: morphOverrideLines(verses),
     terms,
     precedingTranslations: preceding.length > 0 ? preceding : undefined,
     existingTranslations: existingTexts.some((text) => inRange(text.bcv, range))

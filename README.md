@@ -112,6 +112,18 @@ literalness: 4   # 1 逐字 / 2 直译 / 3 平衡 / 4 意义对等 / 5 意译
 pnpm run view 徒 7:17-18 --workdir ~/圣经翻译 --diagram ~/圣经翻译/图示/使徒行传/徒7-17-18.html
 ```
 
+### 词法覆盖
+
+原文同形、两读都成立而 Macula 只标了一种时（创 30:32 הָסֵר 既可作 Hiphil 不定式独立格 `HVhaa`，也可作命令式 `HVhv2ms`，七十士译本读作命令式），可以在工作目录覆盖这个词的词法，不动数据库：
+
+```bash
+pnpm morph 创 30:32 הסר HVhv2ms --note "七十士译本作命令式；35 节由拉班动手" --workdir ~/圣经翻译
+pnpm morph 创 30:32 הסר --clear --workdir ~/圣经翻译     # 删除，恢复原标注
+pnpm morph --list --workdir ~/圣经翻译
+```
+
+词写字形（只比辅音 / 字母）或词 id，同形多处用 `--nth`；新词法须是数据库里有的代码。覆盖写进 `morph-overrides.json`，之后读词一律用新词法：briefing 的逐词表照新的给，另列 `morphOverrides`（原标注 → 新标注与理由）；结构图的字色、底色照新的画，词卡列出原标注与理由。文件改了下次读取即生效，MCP server 不必重启；已有的分析与译文不会自动重做，要按新读法改的节重跑分析、翻译。
+
 ### 原文结构图
 
 `pnpm run view <范围> --workdir <目录> --diagram <文件>.html` 按子句分析画一张可交互的结构图（单文件 HTML，惯例写到工作目录的 `图示/<中文书名>/`，每卷一个文件夹；同一文件夹的图共用旁边的 `diagram.css`、`diagram.js`，每次生成都重写，已有的图刷新即用新版）：
@@ -200,6 +212,7 @@ glossary.json                      术语表 {strong, senseKey, lemma, zh, level
 rules.json                         分析/翻译规则 {id, task, pattern, resolution, examples}（手工维护，或由 bible-learn 写入）
 style.md                           翻译档位与个人风格：Markdown，可带 frontmatter 选项（literalness: 1-5，clauseOrder: fluent|source，disputes: off|on）
 terms.yaml                         术语偏好 [{lemma, strong?, senseKey?, zh, avoid?, note?}]，可写注释
+morph-overrides.json               词法覆盖 [{token, morph, note}]（pnpm morph 维护）
 <中文书名>/chNN/clause_entities.json  子句分析
 <中文书名>/chNN/clauses.json          译文
 图示/<中文书名>/                    结构图 HTML，每卷一个文件夹

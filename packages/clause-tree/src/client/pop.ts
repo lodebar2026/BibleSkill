@@ -32,6 +32,7 @@ function card(id: string): string {
         <dt>本处</dt><dd><span class="o">${esc(word.text)}</span></dd>
         ${word.rendering ? `<dt>译作</dt><dd>${esc(word.rendering)}</dd>` : ''}
         <dt>词法</dt><dd>${esc(word.morph)} <span class="hint">${esc((word.morphExp ?? '').replace(/\b[A-Za-z]+=/g, ''))}</span></dd>
+        ${word.morphOriginal ? `<dt>原标注</dt><dd>${esc(word.morphOriginal)} <span class="hint">已在工作目录覆盖${word.morphNote ? `：${esc(word.morphNote)}` : ''}</span></dd>` : ''}
         <dt>词义</dt><dd>${esc(word.glossZh ?? '—')} · ${esc(word.glossEn)}${word.sense ? ` <span class="hint">义项 ${esc(word.sense)}</span>` : ''}</dd>
       </dl>
       ${lexicon.map((entry) => `<details><summary>${entry.source === 'UBS-zh' ? 'UBS 中文词典' : `STEPBible 简明词典（${esc(entry.source)}）`}</summary><div class="def">${orig(entry.definition)}</div></details>`).join('')}`;

@@ -12,4 +12,5 @@ export * from './align.js';
 export * from './segments.js';
 export * from './clause-words.js';
 export * from './diagram.js';
+export * from './morph-overrides.js';
 export * from './paragraphs.js';

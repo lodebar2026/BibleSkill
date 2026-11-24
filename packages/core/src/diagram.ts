@@ -26,6 +26,9 @@ export type DiagramWord = {
   strong: string;
   morph: string;
   morphExp: string | null;
+  /** 工作目录覆盖了词法时：原标注与理由（词卡里列出）。 */
+  morphOriginal?: string;
+  morphNote?: string;
   glossEn: string;
   glossZh: string | null;
   sense: string | null;
@@ -743,6 +746,7 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     words[token.id] = {
       id: token.id, bcv: token.bcv, text: token.surface, after: token.after, lemma: token.lemma, translit: token.translit,
       strong: token.strong, morph: token.morph, morphExp: input.morphExpansion(token.morph), glossEn: token.glossEn,
+      ...(token.morphOriginal ? { morphOriginal: token.morphOriginal, morphNote: token.morphNote ?? '' } : {}),
       glossZh: token.glossZh, sense: token.sense, rendering: renderings.get(token.id) ?? null, variant: variantOf(token, isOT),
       ...(isOT ? { gcase: null, ...hebrewVerb(token.morph), voice: null } : greekMorph(token.morph)),
       stem: isOT ? hebrewStem(token.morph) : null,
@@ -1122,6 +1126,7 @@ const NARRATIVE_BOOKS = new Set([40, 41, 42, 43, 44, 66]);
 const DEFINITION_LIMIT = 3000;
 
 export async function loadDiagram(db: BibleDb, store: WorkFileStore, range: ScriptureRange): Promise<DiagramData> {
+  db.setMorphOverrides(() => store.morphOverrides.current());
   const clauses: ClauseEntity[] = [];
   const texts: ClauseText[] = [];
   for (let chapter = chapterFromBcv(range.startBcv); chapter <= chapterFromBcv(range.endBcv); chapter += 1) {

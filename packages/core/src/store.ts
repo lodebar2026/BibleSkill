@@ -9,6 +9,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises
 import path from 'node:path';
 import { Document, isMap, isNode, isScalar, isSeq, parseDocument } from 'yaml';
 import { z } from 'zod';
+import { MORPH_OVERRIDES_FILE, MorphOverrideFile } from './morph-overrides.js';
 import { parseClauseId } from './ref.js';
 import {
   ClauseEntitySchema,
@@ -160,7 +161,12 @@ function assertExpected(existing: Map<string, { version: number }>, expected: Ve
 }
 
 export class WorkFileStore {
-  constructor(readonly projectRoot: string) {}
+  /** 词法覆盖（morph-overrides.json）；BibleDb.setMorphOverrides 接上它读词时才生效。 */
+  readonly morphOverrides: MorphOverrideFile;
+
+  constructor(readonly projectRoot: string) {
+    this.morphOverrides = new MorphOverrideFile(path.join(projectRoot, MORPH_OVERRIDES_FILE));
+  }
 
   chapterDir(bookName: string, chapter: number): string {
     return path.join(this.projectRoot, bookName, `ch${String(chapter).padStart(2, '0')}`);

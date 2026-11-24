@@ -32,6 +32,7 @@ glossary.json               术语表（用词统一）
 rules.json                  积累的分析/翻译规则（可手工维护）
 style.md                    翻译档位 literalness、争议开关 disputes 与个人风格（可手工维护）
 terms.yaml                  术语偏好（偏好级，可手工维护，可写注释）
+morph-overrides.json        词法覆盖：按词 id 改数据库的词法标注（pnpm morph 维护）
 <书名>/chNN/history.jsonl          译文修改历史（自动记录）
 <书名>/chNN/clause_entities.json   子句分析
 <书名>/chNN/clauses.json           译文与实词译法对照

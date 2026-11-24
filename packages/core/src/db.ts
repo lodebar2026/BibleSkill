@@ -4,6 +4,7 @@
 import { existsSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { SCHEMA_VERSION } from './db-schema.js';
+import { applyMorphOverride, type MorphOverride } from './morph-overrides.js';
 
 export type Token = {
   id: string;
@@ -25,6 +26,10 @@ export type Token = {
   significant: boolean;
   /** 在 NA28 双括号内。 */
   naBracket: boolean;
+  /** 工作目录的词法覆盖改过时：数据库原来的词法（morph 已是覆盖后的）。 */
+  morphOriginal?: string;
+  /** 词法覆盖的理由。 */
+  morphNote?: string;
 };
 
 /**
@@ -94,6 +99,7 @@ function toToken(row: unknown): Token {
 
 export class BibleDb {
   private readonly db: DatabaseSync;
+  private morphOverrides: () => ReadonlyMap<string, MorphOverride> = () => new Map();
 
   constructor(readonly filePath: string) {
     if (!existsSync(filePath)) {
@@ -106,20 +112,27 @@ export class BibleDb {
     }
   }
 
+  /** 读词时套用的词法覆盖（工作目录 morph-overrides.json，见 morph-overrides.ts）。 */
+  setMorphOverrides(source: () => ReadonlyMap<string, MorphOverride>): void {
+    this.morphOverrides = source;
+  }
+
   tokensInRange(startBcv: number, endBcv: number): Token[] {
+    const overrides = this.morphOverrides();
     return this.db
       .prepare(`select ${TOKEN_COLUMNS} from token where bcv between ? and ? order by bcv, ord`)
       .all(startBcv, endBcv)
-      .map(toToken);
+      .map((row) => applyMorphOverride(toToken(row), overrides));
   }
 
   tokensByIds(ids: string[]): Map<string, Token> {
     const result = new Map<string, Token>();
+    const overrides = this.morphOverrides();
     const statement = this.db.prepare(`select ${TOKEN_COLUMNS} from token where id = ?`);
     for (const id of ids) {
       const row = statement.get(id);
       if (row) {
-        result.set(id, toToken(row));
+        result.set(id, applyMorphOverride(toToken(row), overrides));
       }
     }
     return result;

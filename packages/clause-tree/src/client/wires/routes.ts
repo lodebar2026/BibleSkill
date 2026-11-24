@@ -141,9 +141,13 @@ export function buildWires(L: Layout): Wire[] {
     const tip = into !== null ? edge : below ? edge + 1 : edge - 1;
     // 横道离母句至少 13px：箭头（9px）前留一段竖线，折点不直接接在箭头上；多条横道相隔 4px，都在框间 26px 的空隙里
     const yLane = below ? edge + 13 + lane * 4 : edge - 13 - lane * 4;
-    // 修饰全句（独立属格）：箭头落在母句框起始一侧的框边，不指某个词
+    // 修饰全句（独立属格）：箭头落在母句框起始一侧的框边，不指某个词。
+    // 子句框顶边（底边）起始侧的出线点落在母句框前半段时，箭头就落在那里，一根竖线直上；
+    // 原固定在母句起始边内 28px，子句框比母句缩进时那一点在子句框外，只好从框中段出线再折回去（徒 13:24a → 23a）
+    const exitX = rtl ? c.right - c.width * 0.2 : c.left + c.width * 0.2;
+    const exitFits = rtl ? exitX <= p.right - 28 && exitX >= p.left + p.width / 2 : exitX >= p.left + 28 && exitX <= p.left + p.width / 2;
     const x0 = t ? t.left + t.width / 2 - base.left
-      : clause.wholeClause ? (rtl ? p.right - 28 : p.left + 28) - base.left
+      : clause.wholeClause ? (exitFits ? exitX : rtl ? p.right - 28 : p.left + 28) - base.left
         : (c.left + c.right) / 2 - base.left;
     infos.push({ clause, c, skip: [childBox, parentBox], below, edge, tip, yLane, yChild, x0, half: t ? Math.max(t.width / 2 - 4, 0) : 0, laneKey, targetKey, lane, into });
   }

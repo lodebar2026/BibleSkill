@@ -46,7 +46,7 @@ section.card h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-cont
 .toolbar button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--soft); color: var(--ink); border-radius: 6px; padding: 3px 9px; cursor: pointer; }
 .toolbar button[aria-pressed="true"] { background: var(--accent); color: var(--panel); border-color: var(--accent); }
 .hint { font-size: 12px; color: var(--muted); }
-.text-line { font-size: 22px; line-height: 2; }
+.text-line { font-size: 22px; line-height: 1.6; }
 .ot .text-line { direction: rtl; font-size: 26px; }
 .vn { font-size: 12px; color: var(--accent); vertical-align: super; margin: 0 2px 0 6px; font-family: sans-serif; }
 .trans { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 16px; line-height: 2; }

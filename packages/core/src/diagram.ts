@@ -367,8 +367,8 @@ function nodeWords(syntax: Map<string, TokenSyntax>): Map<number, Set<string>> {
 }
 
 /**
- * 每个词归入哪个成分：谓语所在的子句结点 C（Macula class=cl）下的直属成分各成一组，角色取 Macula 的 role；
- * 不在 C 之下的词（前置的冠词、悬垂话题）取整个落在本子句里、又不含 C 的最高短语成组。谓语不在树上时返回 null。
+ * 每个词归入哪个成分：谓语（名词句没有谓语时取主语）所在的子句结点 C（Macula class=cl）下的直属成分各成一组，角色取 Macula 的 role；
+ * 不在 C 之下的词（前置的冠词、悬垂话题）取整个落在本子句里、又不含 C 的最高短语成组。谓语、主语都不在树上时返回 null。
  */
 function constituentsOf(words: Token[], verbId: string | undefined, syntax: Map<string, TokenSyntax>, covered: Map<number, Set<string>>):
   Array<{ key: string; role: ChipRole | null }> | null {
@@ -548,7 +548,8 @@ function pairAppositives<T extends DiagramChip>(chips: T[], syntax: Map<string, 
 function chipsOf(clause: ClauseEntity, words: Token[], isOT: boolean, syntax?: Map<string, TokenSyntax>, covered?: Map<number, Set<string>>): DiagramChip[] {
   const subject = idsInRange(clause.subjectRange, words);
   const verb = idsInRange(clause.verbRange, words);
-  const groups = syntax && covered ? constituentsOf(words, [...verb][0], syntax, covered) : null;
+  // 名词句没有谓语（创 30:33c אֵינֶנּוּ נָקֹד וְטָלוּא …）：以主语定所在的子句结点，否则否定词、表语都分不出来，和先行词连成一块
+  const groups = syntax && covered ? constituentsOf(words, [...verb][0] ?? [...subject][0], syntax, covered) : null;
   // 后置连词（ὁ γὰρ Μωϋσῆς）夹在同一个成分中间时随成分走
   groups?.forEach((group, index) => {
     const [before, after] = [groups[index - 1], groups[index + 1]];

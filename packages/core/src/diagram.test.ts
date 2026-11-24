@@ -617,6 +617,23 @@ test('同位语：旧约也按 Np-Appos 拆（创 7:16a 主语 הַבָּאִי�
   assert.deepEqual(whole.map((chip) => chip.role), ['s', 'v']);
 });
 
+test('名词句没有谓语时以主语定子句结点：创 30:33c כֹּל אֲשֶׁר אֵינֶ נּוּ נָקֹד וְטָלוּא 分出先行词、否定（状语）、主语、表语，不再连成一块', () => {
+  const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({
+    ...token(word, surface, morph), id: `o01030033${String(word).padStart(3, '0')}1`, bcv: 1030033, after,
+  });
+  const words = [ot(1, 'כֹּל', 'HNcmsa'), ot(2, 'אֲשֶׁר', 'HTr'), ot(3, 'אֵינֶ', 'HNcmsc', ''), ot(4, 'נּוּ', 'HSp3ms'), ot(5, 'נָקֹד', 'HAamsa'), ot(6, 'וְ', 'HC', ''), ot(7, 'טָלוּא', 'HVqsmsa')];
+  const relp = node(1, 'np', null, 'NpRelp');
+  const rel = node(2, 'cl', null, 'relCL');
+  const nominal = node(3, 'cl', null, 'ADV-S-P');
+  const predicate = node(4, 'np', 'p', 'NpaNp');
+  const roles: Array<string | null> = [null, null, 'adv', 's', null, null, null];
+  const paths: SyntaxNode[][] = [[relp], [relp, rel], [relp, rel, nominal], [relp, rel, nominal], ...[5, 6, 7].map(() => [relp, rel, nominal, predicate])];
+  const syntax = new Map(words.map((word, i) => [word.id, { role: roles[i], path: paths[i] }]));
+  const entity = { ...clause('1030033c', 1, 7), firstWordId: words[0].id, lastWordId: words[6].id, type: 'NmCl', verbRange: null, subjectRange: words[3].id };
+  const chips = buildDiagram({ title: '', isOT: true, clauses: [entity], texts: [], tokens: words, variants: [], morphExpansion: () => null, syntax }).clauses[0].chips;
+  assert.deepEqual(chips.map((chip) => `${chip.role}:${chip.wordIds.map((id) => Number(id.slice(-4, -1))).join(',')}`), ['null:1,2', 'adv:3', 's:4', 'p:5,6,7']);
+});
+
 test('同位语：重复冠词带属格、没有自己中心词的部分是定语，不拆（徒 11:23 τὴν χάριν [τὴν] τοῦ θεοῦ）', () => {
   const surfaces: Array<[string, string]> = [['ἰδὼν', 'V-2AAP-NSM'], ['τὴν', 'T-ASF'], ['χάριν', 'N-ASF'], ['τὴν', 'T-ASF'], ['τοῦ', 'T-GSM'], ['θεοῦ', 'N-GSM-T']];
   const tokens = surfaces.map(([surface, morph], i) => token(i + 1, surface, morph));

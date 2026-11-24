@@ -35,5 +35,5 @@ terms.yaml                  术语偏好（偏好级，可手工维护，可写�
 <书名>/chNN/history.jsonl          译文修改历史（自动记录）
 <书名>/chNN/clause_entities.json   子句分析
 <书名>/chNN/clauses.json           译文与实词译法对照
-图示/                              结构图 HTML（pnpm run view --diagram 生成）
+图示/<书名>/                       结构图 HTML，每卷一个文件夹（pnpm run view --diagram 生成）
 ```

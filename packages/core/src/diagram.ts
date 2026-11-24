@@ -43,6 +43,8 @@ export type DiagramWord = {
   voice: GreekVoice | null;
   /** 旧约动词的词干（qal 主动为 null，不着色；新约一律 null）。 */
   stem: HebrewStem | null;
+  /** wayyiqtol、weqatal 的 וַ / וְ：与后面的动词连写，字色、底色随动词，下面不另列词义。 */
+  bound?: true;
 };
 
 export type StemFamily = 'qal' | 'niphal' | 'piel' | 'hiphil' | 'hithpael';
@@ -1106,6 +1108,13 @@ export function buildDiagram(input: DiagramInput): Omit<DiagramData, 'lexicon'> 
     ? `第 ${level ?? 2} 档「${LITERALNESS_LEVELS[(level ?? 2) as keyof typeof LITERALNESS_LEVELS].name}」`
     : null;
 
+  // wayyiqtol、weqatal 的 וַ / וְ 已并进动词块（chipsOf）：着色随动词，显示时与动词连成一个词
+  for (const clause of clauses) {
+    const [lead, verb] = clause.chips.find((chip) => chip.role === 'v')?.wordIds ?? [];
+    if (isOT && /^(Way|WQtl)/.test(clause.type) && lead && verb && /^[HA][Cc]$/.test(words[lead].morph) && words[lead].after === '') {
+      Object.assign(words[lead], { tense: words[verb].tense, mood: words[verb].mood, bound: true });
+    }
+  }
   return { title: input.title, isOT, narrative: !isOT && input.narrative === true, literalness, verses, words, clauses };
 }
 

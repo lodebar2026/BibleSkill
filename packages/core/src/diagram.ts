@@ -411,6 +411,11 @@ const isClauseNode = (node: SyntaxNode) => node.cls === 'cl';
  * 并列连词 καί 之前是首选断点（PAUSE_COORD），其次是嵌入的子句（连同前面的冠词）前后（PAUSE_EMBED），
  * 嵌入子句的几行缩进一级。这些都只是优先断点：块排得下时不断，不把短块切成又窄又高的一列。
  */
+/** 新约非强调的属格、与格、宾格人称代词（αὐτοῦ、αὐτῷ、μου、σοι、με…）；ἐμοῦ、ἐμοί、ἐμέ 这类强调形不算。 */
+function isLightPronoun(word: Pick<Token, 'surface' | 'morph'>): boolean {
+  return /^P-[12]?[GDA]/.test(word.morph) && !/^ἐμ/.test(word.surface.normalize('NFC').toLowerCase());
+}
+
 function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: boolean): { pauses: number[]; indents: number[] } | null {
   const paths = chipWords.map((word) => syntax.get(word.id)?.path);
   paths.forEach((path, i) => {
@@ -437,6 +442,13 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
     const punct = pauseAfter(word, isOT);
     return i < common.length && punct !== PAUSE_JOINED ? Math.max(punct, Math.max(0, 4 - (common[i] - shallowest))) : punct;
   });
+  // 非强调的人称代词（αὐτῷ、μου、σοι…）跟着前一个词，不起新行：徒 13:31a τοῖς συναναβᾶσιν αὐτῷ ἀπὸ…，
+  // 原来 αὐτῷ 前后是同级停顿，超宽时一起断，αὐτῷ 独占一行
+  chipWords.forEach((word, i) => {
+    if (i > 0 && isLightPronoun(word) && pauseAfter(chipWords[i - 1], isOT) === 0) {
+      pauses[i - 1] = PAUSE_JOINED;
+    }
+  });
   const indents = chipWords.map(() => 0);
   const boost = (at: number, level: number) => Math.max(pauses[at], level);
   if (chipWords.length > 6) {
@@ -455,7 +467,8 @@ function treeLayout(chipWords: Token[], syntax: Map<string, TokenSyntax>, isOT: 
       if (!isOT && from > 0 && chipWords[from - 1].morph.startsWith('T-') && ids[from].includes(ids[from - 1].at(-1)!)) {
         from -= 1;
       }
-      if (seen.has(`${from}-${to}`)) {
+      // 整块就是一个嵌入短语（徒 13:31a τοῖς συναναβᾶσιν…）：没有母句的词与它分行，续行不缩进
+      if (seen.has(`${from}-${to}`) || (from === 0 && to === chipWords.length - 1)) {
         continue;
       }
       seen.add(`${from}-${to}`);

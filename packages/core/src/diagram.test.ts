@@ -189,6 +189,30 @@ test('块内按短语树折行：嵌入的分词短语连同冠词自成一行�
   assert.deepEqual([0, 1, 3, 7].map((i) => predicate.pauses![i]), [PAUSE_JOINED, PAUSE_JOINED, PAUSE_JOINED, PAUSE_JOINED]);
 });
 
+test('块内折行：非强调人称代词跟着前一个词；整块就是一个嵌入短语时续行不缩进', () => {
+  // 徒 13:31a ὤφθη … τοῖς συναναβᾶσιν αὐτῷ ἀπὸ τῆς Γαλιλαίας εἰς Ἰερουσαλήμ
+  const words = ['ὤφθη', 'τοῖς', 'συναναβᾶσιν', 'αὐτῷ', 'ἀπὸ', 'τῆς', 'Γαλιλαίας', 'εἰς', 'Ἰερουσαλήμ'];
+  const morphs = ['V-API-3S', 'T-DPM', 'V-2AAP-DPM', 'P-DSM', 'PREP', 'T-GSF', 'N-GSF-L', 'PREP', 'N-ASF-L'];
+  const tokens = words.map((surface, i) => token(i + 1, surface, morphs[i]));
+  const c = node(1, 'cl');
+  const detcl = node(2, 'np', 'io', 'DetCL');
+  const went = node(3, 'cl', null, 'V-IO-ADV-ADV');
+  const from = node(4, 'pp', 'adv');
+  const galilee = node(5, 'np', null, 'DetNP');
+  const to = node(6, 'pp', 'adv');
+  const syntax = syntaxOf([
+    [1, 'v', [c]], [2, null, [c, detcl]], [3, 'v', [c, detcl, went]], [4, 'io', [c, detcl, went]],
+    [5, null, [c, detcl, went, from]], [6, null, [c, detcl, went, from, galilee]], [7, null, [c, detcl, went, from, galilee]],
+    [8, null, [c, detcl, went, to]], [9, null, [c, detcl, went, to]],
+  ]);
+  const data = buildDiagram({ title: '', isOT: false, clauses: [clause('44007018a', 1, 9, { verbRange: 'n44007018001' })], texts: [], tokens,
+    variants: [], morphExpansion: () => null, syntax });
+  const chip = data.clauses[0].chips.find((item) => item.wordIds.length === 8)!;
+  assert.equal(chip.pauses![1], PAUSE_JOINED);
+  assert.ok(chip.pauses![2] > 0);
+  assert.equal(chip.indents, undefined);
+});
+
 test('旧约也按短语树分成分块（介词短语按状语），但块内折行只看停顿重音、不缩进', () => {
   // 创 30:32 הָסֵר מִשָּׁם כָּל־שֶׂה נָקֹד וְטָלוּא וְכָל־שֶׂה חוּם（简化）
   const ot = (word: number, surface: string, morph: string, after = ' '): Token => ({

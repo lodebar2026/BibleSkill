@@ -10,6 +10,7 @@ import path from 'node:path';
 import {
   isContentWord,
   listBooks,
+  normalizeSenseKey,
   parseTokenRange,
   senseKey,
   renderingKey,
@@ -159,7 +160,7 @@ export function glossaryFor(token: Token, bookName: string, glossary: GlossaryEn
   const key = tokenSenseKey(token);
   const candidates = glossary.filter((entry) =>
     entry.strong === token.strong
-    && (entry.senseKey === null || entry.senseKey === key)
+    && (entry.senseKey === null || normalizeSenseKey(entry.senseKey) === key)
     && (entry.scope === 'all' || entry.scope === bookName));
   const rank = (entry: GlossaryEntry) => (entry.senseKey ? 2 : 0) + (entry.scope === bookName ? 1 : 0);
   return candidates.sort((a, b) => rank(b) - rank(a))[0];

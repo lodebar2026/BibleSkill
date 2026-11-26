@@ -144,10 +144,22 @@ export const GlossaryEntrySchema = z.object({
 
 /**
  * 用词统一的归并键：扩展 Strong + Macula 义项（旧约 SDBH、新约 Louw-Nida）。
- * 没有义项标注时只用 Strong。
+ * 没有义项标注时只用 Strong。Macula 给一个词标了几个义项（空格分隔，如创 41:40 נָשַׁק
+ * `004944001001000 004944001003000`）时只取第一个：整串作键会自成一类，没有既有译法，
+ * 偏离检查就漏掉了（41:40 由前文的“亲吻”改作“服从”没被拦下）。
  */
 export function senseKey(strong: string, sense: string | null | undefined): string {
-  return sense ? `${strong}|${sense}` : strong;
+  const primary = sense?.trim().split(/\s+/)[0];
+  return primary ? `${strong}|${primary}` : strong;
+}
+
+/** 术语表里旧的多义项键（`G1100|33.2 33.3`）按 senseKey() 的规则归一，便于与词的键比较。 */
+export function normalizeSenseKey<T extends string | null | undefined>(key: T): T {
+  if (!key) {
+    return key;
+  }
+  const bar = key.indexOf('|');
+  return (bar < 0 ? key : senseKey(key.slice(0, bar), key.slice(bar + 1))) as T;
 }
 
 export type GlossaryEntry = z.infer<typeof GlossaryEntrySchema>;

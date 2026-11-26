@@ -28,6 +28,7 @@ import {
   type Rule,
   type Style,
   type TermPreference,
+  normalizeSenseKey,
 } from './schemas.js';
 
 export class ConflictError extends Error {
@@ -114,7 +115,7 @@ export function bareLemma(lemma: string): string {
  */
 function sameTerm(a: TermIdentity, b: TermIdentity): boolean {
   if (a.senseKey || b.senseKey) {
-    return a.senseKey === b.senseKey;
+    return normalizeSenseKey(a.senseKey) === normalizeSenseKey(b.senseKey);
   }
   if (a.strong && b.strong) {
     return strongMatches(a.strong, b.strong) || strongMatches(b.strong, a.strong);

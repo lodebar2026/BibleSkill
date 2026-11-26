@@ -169,6 +169,17 @@ test('用词统一：locked 违反为 error，偏离既有译法无 note 为 war
   assert.deepEqual(reasoned, []);
 });
 
+test('用词统一：Macula 标了几个义项的词按第一个义项归并（创 41:40 נָשַׁק 改作“服从”要报偏离）；术语表旧的多义项键照样生效', () => {
+  const multi = [tokens[0], tokens[1], tokens[2], { ...tokens[3], sense: 'S1 S3' }];
+  const memory: RenderingMemory = new Map([['H0776G|S1', { key: 'H0776G|S1', strong: 'H0776G', lemma: '', glossEn: '', uses: [{ zh: '大地', clauseKey: '1001002a' }] }]]);
+  const issues = checkRenderings({ renderings: [{ tokens: id(4), zh: '地' }] }, multi, '创世记', [], memory);
+  assert.equal(issues.length, 1);
+  assert.match(issues[0].message, /大地/);
+  const glossary = [{ strong: 'H0776G', senseKey: 'H0776G|S1 S3', lemma: '', zh: '大地', level: 'locked' as const, note: '', scope: 'all', version: 0 }];
+  const locked = checkRenderings({ renderings: [{ tokens: id(4), zh: '地' }] }, tokens, '创世记', glossary, new Map());
+  assert.deepEqual(locked.map((issue) => issue.severity), ['error']);
+});
+
 test('撞名：别的原文词已用同一中文词时 warning，同根、专名、术语表认可的不算', () => {
   const owner = (strong: string, lemma: string, zh: string, morph = 'HNcmsa') => [`${strong}|S`, { key: `${strong}|S`, strong, lemma, glossEn: '', morph, uses: [{ zh, clauseKey: '1001009a' }] }] as [string, SenseHistory];
   const memory: RenderingMemory = new Map([owner('H9999', 'עָבַד', '地')]);

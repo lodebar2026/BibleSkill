@@ -22,6 +22,7 @@ import {
   type Token,
   type TranslationSegment,
   type WorkFileStore,
+  normalizeSenseKey,
 } from '@bs/core';
 import { listChapterDirs, singleContentToken, tokenSenseKey } from './consistency.js';
 
@@ -283,7 +284,7 @@ export type ReplaceResult = {
 
 function matchesTarget(token: Token, target: ReplaceTarget): boolean {
   if (target.senseKey) {
-    return tokenSenseKey(token) === target.senseKey;
+    return tokenSenseKey(token) === normalizeSenseKey(target.senseKey);
   }
   return target.strong !== undefined && strongMatches(target.strong, token.strong);
 }

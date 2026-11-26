@@ -40,6 +40,7 @@ import {
   type Token,
   type VersionExpectation,
   type WorkFileStore,
+  normalizeSenseKey,
 } from '@bs/core';
 import { chaptersBetween } from './args.js';
 import {
@@ -145,7 +146,7 @@ async function approachBriefing(deps: Deps) {
 
 /** 术语偏好按 senseKey > strong > lemma 匹配。 */
 function preferenceFor(sense: { key: string; strong: string; lemma: string }, preferences: TermPreference[]): TermPreference | undefined {
-  return preferences.find((item) => item.senseKey === sense.key)
+  return preferences.find((item) => !!item.senseKey && normalizeSenseKey(item.senseKey) === sense.key)
     ?? preferences.find((item) => !item.senseKey && item.strong !== undefined && strongMatches(item.strong, sense.strong))
     ?? preferences.find((item) => !item.senseKey && !item.strong && bareLemma(item.lemma) === bareLemma(sense.lemma));
 }

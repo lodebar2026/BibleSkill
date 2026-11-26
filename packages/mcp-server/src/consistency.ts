@@ -28,6 +28,8 @@ export type SenseHistory = {
   strong: string;
   lemma: string;
   glossEn: string;
+  /** 该义项首见词的 morph，供撞名检查判断专名、数词。 */
+  morph?: string;
   uses: RenderingUse[];
 };
 
@@ -127,7 +129,7 @@ export class RenderingMemoryIndex {
           continue;
         }
         const key = tokenSenseKey(token);
-        const entry = memory.get(key) ?? { key, strong: token.strong, lemma: token.lemma, glossEn: token.glossEn, uses: [] };
+        const entry = memory.get(key) ?? { key, strong: token.strong, lemma: token.lemma, glossEn: token.glossEn, morph: token.morph, uses: [] };
         entry.uses.push(use);
         memory.set(key, entry);
       }
@@ -163,6 +165,77 @@ export function glossaryFor(token: Token, bookName: string, glossary: GlossaryEn
   return candidates.sort((a, b) => rank(b) - rank(a))[0];
 }
 
+
+// ---------------------------------------------------------------- 撞名（多词一译）
+
+type LexemeInfo = { strong: string; lemma: string; morph?: string };
+
+/** Strong 去掉扩展字母（H0310A → H0310），同一词条的变体不算撞名。 */
+function baseStrong(strong: string): string {
+  return strong.replace(/^([HGA]\d+).*$/, '$1');
+}
+
+/** 系动词 הָיָה / εἰμί、γίνομαι 随句式译成“是、有、在、成为”，不算撞名。 */
+const LIGHT_VERBS = new Set(['H1961', 'G1510', 'G1096']);
+
+/** 专名、数词、系动词：同译是音译、数目相同或句式所致，不算撞名。 */
+function isNameOrNumeral(info: LexemeInfo): boolean {
+  const morph = info.morph ?? '';
+  return LIGHT_VERBS.has(baseStrong(info.strong)) || /^[HA]Np/.test(morph) || /^[HA]A[co]/.test(morph) || /^N-PRI/.test(morph) || /^A-NUI/.test(morph);
+}
+
+/** 词根骨架：希伯来文去点符、终形归一、去弱辅音 אהוי；希腊文去重音、小写。 */
+function lemmaCore(lemma: string): string {
+  const plain = lemma.normalize('NFD').replace(/[\u0300-\u036f\u0591-\u05c7]/g, '');
+  if (/[\u05d0-\u05ea]/.test(plain)) {
+    const finals: Record<string, string> = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ' };
+    return [...plain].map((ch) => finals[ch] ?? ch).filter((ch) => /[\u05d0-\u05ea]/.test(ch) && !'אהוי'.includes(ch)).join('');
+  }
+  return plain.toLowerCase().replace(/[^a-zα-ω]/g, '');
+}
+
+/** 同根词（如 בָּרַךְ / בְּרָכָה、מוּת / מָוֶת、שָׁמַר / מִשְׁמֶרֶת）：词根骨架相同，或较短的（至少两个辅音）连续出现在较长的里；希腊文按前 4 个字母。 */
+export function sameRoot(a: string, b: string): boolean {
+  const x = lemmaCore(a);
+  const y = lemmaCore(b);
+  if (!x || !y) {
+    return false;
+  }
+  if (x === y) {
+    return true;
+  }
+  if (/[a-zα-ω]/.test(x + y)) {
+    return x.length >= 4 && y.length >= 4 && x.slice(0, 4) === y.slice(0, 4);
+  }
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.length >= 2 && long.includes(short);
+}
+
+/** 两个原文词同译一个中文词是否算撞名。 */
+export function isCollision(a: LexemeInfo, b: LexemeInfo): boolean {
+  // 希伯来文（含亚兰文）与希腊文各自统一，跨语言同译不算
+  if (baseStrong(a.strong) === baseStrong(b.strong) || (a.strong.charAt(0) === 'G') !== (b.strong.charAt(0) === 'G')) {
+    return false;
+  }
+  if (isNameOrNumeral(a) || isNameOrNumeral(b)) {
+    return false;
+  }
+  return !sameRoot(a.lemma, b.lemma);
+}
+
+/** 中文译法 → 用它的各义项。 */
+function zhOwners(memory: RenderingMemory): Map<string, Array<{ history: SenseHistory; count: number; examples: string[] }>> {
+  const owners = new Map<string, Array<{ history: SenseHistory; count: number; examples: string[] }>>();
+  for (const history of memory.values()) {
+    for (const item of renderingDistribution(history)) {
+      const list = owners.get(item.zh) ?? [];
+      list.push({ history, count: item.count, examples: item.examples });
+      owners.set(item.zh, list);
+    }
+  }
+  return owners;
+}
+
 export type ConsistencyIssue = {
   tokenId: string;
   surface: string;
@@ -181,6 +254,7 @@ export function checkRenderings(
   memory: RenderingMemory,
 ): ConsistencyIssue[] {
   const issues: ConsistencyIssue[] = [];
+  let owners: ReturnType<typeof zhOwners> | undefined;
   for (const rendering of text.renderings) {
     const token = singleContentToken(rendering, ordered);
     if (!token) {
@@ -206,6 +280,22 @@ export function checkRenderings(
     if (!entry && distribution.length > 0 && !distribution.some((item) => item.zh === zh)) {
       const summary = distribution.slice(0, 3).map((item) => `「${item.zh}」×${item.count}（${item.examples.join(',')}）`).join('、');
       issues.push({ ...base, severity: 'warning', message: `同一义项既有译法为 ${summary}；统一用既有译法，或在 note 说明为何不同` });
+      continue;
+    }
+    // 撞名：这个中文词已经用来译别的原文词。术语表明定此译法的算认可，不查
+    // 不定式独立格译成“必定 / 确实”等副词，是句式不是词义
+    if (entry?.zh === zh || zh === '∅' || /^HV.a/.test(token.morph)) {
+      continue;
+    }
+    // 这个词本来就这样译的，撞名是旧账，交给一致性报告统一处理；只查新用上的译法
+    if (distribution.some((item) => item.zh === zh)) {
+      continue;
+    }
+    owners ??= zhOwners(memory);
+    const clashes = (owners.get(zh) ?? []).filter((owner) => owner.history.key !== key && isCollision(token, owner.history));
+    if (clashes.length > 0) {
+      const summary = clashes.slice(0, 3).map((owner) => `${owner.history.lemma}（${owner.history.strong}）×${owner.count}（${owner.examples.join(',')}）`).join('、');
+      issues.push({ ...base, severity: 'warning', message: `「${zh}」已用来译 ${summary}；不同的原文词默认用不同的中文词：换一个词，或在 note 说明为何同译` });
     }
   }
   return issues;
@@ -218,27 +308,30 @@ export type ConsistencyReport = {
 
 /**
  * 一词多译：同一 senseKey 下多个 zh。
- * 多词一译：同一 zh 落在不同 Strong 的实词上（义项不同但 Strong 相同的不算——那是一词多义同译）。
+ * 多词一译（撞名）：同一 zh 落在不同原文词上；同一词条的义项、同根词、专名、数词不算（见 isCollision）。
  */
 export function buildConsistencyReport(memory: RenderingMemory): ConsistencyReport {
   const oneToMany: ConsistencyReport['oneToMany'] = [];
-  const byZh = new Map<string, Map<string, { senseKey: string; strong: string; lemma: string; glossEn: string; count: number }>>();
+  const byZh = new Map<string, Map<string, { senseKey: string; strong: string; lemma: string; glossEn: string; morph?: string; count: number }>>();
   for (const history of memory.values()) {
     const distribution = renderingDistribution(history);
     if (distribution.length > 1) {
       oneToMany.push({ senseKey: history.key, strong: history.strong, lemma: history.lemma, glossEn: history.glossEn, renderings: distribution });
     }
     for (const item of distribution) {
+      if (item.zh === '∅') {
+        continue;
+      }
       const senses = byZh.get(item.zh) ?? new Map();
-      senses.set(history.key, { senseKey: history.key, strong: history.strong, lemma: history.lemma, glossEn: history.glossEn, count: item.count });
+      senses.set(history.key, { senseKey: history.key, strong: history.strong, lemma: history.lemma, glossEn: history.glossEn, morph: history.morph, count: item.count });
       byZh.set(item.zh, senses);
     }
   }
   const manyToOne: ConsistencyReport['manyToOne'] = [];
   for (const [zh, senses] of byZh) {
-    const strongs = new Set([...senses.values()].map((sense) => sense.strong));
-    if (strongs.size > 1) {
-      manyToOne.push({ zh, senses: [...senses.values()].map(({ strong: _strong, ...rest }) => rest) });
+    const list = [...senses.values()];
+    if (list.some((a, i) => list.slice(i + 1).some((b) => isCollision(a, b)))) {
+      manyToOne.push({ zh, senses: list.map(({ strong: _strong, morph: _morph, ...rest }) => rest) });
     }
   }
   oneToMany.sort((a, b) => b.renderings.reduce((sum, item) => sum + item.count, 0) - a.renderings.reduce((sum, item) => sum + item.count, 0));

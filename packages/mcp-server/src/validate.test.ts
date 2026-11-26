@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { ClauseEntity, SeedClause, Token } from '@bs/core';
-import { checkRenderings, buildConsistencyReport, type RenderingMemory } from './consistency.js';
+import { checkRenderings, buildConsistencyReport, sameRoot, type RenderingMemory, type SenseHistory } from './consistency.js';
 import { SubmittedClauseSchema, SubmittedTranslationSchema, checkClauseAnalysis, checkTranslations } from './validate.js';
 
 const BCV = 1001001;
@@ -167,6 +167,25 @@ test('用词统一：locked 违反为 error，偏离既有译法无 note 为 war
   assert.deepEqual(issues.map((issue) => issue.severity), ['error', 'warning']);
   const reasoned = checkRenderings({ renderings: [{ tokens: id(4), zh: '地', note: '此处另有所指' }] }, tokens, '创世记', glossary, memory);
   assert.deepEqual(reasoned, []);
+});
+
+test('撞名：别的原文词已用同一中文词时 warning，同根、专名、术语表认可的不算', () => {
+  const owner = (strong: string, lemma: string, zh: string, morph = 'HNcmsa') => [`${strong}|S`, { key: `${strong}|S`, strong, lemma, glossEn: '', morph, uses: [{ zh, clauseKey: '1001009a' }] }] as [string, SenseHistory];
+  const memory: RenderingMemory = new Map([owner('H9999', 'עָבַד', '地')]);
+  const clash = checkRenderings({ renderings: [{ tokens: id(4), zh: '地' }] }, tokens, '创世记', [], memory);
+  assert.match(clash[0].message, /已用来译 עָבַד/);
+  assert.deepEqual(checkRenderings({ renderings: [{ tokens: id(4), zh: '地', note: '两词此处同义' }] }, tokens, '创世记', [], memory), []);
+  const approved = [{ strong: tokens[3].strong, senseKey: null, lemma: '', zh: '地', level: 'preferred' as const, note: '', scope: 'all', version: 0 }];
+  assert.deepEqual(checkRenderings({ renderings: [{ tokens: id(4), zh: '地' }] }, tokens, '创世记', approved, memory), []);
+  const named: RenderingMemory = new Map([owner('H9999', 'עָבַד', '地', 'HNpm')]);
+  assert.deepEqual(checkRenderings({ renderings: [{ tokens: id(4), zh: '地' }] }, tokens, '创世记', [], named), []);
+  const established: RenderingMemory = new Map([owner('H9999', 'עָבַד', '地'), [`${tokens[3].strong}|S1`, { key: `${tokens[3].strong}|S1`, strong: tokens[3].strong, lemma: '', glossEn: '', uses: [{ zh: '地', clauseKey: '1001010a' }] }]]);
+  assert.deepEqual(checkRenderings({ renderings: [{ tokens: id(4), zh: '地' }] }, tokens, '创世记', [], established), []);
+  assert.ok(sameRoot('בָּרַךְ', 'בְּרָכָה'));
+  assert.ok(sameRoot('מוּת', 'מָוֶת'));
+  assert.ok(sameRoot('שָׁמַר', 'מִשְׁמֶרֶת'));
+  assert.ok(!sameRoot('מוּת', 'מִשְׁמֶרֶת'));
+  assert.ok(!sameRoot('זָרַע', 'עָבַד'));
 });
 
 test('一致性报告：一词多译与多词一译', () => {
